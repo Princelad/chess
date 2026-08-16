@@ -85,6 +85,8 @@ ctest --test-dir build
 
 ## License and attribution
 
-Piece sprites are the lichess "cburnett" set v1
-(`https://github.com/lichess-org/lila`), licensed under
+Piece sprites are the lichess "cburnett" set
+(`https://github.com/lichess-org/lila`, `public/piece/cburnett/`), rasterized
+from the source SVGs, licensed under
 [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/).
+Original piece set by Colin M.L. Burnett.

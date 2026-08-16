@@ -117,10 +117,10 @@ phase compiles standalone.
   - [x] Confirm both SFML and GoogleTest link without errors
   - [x] Make `ctest` run (even with zero tests yet)
 
-- [ ] **0.4 Fetch piece assets**
-  - [ ] Download the 12 cburnett PNG pieces from the lichess `cburnett` set (e.g. `github.com/lichess-org/lila` `public/piece/cburnett/`)
-  - [ ] Name them consistently: `wp.png wn.png wb.png wr.png wq.png wk.png`, same for black (`bp.png ... bk.png`)
-  - [ ] Add a README note with CC BY-SA 3.0 attribution
+- [x] **0.4 Fetch piece assets**
+  - [x] Download the 12 cburnett PNG pieces from the lichess `cburnett` set (e.g. `github.com/lichess-org/lila` `public/piece/cburnett/`)
+  - [x] Name them consistently: `wp.png wn.png wb.png wr.png wq.png wk.png`, same for black (`bp.png ... bk.png`)
+  - [x] Add a README note with CC BY-SA 3.0 attribution
 
 - [ ] **0.5 First commit**
   - [ ] Commit the skeleton + assets so the repo builds green
