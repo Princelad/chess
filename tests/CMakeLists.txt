@@ -13,7 +13,7 @@ if(BUILD_TESTING)
     FetchContent_MakeAvailable(googletest)
     set(BUILD_TESTING ${_gtest_build_testing} CACHE BOOL "Build tests" FORCE)
 
-    add_executable(chess-tests test_main.cpp core/types_test.cpp core/board_test.cpp)
+    add_executable(chess-tests test_main.cpp core/types_test.cpp core/board_test.cpp core/state_test.cpp)
     target_link_libraries(chess-tests PRIVATE chesscore GTest::gtest_main)
 
     include(GoogleTest)
