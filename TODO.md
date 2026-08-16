@@ -176,10 +176,10 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [x] Encapsulate construction: `move(from, to)`, `promotion(from, to, type)`, `castle(...)`
   - [x] Streaming/pretty print for debugging
 
-- [ ] **1.2.2 FEN parser (`fen.h`/`fen.cpp`)**
-  - [ ] Parse placement field `rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR`
-  - [ ] Parse side-to-move, castling, en-passant, halfmove clock, fullmove number
-  - [ ] `Board::fromFen(std::string_view)`; handle invalid FEN with an error result
+- [x] **1.2.2 FEN parser (`fen.h`/`fen.cpp`)**
+  - [x] Parse placement field `rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR`
+  - [x] Parse side-to-move, castling, en-passant, halfmove clock, fullmove number
+  - [x] `Board::fromFen(std::string_view)`; handle invalid FEN with an error result
 
 - [ ] **1.2.3 FEN emitter**
   - [ ] `toFen()` producing a canonical FEN from any board state
