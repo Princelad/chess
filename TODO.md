@@ -144,11 +144,11 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
 ▶ [0x88](https://www.chessprogramming.org/0x88)
 ▶ [Board Representation](https://www.chessprogramming.org/Board_Representation)
 
-- [ ] **1.1.1 Define enums in `types.h`**
-  - [ ] `enum class Color : int { White, Black, None }`, with `opposite()`
-  - [ ] `enum class PieceType { Pawn, Knight, Bishop, Rook, Queen, King }`
-  - [ ] `Piece` = color + type, `Piece::None` for empty square
-  - [ ] `enum class Square` or 0x88 constants: `squareOf(file, rank)` and `fileOf()/rankOf()`
+- [x] **1.1.1 Define enums in `types.h`**
+  - [x] `enum class Color : int { White, Black, None }`, with `opposite()`
+  - [x] `enum class PieceType { Pawn, Knight, Bishop, Rook, Queen, King }`
+  - [x] `Piece` = color + type, `Piece::None` for empty square
+  - [x] `enum class Square` or 0x88 constants: `squareOf(file, rank)` and `fileOf()/rankOf()`
 
 - [ ] **1.1.2 Implement the 0x88 board**
   - [ ] 0x88 layout: 16 × 8 = 128 array `board[128]`, a1 = 0, b1 = 1, ..., h8 = 119
