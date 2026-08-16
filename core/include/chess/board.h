@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstddef>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -47,6 +48,9 @@ struct Snapshot {
 class Board {
 public:
     static Board fromStartPos();
+    static std::optional<Board> fromFen(std::string_view fen);
+
+    std::string toFen() const;
 
     Piece pieceAt(Square sq) const { return m_board[sq]; }
     void setPiece(Square sq, Piece piece) { m_board[sq] = piece; }

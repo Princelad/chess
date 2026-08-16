@@ -170,20 +170,20 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
 
 ▶ [Forsyth-Edwards Notation](https://www.chessprogramming.org/Forsyth-Edwards_Notation)
 
-- [ ] **1.2.1 `Move` struct in `move.h`**
-  - [ ] Fields: `from`, `to` (0x88 squares), `flags` (quiet, capture, double-push, castle, en passant, promotion)
-  - [ ] Promotion piece type encoded in move (or 4 promotion moves: n/b/r/q)
-  - [ ] Encapsulate construction: `move(from, to)`, `promotion(from, to, type)`, `castle(...)`
-  - [ ] Streaming/pretty print for debugging
+- [x] **1.2.1 `Move` struct in `move.h`**
+  - [x] Fields: `from`, `to` (0x88 squares), `flags` (quiet, capture, double-push, castle, en passant, promotion)
+  - [x] Promotion piece type encoded in move (or 4 promotion moves: n/b/r/q)
+  - [x] Encapsulate construction: `move(from, to)`, `promotion(from, to, type)`, `castle(...)`
+  - [x] Streaming/pretty print for debugging
 
-- [ ] **1.2.2 FEN parser (`fen.h`/`fen.cpp`)**
-  - [ ] Parse placement field `rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR`
-  - [ ] Parse side-to-move, castling, en-passant, halfmove clock, fullmove number
-  - [ ] `Board::fromFen(std::string_view)`; handle invalid FEN with an error result
+- [x] **1.2.2 FEN parser (`fen.h`/`fen.cpp`)**
+  - [x] Parse placement field `rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR`
+  - [x] Parse side-to-move, castling, en-passant, halfmove clock, fullmove number
+  - [x] `Board::fromFen(std::string_view)`; handle invalid FEN with an error result
 
-- [ ] **1.2.3 FEN emitter**
-  - [ ] `toFen()` producing a canonical FEN from any board state
-  - [ ] Round-trip test: `fromFen(toFen(b))` == `b` for many positions
+- [x] **1.2.3 FEN emitter**
+  - [x] `toFen()` producing a canonical FEN from any board state
+  - [x] Round-trip test: `fromFen(toFen(b))` == `b` for many positions
 
 ### Task 1.3 — Move generation (pseudo-legal)
 
