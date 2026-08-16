@@ -107,10 +107,10 @@ phase compiles standalone.
   - [x] Add per-component `CMakeLists.txt` stubs (core, net, server, client, tests)
   - [ ] Commit baseline (after 0.5)
 
-- [~] **0.2 Set up dependencies**
-  - [ ] Detect SFML 3 via `find_package(SFML 3 REQUIRED COMPONENTS graphics window network)` (fall back to building SFML 3.1.0 from source if the distro package is too old)
-  - [ ] Wire GoogleTest **v1.17.0** via `FetchContent` (tag `v1.17.0`), enable `BUILD_TESTING` + `include(CTest)`
-  - [ ] Document `apt install libsfml-dev` (or distro equivalent) in README
+- [x] **0.2 Set up dependencies**
+  - [x] Detect SFML 3 via `find_package(SFML 3 REQUIRED COMPONENTS graphics window network)` (fall back to building SFML 3.1.0 from source if the distro package is too old)
+  - [x] Wire GoogleTest **v1.17.0** via `FetchContent` (tag `v1.17.0`), enable `BUILD_TESTING` + `include(CTest)`
+  - [x] Document `apt install libsfml-dev` (or distro equivalent) in README
 
 - [ ] **0.3 Verify build**
   - [ ] `cmake -S . -B build && cmake --build build`
