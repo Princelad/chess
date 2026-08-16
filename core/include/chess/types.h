@@ -25,6 +25,7 @@ enum class PieceType : int {
     Rook,
     Queen,
     King,
+    None,
 };
 
 struct Piece {
