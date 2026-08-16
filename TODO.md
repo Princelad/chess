@@ -100,14 +100,14 @@ phase compiles standalone.
 
 **Exit version:** `v0.1.0` — skeleton builds green
 
-- [ ] **0.1 Create repository scaffolding**
-  - [ ] Add `.gitignore` (build/, *.o, .cache, etc.)
-  - [ ] Create directory layout from the tree above
-  - [ ] Write top-level `CMakeLists.txt` with `project(chess CXX)`, C++17, and `add_subdirectory` for each component
-  - [ ] Add per-component `CMakeLists.txt` stubs (core, net, server, client, tests)
+- [x] **0.1 Create repository scaffolding**
+  - [x] Add `.gitignore` (build/, *.o, .cache, etc.)
+  - [x] Create directory layout from the tree above
+  - [x] Write top-level `CMakeLists.txt` with `project(chess CXX)`, C++17, and `add_subdirectory` for each component
+  - [x] Add per-component `CMakeLists.txt` stubs (core, net, server, client, tests)
   - [ ] Commit baseline (after 0.5)
 
-- [ ] **0.2 Set up dependencies**
+- [~] **0.2 Set up dependencies**
   - [ ] Detect SFML 3 via `find_package(SFML 3 REQUIRED COMPONENTS graphics window network)` (fall back to building SFML 3.1.0 from source if the distro package is too old)
   - [ ] Wire GoogleTest **v1.17.0** via `FetchContent` (tag `v1.17.0`), enable `BUILD_TESTING` + `include(CTest)`
   - [ ] Document `apt install libsfml-dev` (or distro equivalent) in README
