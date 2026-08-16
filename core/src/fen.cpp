@@ -1,6 +1,7 @@
 #include <chess/fen.h>
 
 #include <optional>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -25,6 +26,51 @@ std::optional<Piece> pieceFromChar(char ch)
         case 'k': return Piece::of(Color::Black, PieceType::King);
         default: return std::nullopt;
     }
+}
+
+std::optional<char> pieceToChar(const Piece& piece)
+{
+    char base;
+    switch (piece.type) {
+        case PieceType::Pawn:   base = 'P'; break;
+        case PieceType::Knight: base = 'N'; break;
+        case PieceType::Bishop: base = 'B'; break;
+        case PieceType::Rook:   base = 'R'; break;
+        case PieceType::Queen:  base = 'Q'; break;
+        case PieceType::King:   base = 'K'; break;
+        default: return std::nullopt;
+    }
+    if (piece.color == Color::Black) {
+        base = static_cast<char>(base - 'A' + 'a');
+    }
+    return base;
+}
+
+std::string buildPlacement(const Board& board)
+{
+    std::string placement;
+    for (int rank = 7; rank >= 0; --rank) {
+        int emptyRun = 0;
+        for (int file = 0; file < 8; ++file) {
+            const Piece piece = board.pieceAt(squareOf(file, rank));
+            if (piece.isNone()) {
+                ++emptyRun;
+            } else {
+                if (emptyRun > 0) {
+                    placement += static_cast<char>('0' + emptyRun);
+                    emptyRun = 0;
+                }
+                placement += *pieceToChar(piece);
+            }
+        }
+        if (emptyRun > 0) {
+            placement += static_cast<char>('0' + emptyRun);
+        }
+        if (rank > 0) {
+            placement += '/';
+        }
+    }
+    return placement;
 }
 
 std::optional<int> parseNumber(std::string_view s)
@@ -169,6 +215,44 @@ std::optional<Board> fromFen(std::string_view fen)
 std::optional<Board> Board::fromFen(std::string_view fen)
 {
     return chess::fromFen(fen);
+}
+
+std::string toFen(const Board& board)
+{
+    std::string fen = buildPlacement(board);
+    fen += ' ';
+    fen += board.sideToMove() == Color::White ? 'w' : 'b';
+
+    fen += ' ';
+    const int rights = board.castlingRights();
+    if (rights == NoCastling) {
+        fen += '-';
+    } else {
+        if (canCastle(rights, WhiteKingSide)) fen += 'K';
+        if (canCastle(rights, WhiteQueenSide)) fen += 'Q';
+        if (canCastle(rights, BlackKingSide)) fen += 'k';
+        if (canCastle(rights, BlackQueenSide)) fen += 'q';
+    }
+
+    fen += ' ';
+    if (board.enPassantSquare() == SquareNone) {
+        fen += '-';
+    } else {
+        fen += squareToString(board.enPassantSquare());
+    }
+
+    fen += ' ';
+    fen += std::to_string(board.halfmoveClock());
+
+    fen += ' ';
+    fen += std::to_string(board.fullmoveNumber());
+
+    return fen;
+}
+
+std::string Board::toFen() const
+{
+    return chess::toFen(*this);
 }
 
 } // namespace chess

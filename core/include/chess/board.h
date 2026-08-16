@@ -50,6 +50,8 @@ public:
     static Board fromStartPos();
     static std::optional<Board> fromFen(std::string_view fen);
 
+    std::string toFen() const;
+
     Piece pieceAt(Square sq) const { return m_board[sq]; }
     void setPiece(Square sq, Piece piece) { m_board[sq] = piece; }
     void clearSquare(Square sq) { m_board[sq] = Piece::None(); }

@@ -181,9 +181,9 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [x] Parse side-to-move, castling, en-passant, halfmove clock, fullmove number
   - [x] `Board::fromFen(std::string_view)`; handle invalid FEN with an error result
 
-- [ ] **1.2.3 FEN emitter**
-  - [ ] `toFen()` producing a canonical FEN from any board state
-  - [ ] Round-trip test: `fromFen(toFen(b))` == `b` for many positions
+- [x] **1.2.3 FEN emitter**
+  - [x] `toFen()` producing a canonical FEN from any board state
+  - [x] Round-trip test: `fromFen(toFen(b))` == `b` for many positions
 
 ### Task 1.3 — Move generation (pseudo-legal)
 

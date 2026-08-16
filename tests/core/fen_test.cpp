@@ -84,6 +84,58 @@ TEST(Fen, BlackToMoveLimitedCastlingEmptyBoard)
     }
 }
 
+TEST(Fen, ToFenStartPosition)
+{
+    EXPECT_EQ(toFen(Board::fromStartPos()), "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
+}
+
+TEST(Fen, ToFenMatchesCanonicalStrings)
+{
+    const char* cases[] = {
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+        "r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq e6 0 4",
+        "8/8/8/8/8/8/8/8 b Qq - 12 40",
+        "4k3/8/8/8/8/8/8/4K3 w - - 0 1",
+        "8/8/8/8/3p4/8/8/8 w - d3 0 1",
+        "r3k2r/8/8/8/8/8/8/R3K2R b Kk - 7 33",
+        "3q3k/5p2/8/8/8/8/2P5/6K1 b - - 0 27",
+    };
+    for (const char* fen : cases) {
+        auto board = fromFen(fen);
+        ASSERT_TRUE(board.has_value()) << "expected parse: " << fen;
+        EXPECT_EQ(toFen(*board), fen) << "toFen must emit canonical FEN for: " << fen;
+    }
+}
+
+TEST(Fen, RoundTrip)
+{
+    const char* cases[] = {
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
+        "r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq e6 0 4",
+        "8/8/8/8/8/8/8/8 b Qq - 12 40",
+        "4k3/8/8/8/8/8/8/4K3 w - - 0 1",
+        "8/8/8/8/3p4/8/8/8 w - d3 0 1",
+        "r3k2r/8/8/8/8/8/8/R3K2R b Kk - 7 33",
+        "3q3k/5p2/8/8/8/8/2P5/6K1 b - - 0 27",
+    };
+    for (const char* fen : cases) {
+        auto board = fromFen(fen);
+        ASSERT_TRUE(board.has_value()) << "expected parse: " << fen;
+        auto reparsed = fromFen(toFen(*board));
+        ASSERT_TRUE(reparsed.has_value()) << "toFen output must reparse: " << fen;
+        EXPECT_TRUE(sameBoard(*board, *reparsed)) << "round-trip mismatch for: " << fen;
+    }
+}
+
+TEST(Fen, BoardToFenMatchesFreeFunction)
+{
+    auto board = fromFen("r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq e6 0 4");
+    ASSERT_TRUE(board.has_value());
+    EXPECT_EQ(board->toFen(), toFen(*board));
+}
+
 TEST(Fen, RejectsMalformedStrings)
 {
     const char* invalid[] = {
