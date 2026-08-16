@@ -158,11 +158,11 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
 - [~] **1.1.3 Game-state struct**
   - [x] Side to move, castling rights (WK/WQ/BK/BQ flags), en-passant target square, halfmove clock, fullmove number
   - [x] Move history stack to support undo (position copies for repetition checks)
-  - [ ] `Board` class API: `pieceAt(Square)`, `sideToMove()`, `makeMove(Move)`, `undoMove()` — `makeMove`/`undoMove` deferred to 1.4 (need `Move` from 1.2.1)
+  - [~] `Board` class API: `pieceAt(Square)`, `sideToMove()`, `makeMove(Move)`, `undoMove()` — `makeMove`/`undoMove` deferred to 1.4 (need `Move` from 1.2.1)
 
-- [ ] **1.1.4 Set up starting position**
-  - [ ] `Board::fromStartPos()` — place 8 pawns, 4 back-rank pieces per side, kings/queens
-  - [ ] Sanity test: assert piece counts (16 per side), king on e1/e8
+- [x] **1.1.4 Set up starting position**
+  - [x] `Board::fromStartPos()` — place 8 pawns, 4 back-rank pieces per side, kings/queens
+  - [x] Sanity test: assert piece counts (16 per side), king on e1/e8
 
 ### Task 1.2 — Move representation and FEN
 
