@@ -150,10 +150,10 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [x] `Piece` = color + type, `Piece::None` for empty square
   - [x] `enum class Square` or 0x88 constants: `squareOf(file, rank)` and `fileOf()/rankOf()`
 
-- [ ] **1.1.2 Implement the 0x88 board**
-  - [ ] 0x88 layout: 16 × 8 = 128 array `board[128]`, a1 = 0, b1 = 1, ..., h8 = 119
-  - [ ] `bool offBoard(int sq) { return sq & 0x88; }` helper (the whole point of 0x88)
-  - [ ] `Square` ↔ algebraic helpers: `"e4"` ↔ index, `file`/`rank` ↔ index
+- [x] **1.1.2 Implement the 0x88 board**
+  - [x] 0x88 layout: 16 × 8 = 128 array `board[128]`, a1 = 0, b1 = 1, ..., h8 = 119
+  - [x] `bool offBoard(int sq) { return sq & 0x88; }` helper (the whole point of 0x88)
+  - [x] `Square` ↔ algebraic helpers: `"e4"` ↔ index, `file`/`rank` ↔ index
 
 - [ ] **1.1.3 Game-state struct**
   - [ ] Side to move, castling rights (WK/WQ/BK/BQ flags), en-passant target square, halfmove clock, fullmove number
