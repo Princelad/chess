@@ -112,10 +112,10 @@ phase compiles standalone.
   - [x] Wire GoogleTest **v1.17.0** via `FetchContent` (tag `v1.17.0`), enable `BUILD_TESTING` + `include(CTest)`
   - [x] Document `apt install libsfml-dev` (or distro equivalent) in README
 
-- [ ] **0.3 Verify build**
-  - [ ] `cmake -S . -B build && cmake --build build`
-  - [ ] Confirm both SFML and GoogleTest link without errors
-  - [ ] Make `ctest` run (even with zero tests yet)
+- [x] **0.3 Verify build**
+  - [x] `cmake -S . -B build && cmake --build build`
+  - [x] Confirm both SFML and GoogleTest link without errors
+  - [x] Make `ctest` run (even with zero tests yet)
 
 - [ ] **0.4 Fetch piece assets**
   - [ ] Download the 12 cburnett PNG pieces from the lichess `cburnett` set (e.g. `github.com/lichess-org/lila` `public/piece/cburnett/`)
