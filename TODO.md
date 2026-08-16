@@ -144,25 +144,25 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
 ▶ [0x88](https://www.chessprogramming.org/0x88)
 ▶ [Board Representation](https://www.chessprogramming.org/Board_Representation)
 
-- [ ] **1.1.1 Define enums in `types.h`**
-  - [ ] `enum class Color : int { White, Black, None }`, with `opposite()`
-  - [ ] `enum class PieceType { Pawn, Knight, Bishop, Rook, Queen, King }`
-  - [ ] `Piece` = color + type, `Piece::None` for empty square
-  - [ ] `enum class Square` or 0x88 constants: `squareOf(file, rank)` and `fileOf()/rankOf()`
+- [x] **1.1.1 Define enums in `types.h`**
+  - [x] `enum class Color : int { White, Black, None }`, with `opposite()`
+  - [x] `enum class PieceType { Pawn, Knight, Bishop, Rook, Queen, King }`
+  - [x] `Piece` = color + type, `Piece::None` for empty square
+  - [x] `enum class Square` or 0x88 constants: `squareOf(file, rank)` and `fileOf()/rankOf()`
 
-- [ ] **1.1.2 Implement the 0x88 board**
-  - [ ] 0x88 layout: 16 × 8 = 128 array `board[128]`, a1 = 0, b1 = 1, ..., h8 = 119
-  - [ ] `bool offBoard(int sq) { return sq & 0x88; }` helper (the whole point of 0x88)
-  - [ ] `Square` ↔ algebraic helpers: `"e4"` ↔ index, `file`/`rank` ↔ index
+- [x] **1.1.2 Implement the 0x88 board**
+  - [x] 0x88 layout: 16 × 8 = 128 array `board[128]`, a1 = 0, b1 = 1, ..., h8 = 119
+  - [x] `bool offBoard(int sq) { return sq & 0x88; }` helper (the whole point of 0x88)
+  - [x] `Square` ↔ algebraic helpers: `"e4"` ↔ index, `file`/`rank` ↔ index
 
-- [ ] **1.1.3 Game-state struct**
-  - [ ] Side to move, castling rights (WK/WQ/BK/BQ flags), en-passant target square, halfmove clock, fullmove number
-  - [ ] Move history stack to support undo (position copies for repetition checks)
-  - [ ] `Board` class API: `pieceAt(Square)`, `sideToMove()`, `makeMove(Move)`, `undoMove()`
+- [~] **1.1.3 Game-state struct**
+  - [x] Side to move, castling rights (WK/WQ/BK/BQ flags), en-passant target square, halfmove clock, fullmove number
+  - [x] Move history stack to support undo (position copies for repetition checks)
+  - [~] `Board` class API: `pieceAt(Square)`, `sideToMove()`, `makeMove(Move)`, `undoMove()` — `makeMove`/`undoMove` deferred to 1.4 (need `Move` from 1.2.1)
 
-- [ ] **1.1.4 Set up starting position**
-  - [ ] `Board::fromStartPos()` — place 8 pawns, 4 back-rank pieces per side, kings/queens
-  - [ ] Sanity test: assert piece counts (16 per side), king on e1/e8
+- [x] **1.1.4 Set up starting position**
+  - [x] `Board::fromStartPos()` — place 8 pawns, 4 back-rank pieces per side, kings/queens
+  - [x] Sanity test: assert piece counts (16 per side), king on e1/e8
 
 ### Task 1.2 — Move representation and FEN
 
