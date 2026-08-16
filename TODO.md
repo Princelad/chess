@@ -105,7 +105,7 @@ phase compiles standalone.
   - [x] Create directory layout from the tree above
   - [x] Write top-level `CMakeLists.txt` with `project(chess CXX)`, C++17, and `add_subdirectory` for each component
   - [x] Add per-component `CMakeLists.txt` stubs (core, net, server, client, tests)
-  - [ ] Commit baseline (after 0.5)
+  - [x] Commit baseline (after 0.5)
 
 - [x] **0.2 Set up dependencies**
   - [x] Detect SFML 3 via `find_package(SFML 3 REQUIRED COMPONENTS graphics window network)` (fall back to building SFML 3.1.0 from source if the distro package is too old)
@@ -122,8 +122,8 @@ phase compiles standalone.
   - [x] Name them consistently: `wp.png wn.png wb.png wr.png wq.png wk.png`, same for black (`bp.png ... bk.png`)
   - [x] Add a README note with CC BY-SA 3.0 attribution
 
-- [ ] **0.5 First commit**
-  - [ ] Commit the skeleton + assets so the repo builds green
+- [x] **0.5 First commit**
+  - [x] Commit the skeleton + assets so the repo builds green
 
 ---
 
