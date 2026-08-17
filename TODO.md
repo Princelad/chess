@@ -258,8 +258,8 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [x] Halfmove clock reaches 100 → draw
   - [x] Reset clock on pawn move or capture (already done in `makeMove`)
 
-- [ ] **1.5.4 Insufficient material**
-  - [ ] K vs K, K+B vs K, K+N vs K (and K+B vs K+B same-color bishops) → draw
+- [x] **1.5.4 Insufficient material**
+  - [x] K vs K, K+B vs K, K+N vs K (and K+B vs K+B same-color bishops) → draw
 
 - [ ] **1.5.5 Public rules API**
   - [ ] `GameStatus evaluate(Board)` combining all above

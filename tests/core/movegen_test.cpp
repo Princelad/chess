@@ -891,4 +891,56 @@ TEST(MoveGen, FiftyMoveRuleResetsOnCapture)
     EXPECT_FALSE(fiftyMoveRule(board));
 }
 
+// --- Insufficient material tests ---
+
+TEST(MoveGen, InsufficientMaterialKingVsKing)
+{
+    auto board = *Board::fromFen("8/8/8/8/8/8/8/4K2k w - - 0 1");
+    EXPECT_TRUE(insufficientMaterial(board));
+    EXPECT_EQ(evaluateGameState(board), GameState::Draw);
+}
+
+TEST(MoveGen, InsufficientMaterialBishopVsKing)
+{
+    // White bishop on light square
+    auto board = *Board::fromFen("8/8/8/8/8/8/5B2/4K2k w - - 0 1");
+    EXPECT_TRUE(insufficientMaterial(board));
+    EXPECT_EQ(evaluateGameState(board), GameState::Draw);
+}
+
+TEST(MoveGen, InsufficientMaterialKnightVsKing)
+{
+    auto board = *Board::fromFen("8/8/8/8/8/8/5N2/4K2k w - - 0 1");
+    EXPECT_TRUE(insufficientMaterial(board));
+    EXPECT_EQ(evaluateGameState(board), GameState::Draw);
+}
+
+TEST(MoveGen, InsufficientMaterialBishopVsBishopSameColor)
+{
+    // Both bishops on light squares: c1 (2+0=even) and e3 (4+2=even)
+    auto board = *Board::fromFen("8/8/8/8/8/4b3/8/2B1K2k w - - 0 1");
+    EXPECT_TRUE(insufficientMaterial(board));
+    EXPECT_EQ(evaluateGameState(board), GameState::Draw);
+}
+
+TEST(MoveGen, SufficientMaterialBishopVsBishopDifferentColor)
+{
+    // White bishop on light square, black bishop on dark square
+    auto board = *Board::fromFen("8/8/8/8/8/5B2/8/4K1b1 w - - 0 1");
+    EXPECT_FALSE(insufficientMaterial(board));
+}
+
+TEST(MoveGen, SufficientMaterialRookVsKing)
+{
+    auto board = *Board::fromFen("8/8/8/8/8/8/8/R3K2k w - - 0 1");
+    EXPECT_FALSE(insufficientMaterial(board));
+}
+
+TEST(MoveGen, SufficientMaterialKnightAndBishop)
+{
+    // K+N vs K+B is sufficient
+    auto board = *Board::fromFen("8/8/8/8/8/5N2/5b2/4K2k w - - 0 1");
+    EXPECT_FALSE(insufficientMaterial(board));
+}
+
 } // namespace chess

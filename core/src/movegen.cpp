@@ -352,6 +352,7 @@ GameState evaluateGameState(const Board& board)
 {
     if (threefoldRepetition(board)) return GameState::Draw;
     if (fiftyMoveRule(board)) return GameState::Draw;
+    if (insufficientMaterial(board)) return GameState::Draw;
     auto legal = generateLegalMoves(board);
     if (!legal.empty()) return GameState::Ongoing;
     if (inCheck(board, board.sideToMove())) return GameState::Checkmate;
@@ -366,6 +367,57 @@ bool threefoldRepetition(const Board& board)
 bool fiftyMoveRule(const Board& board)
 {
     return board.halfmoveClock() >= 100;
+}
+
+bool insufficientMaterial(const Board& board)
+{
+    int whiteBishops = 0, blackBishops = 0;
+    int whiteKnights = 0, blackKnights = 0;
+    int whiteOthers = 0, blackOthers = 0;
+    int whiteBishopSquareColor = 0, blackBishopSquareColor = 0;
+
+    for (int sq = 0; sq < BoardSize; ++sq) {
+        if (offBoard(sq)) continue;
+        const Piece p = board.pieceAt(sq);
+        if (p.isNone() || p.type == PieceType::King) continue;
+
+        int sqColor = ((sq & 7) + (sq >> 4)) & 1;
+
+        if (p.color == Color::White) {
+            switch (p.type) {
+                case PieceType::Bishop: ++whiteBishops; whiteBishopSquareColor = sqColor; break;
+                case PieceType::Knight: ++whiteKnights; break;
+                default: ++whiteOthers; break;
+            }
+        } else {
+            switch (p.type) {
+                case PieceType::Bishop: ++blackBishops; blackBishopSquareColor = sqColor; break;
+                case PieceType::Knight: ++blackKnights; break;
+                default: ++blackOthers; break;
+            }
+        }
+    }
+
+    // K vs K
+    if (whiteBishops == 0 && whiteKnights == 0 && whiteOthers == 0
+        && blackBishops == 0 && blackKnights == 0 && blackOthers == 0)
+        return true;
+
+    // K+B vs K or K+N vs K
+    if (whiteBishops + whiteKnights == 1 && whiteOthers == 0
+        && blackBishops + blackKnights + blackOthers == 0)
+        return true;
+    if (blackBishops + blackKnights == 1 && blackOthers == 0
+        && whiteBishops + whiteKnights + whiteOthers == 0)
+        return true;
+
+    // K+B vs K+B same-color bishops
+    if (whiteBishops == 1 && whiteKnights == 0 && whiteOthers == 0
+        && blackBishops == 1 && blackKnights == 0 && blackOthers == 0
+        && whiteBishopSquareColor == blackBishopSquareColor)
+        return true;
+
+    return false;
 }
 
 } // namespace chess
