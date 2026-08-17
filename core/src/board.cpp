@@ -122,6 +122,11 @@ void Board::makeMove(const Move& m)
     m_state.sideToMove = opposite(side);
 }
 
+void Board::undoMove(const Move& /*m*/)
+{
+    popSnapshot();
+}
+
 std::string squareToString(Square sq)
 {
     const char file = "abcdefgh"[sq & 7];
