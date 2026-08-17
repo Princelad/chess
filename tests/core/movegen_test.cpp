@@ -144,12 +144,73 @@ TEST(MoveGen, KingInCornerHasThreeMoves)
     EXPECT_EQ(std::count_if(moves.begin(), moves.end(), [&](const Move& m) { return m.from == a8; }), 3);
 }
 
-TEST(MoveGen, KingNoCastlingYet)
+TEST(MoveGen, KingCastlingBothSides)
+{
+    auto board = fromFen("r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1");
+    ASSERT_TRUE(board.has_value());
+    auto moves = generateMoves(*board);
+    Square e1 = squareOf(File::E, Rank::R1);
+    EXPECT_TRUE(containsMove(moves, e1, squareOf(File::G, Rank::R1), Castle));
+    EXPECT_TRUE(containsMove(moves, e1, squareOf(File::C, Rank::R1), Castle));
+}
+
+TEST(MoveGen, BlackCastlingBothSides)
+{
+    auto board = fromFen("r3k2r/8/8/8/8/8/8/R3K2R b KQkq - 0 1");
+    ASSERT_TRUE(board.has_value());
+    auto moves = generateMoves(*board);
+    Square e8 = squareOf(File::E, Rank::R8);
+    EXPECT_TRUE(containsMove(moves, e8, squareOf(File::G, Rank::R8), Castle));
+    EXPECT_TRUE(containsMove(moves, e8, squareOf(File::C, Rank::R8), Castle));
+}
+
+TEST(MoveGen, CastlingKingSideOnly)
+{
+    auto board = fromFen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w Kk - 0 1");
+    ASSERT_TRUE(board.has_value());
+    auto moves = generateMoves(*board);
+    Square e1 = squareOf(File::E, Rank::R1);
+    EXPECT_TRUE(containsMove(moves, e1, squareOf(File::G, Rank::R1), Castle));
+    EXPECT_FALSE(containsMove(moves, e1, squareOf(File::C, Rank::R1), Castle));
+}
+
+TEST(MoveGen, CastlingQueenSideOnly)
+{
+    auto board = fromFen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w Qq - 0 1");
+    ASSERT_TRUE(board.has_value());
+    auto moves = generateMoves(*board);
+    Square e1 = squareOf(File::E, Rank::R1);
+    EXPECT_FALSE(containsMove(moves, e1, squareOf(File::G, Rank::R1), Castle));
+    EXPECT_TRUE(containsMove(moves, e1, squareOf(File::C, Rank::R1), Castle));
+}
+
+TEST(MoveGen, NoCastlingRights)
+{
+    auto board = fromFen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w - - 0 1");
+    ASSERT_TRUE(board.has_value());
+    auto moves = generateMoves(*board);
+    Square e1 = squareOf(File::E, Rank::R1);
+    EXPECT_FALSE(containsMove(moves, e1, squareOf(File::G, Rank::R1), Castle));
+    EXPECT_FALSE(containsMove(moves, e1, squareOf(File::C, Rank::R1), Castle));
+}
+
+TEST(MoveGen, CastlingBlockedByPiece)
+{
+    auto board = fromFen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/RN2K2R w KQkq - 0 1");
+    ASSERT_TRUE(board.has_value());
+    auto moves = generateMoves(*board);
+    Square e1 = squareOf(File::E, Rank::R1);
+    EXPECT_TRUE(containsMove(moves, e1, squareOf(File::G, Rank::R1), Castle));
+    EXPECT_FALSE(containsMove(moves, e1, squareOf(File::C, Rank::R1), Castle));
+}
+
+TEST(MoveGen, CastlingCapturesOnlyEmpty)
 {
     auto board = Board::fromStartPos();
-    auto moves = generateMoves(board);
-    Square e1 = squareOf(File::E, Rank::R1);
-    EXPECT_EQ(std::count_if(moves.begin(), moves.end(), [&](const Move& m) { return m.from == e1; }), 0);
+    auto moves = generateMoves(board, MoveFilter::CapturesOnly);
+    for (const auto& m : moves) {
+        EXPECT_FALSE(m.isCastle());
+    }
 }
 
 TEST(MoveGen, KingCaptureAndBlock)
@@ -175,6 +236,23 @@ TEST(MoveGen, KingCaptureAndBlock)
     EXPECT_TRUE(containsMove(moves, e5, e4));
     EXPECT_TRUE(containsMove(moves, e5, f4));
     EXPECT_EQ(std::count_if(moves.begin(), moves.end(), [&](const Move& m) { return m.from == e5; }), 8);
+}
+
+// --- Full board count tests ---
+
+TEST(MoveGen, StartPositionWhiteHasTwentyMoves)
+{
+    auto board = Board::fromStartPos();
+    auto moves = generateMoves(board);
+    EXPECT_EQ(moves.size(), 20u);
+}
+
+TEST(MoveGen, StartPositionBlackHasTwentyMoves)
+{
+    auto board = fromFen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1");
+    ASSERT_TRUE(board.has_value());
+    auto moves = generateMoves(*board);
+    EXPECT_EQ(moves.size(), 20u);
 }
 
 // --- Pawn tests ---
@@ -300,23 +378,6 @@ TEST(MoveGen, WhitePawnDoublePushFromStart)
     EXPECT_TRUE(containsMove(moves, e2, e3));
     EXPECT_TRUE(containsMove(moves, e2, e4, DoublePush));
     EXPECT_EQ(std::count_if(moves.begin(), moves.end(), [&](const Move& m) { return m.from == e2; }), 2);
-}
-
-// --- Full board count tests ---
-
-TEST(MoveGen, StartPositionWhiteHasTwentyMoves)
-{
-    auto board = Board::fromStartPos();
-    auto moves = generateMoves(board);
-    EXPECT_EQ(moves.size(), 20u);
-}
-
-TEST(MoveGen, StartPositionBlackHasTwentyMoves)
-{
-    auto board = fromFen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1");
-    ASSERT_TRUE(board.has_value());
-    auto moves = generateMoves(*board);
-    EXPECT_EQ(moves.size(), 20u);
 }
 
 // --- Rook tests ---
