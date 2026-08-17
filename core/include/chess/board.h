@@ -11,6 +11,8 @@
 
 namespace chess {
 
+struct Move;  // forward declaration — defined in move.h
+
 constexpr int BoardSize = 128;
 
 constexpr bool offBoard(Square sq) noexcept
@@ -51,6 +53,8 @@ public:
     static std::optional<Board> fromFen(std::string_view fen);
 
     std::string toFen() const;
+
+    void makeMove(const Move& m);
 
     Piece pieceAt(Square sq) const { return m_board[sq]; }
     void setPiece(Square sq, Piece piece) { m_board[sq] = piece; }
