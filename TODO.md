@@ -158,7 +158,7 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
 - [~] **1.1.3 Game-state struct**
   - [x] Side to move, castling rights (WK/WQ/BK/BQ flags), en-passant target square, halfmove clock, fullmove number
   - [x] Move history stack to support undo (position copies for repetition checks)
-  - [~] `Board` class API: `pieceAt(Square)`, `sideToMove()`, `makeMove(Move)`, `undoMove()` — `makeMove`/`undoMove` deferred to 1.4 (need `Move` from 1.2.1)
+  - [x] `Board` class API: `pieceAt(Square)`, `sideToMove()`, `makeMove(Move)` — `undoMove()` deferred to 1.4.2
 
 - [x] **1.1.4 Set up starting position**
   - [x] `Board::fromStartPos()` — place 8 pawns, 4 back-rank pieces per side, kings/queens
@@ -217,13 +217,13 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
 
 ▶ [Move Making](https://www.chessprogramming.org/Move_Making) · [Check](https://www.chessprogramming.org/Check) · [King Attack](https://www.chessprogramming.org/King_Attack)
 
-- [ ] **1.4.1 Implement `makeMove`**
-  - [ ] Move piece, handle captures (remove piece, restore on undo)
-  - [ ] Handle promotion (replace pawn with chosen piece)
-  - [ ] Handle en passant capture (remove the captured pawn, not the target square's piece)
-  - [ ] Handle castling (also move the rook)
-  - [ ] Update castling rights (king/rook moved or square captured), en-passant target, clocks, side-to-move
-  - [ ] Push full previous state onto history stack for `undoMove`
+- [x] **1.4.1 Implement `makeMove`**
+  - [x] Move piece, handle captures (remove piece, restore on undo)
+  - [x] Handle promotion (replace pawn with chosen piece)
+  - [x] Handle en passant capture (remove the captured pawn, not the target square's piece)
+  - [x] Handle castling (also move the rook)
+  - [x] Update castling rights (king/rook moved or square captured), en-passant target, clocks, side-to-move
+  - [x] Push full previous state onto history stack for `undoMove`
 
 - [ ] **1.4.2 Implement `undoMove`**
   - [ ] Pop history, restore pieces/state exactly (including promotion piece restored to pawn)
