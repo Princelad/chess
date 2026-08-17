@@ -254,9 +254,9 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [x] `threefoldRepetition()` — same position 3 times (side to move matters)
   - [x] Include en-passant and castling-rights state in the "same position" test
 
-- [ ] **1.5.3 Fifty-move rule**
-  - [ ] Halfmove clock reaches 100 → draw
-  - [ ] Reset clock on pawn move or capture (already done in `makeMove`)
+- [x] **1.5.3 Fifty-move rule**
+  - [x] Halfmove clock reaches 100 → draw
+  - [x] Reset clock on pawn move or capture (already done in `makeMove`)
 
 - [ ] **1.5.4 Insufficient material**
   - [ ] K vs K, K+B vs K, K+N vs K (and K+B vs K+B same-color bishops) → draw

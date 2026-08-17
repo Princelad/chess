@@ -855,4 +855,40 @@ TEST(MoveGen, GameStateDrawByRepetition)
     EXPECT_EQ(evaluateGameState(board), GameState::Draw);
 }
 
+// --- Fifty-move rule tests ---
+
+TEST(MoveGen, FiftyMoveRuleNotTriggered)
+{
+    auto board = Board::fromStartPos();
+    EXPECT_FALSE(fiftyMoveRule(board));
+}
+
+TEST(MoveGen, FiftyMoveRuleTriggered)
+{
+    // Position with halfmove clock at 100 — draw by fifty-move rule
+    auto board = *Board::fromFen("8/8/8/8/8/8/8/4K2k w - - 100 50");
+    EXPECT_TRUE(fiftyMoveRule(board));
+    EXPECT_EQ(evaluateGameState(board), GameState::Draw);
+}
+
+TEST(MoveGen, FiftyMoveRuleResetsOnPawnMove)
+{
+    // Position with halfmove clock at 100; pawn move resets it
+    auto board = *Board::fromFen("8/8/8/8/4P3/8/8/4K2k w - - 100 50");
+    EXPECT_TRUE(fiftyMoveRule(board));
+    // Make the pawn push — clock resets to 0
+    board.makeMove(move(squareOf(File::E, Rank::R4), squareOf(File::E, Rank::R5)));
+    EXPECT_FALSE(fiftyMoveRule(board));
+}
+
+TEST(MoveGen, FiftyMoveRuleResetsOnCapture)
+{
+    // Position with halfmove clock at 100; capture resets it
+    auto board = *Board::fromFen("8/8/8/4p3/3P4/8/8/4K2k w - - 100 50");
+    EXPECT_TRUE(fiftyMoveRule(board));
+    // Capture on e5 — clock resets to 0
+    board.makeMove(move(squareOf(File::D, Rank::R4), squareOf(File::E, Rank::R5)));
+    EXPECT_FALSE(fiftyMoveRule(board));
+}
+
 } // namespace chess
