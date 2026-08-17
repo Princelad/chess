@@ -169,6 +169,46 @@ void genSliding(Square from, Color color, const Board& board, MoveFilter filter,
     }
 }
 
+constexpr Square kingHome(Color color) { return color == Color::White ? 4 : 116; }
+constexpr Square rookHomeKs(Color color) { return color == Color::White ? 7 : 119; }
+constexpr Square rookHomeQs(Color color) { return color == Color::White ? 0 : 112; }
+constexpr Square kingDestKs(Color color) { return color == Color::White ? 6 : 118; }
+constexpr Square kingDestQs(Color color) { return color == Color::White ? 2 : 114; }
+constexpr CastlingRights ksRight(Color color) { return color == Color::White ? WhiteKingSide : BlackKingSide; }
+constexpr CastlingRights qsRight(Color color) { return color == Color::White ? WhiteQueenSide : BlackQueenSide; }
+
+bool squaresEmpty(const Board& board, Square from, Square to)
+{
+    const int step = (to > from) ? 1 : -1;
+    for (Square sq = from + step; sq != to; sq += step) {
+        if (!board.isEmpty(sq)) return false;
+    }
+    return true;
+}
+
+void genCastling(Square from, Color color, const Board& board, MoveFilter filter,
+                 std::vector<Move>& moves)
+{
+    if (filter == MoveFilter::CapturesOnly) return;
+    if (from != kingHome(color)) return;
+
+    const int rights = board.castlingRights();
+
+    if (canCastle(rights, ksRight(color))
+        && !board.isEmpty(rookHomeKs(color))
+        && squaresEmpty(board, from, rookHomeKs(color)))
+    {
+        moves.push_back(castleMove(from, kingDestKs(color)));
+    }
+
+    if (canCastle(rights, qsRight(color))
+        && !board.isEmpty(rookHomeQs(color))
+        && squaresEmpty(board, rookHomeQs(color), from))
+    {
+        moves.push_back(castleMove(from, kingDestQs(color)));
+    }
+}
+
 } // namespace
 
 std::vector<Move> generateMoves(const Board& board, MoveFilter filter)
@@ -197,6 +237,7 @@ std::vector<Move> generateMoves(const Board& board, MoveFilter filter)
                 break;
             case PieceType::King:
                 genKing(sq, side, board, filter, moves);
+                genCastling(sq, side, board, filter, moves);
                 break;
             case PieceType::Pawn:
                 genPawn(sq, side, board, filter, moves);

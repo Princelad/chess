@@ -203,9 +203,9 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [x] Queen: rook + bishop rays combined
   - [x] Set `capture` flag when landing on enemy piece; stop at first blocker
 
-- [ ] **1.3.3 Castling moves**
-  - [ ] Only when castling-right flag set, squares between empty, king/rook unmoved
-  - [ ] Generate king-side and queen-side castling as moves (legality of "not in/through check" deferred to Task 1.4)
+- [x] **1.3.3 Castling moves**
+  - [x] Only when castling-right flag set, squares between empty, king/rook unmoved
+  - [x] Generate king-side and queen-side castling as moves (legality of "not in/through check" deferred to Task 1.4)
 
 - [ ] **1.3.4 Assemble `generateMoves(Board)`**
   - [ ] Iterate 0x88 squares, dispatch on piece type, collect into `std::vector<Move>`
