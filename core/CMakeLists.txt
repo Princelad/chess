@@ -1,5 +1,5 @@
-add_library(chesscore INTERFACE)
+add_library(chesscore STATIC src/board.cpp src/fen.cpp src/movegen.cpp)
 
-target_include_directories(chesscore INTERFACE
+target_include_directories(chesscore PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
