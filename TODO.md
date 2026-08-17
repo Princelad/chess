@@ -192,10 +192,10 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
 ▶ [Move Generation](https://www.chessprogramming.org/Move_Generation)
 ▶ [Pawn Moves](https://www.chessprogramming.org/Pawn_Moves) · [Knight Moves](https://www.chessprogramming.org/Knight) · [Bishop](https://www.chessprogramming.org/Bishop) · [Rook](https://www.chessprogramming.org/Rook) · [Queen](https://www.chessprogramming.org/Queen) · [King](https://www.chessprogramming.org/King_Moves)
 
-- [ ] **1.3.1 Generate moves for fixed-step pieces**
-  - [ ] Knight: 8 offsets, `!offBoard(to) && !ownPiece(to)`
-  - [ ] King: 8 offsets (excluding castling for now)
-  - [ ] Pawns: single push, double push from starting rank, diagonal captures, promotions (4 types), en passant
+- [x] **1.3.1 Generate moves for fixed-step pieces**
+  - [x] Knight: 8 offsets, `!offBoard(to) && !ownPiece(to)`
+  - [x] King: 8 offsets (excluding castling for now)
+  - [x] Pawns: single push, double push from starting rank, diagonal captures, promotions (4 types), en passant
 
 - [ ] **1.3.2 Generate sliding-piece moves**
   - [ ] Rook: walk 4 directions until board edge or blocker
