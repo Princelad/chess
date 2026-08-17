@@ -53,9 +53,11 @@ constexpr Move enPassantMove(Square from, Square to) noexcept
     return {from, to, EnPassant | Capture};
 }
 
-constexpr Move promotionMove(Square from, Square to, PieceType piece) noexcept
+constexpr Move promotionMove(Square from, Square to, PieceType piece,
+                             bool isCapture = false) noexcept
 {
-    Move m{from, to, Promotion};
+    int flags = Promotion | (isCapture ? Capture : 0);
+    Move m{from, to, flags};
     m.promotion = piece;
     return m;
 }
