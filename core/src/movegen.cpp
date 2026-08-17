@@ -211,6 +211,78 @@ void genCastling(Square from, Color color, const Board& board, MoveFilter filter
 
 } // namespace
 
+bool isAttacked(const Board& board, Square sq, Color byColor)
+{
+    // Knight attacks
+    for (int offset : knightOffsets) {
+        const Square to = sq + offset;
+        if (offBoard(to)) continue;
+        const Piece p = board.pieceAt(to);
+        if (p.color == byColor && p.type == PieceType::Knight) return true;
+    }
+
+    // King attacks
+    for (int offset : kingOffsets) {
+        const Square to = sq + offset;
+        if (offBoard(to)) continue;
+        const Piece p = board.pieceAt(to);
+        if (p.color == byColor && p.type == PieceType::King) return true;
+    }
+
+    // Pawn attacks — check the two squares a pawn of byColor would attack from
+    // White pawns capture at +15/+17, so attackers are at sq-15/sq-17
+    // Black pawns capture at -15/-17, so attackers are at sq+15/sq+17
+    const int pawnDir = (byColor == Color::White) ? -1 : 1;
+    const int pawnAttackOffsets[2] = {15 * pawnDir, 17 * pawnDir};
+    for (int offset : pawnAttackOffsets) {
+        const Square to = sq + offset;
+        if (offBoard(to)) continue;
+        const Piece p = board.pieceAt(to);
+        if (p.color == byColor && p.type == PieceType::Pawn) return true;
+    }
+
+    // Sliding attacks — rook rays
+    for (int d = 0; d < 4; ++d) {
+        Square to = sq + rookDirs[d];
+        while (!offBoard(to)) {
+            const Piece p = board.pieceAt(to);
+            if (!p.isNone()) {
+                if (p.color == byColor && (p.type == PieceType::Rook || p.type == PieceType::Queen))
+                    return true;
+                break;
+            }
+            to += rookDirs[d];
+        }
+    }
+
+    // Sliding attacks — bishop rays
+    for (int d = 0; d < 4; ++d) {
+        Square to = sq + bishopDirs[d];
+        while (!offBoard(to)) {
+            const Piece p = board.pieceAt(to);
+            if (!p.isNone()) {
+                if (p.color == byColor && (p.type == PieceType::Bishop || p.type == PieceType::Queen))
+                    return true;
+                break;
+            }
+            to += bishopDirs[d];
+        }
+    }
+
+    return false;
+}
+
+bool inCheck(const Board& board, Color color)
+{
+    for (int sq = 0; sq < BoardSize; ++sq) {
+        if (offBoard(sq)) continue;
+        const Piece p = board.pieceAt(sq);
+        if (p.color == color && p.type == PieceType::King)
+            return isAttacked(board, sq, opposite(color));
+    }
+    return false;
+}
+
 std::vector<Move> generateMoves(const Board& board, MoveFilter filter)
 {
     std::vector<Move> moves;
@@ -248,6 +320,114 @@ std::vector<Move> generateMoves(const Board& board, MoveFilter filter)
     }
 
     return moves;
+}
+
+std::vector<Move> generateLegalMoves(const Board& board, MoveFilter filter)
+{
+    auto pseudo = generateMoves(board, filter);
+    Board b = board;
+    std::vector<Move> legal;
+    const Color side = b.sideToMove();
+    const Color enemy = opposite(side);
+
+    for (const auto& m : pseudo) {
+        if (m.isCastle()) {
+            if (inCheck(b, side)) continue;
+            const Square transit = (m.to > m.from) ? m.from + 1 : m.from - 1;
+            if (isAttacked(b, transit, enemy)) continue;
+            if (isAttacked(b, m.to, enemy)) continue;
+        } else {
+            b.makeMove(m);
+            bool leftInCheck = inCheck(b, side);
+            b.undoMove(m);
+            if (leftInCheck) continue;
+        }
+        legal.push_back(m);
+    }
+
+    return legal;
+}
+
+GameState evaluateGameState(const Board& board)
+{
+    if (threefoldRepetition(board)) return GameState::Draw;
+    if (fiftyMoveRule(board)) return GameState::Draw;
+    if (insufficientMaterial(board)) return GameState::Draw;
+    auto legal = generateLegalMoves(board);
+    if (!legal.empty()) return GameState::Ongoing;
+    if (inCheck(board, board.sideToMove())) return GameState::Checkmate;
+    return GameState::Stalemate;
+}
+
+bool threefoldRepetition(const Board& board)
+{
+    return board.isRepetition(3);
+}
+
+bool fiftyMoveRule(const Board& board)
+{
+    return board.halfmoveClock() >= 100;
+}
+
+bool insufficientMaterial(const Board& board)
+{
+    int whiteBishops = 0, blackBishops = 0;
+    int whiteKnights = 0, blackKnights = 0;
+    int whiteOthers = 0, blackOthers = 0;
+    int whiteBishopSquareColor = 0, blackBishopSquareColor = 0;
+
+    for (int sq = 0; sq < BoardSize; ++sq) {
+        if (offBoard(sq)) continue;
+        const Piece p = board.pieceAt(sq);
+        if (p.isNone() || p.type == PieceType::King) continue;
+
+        int sqColor = ((sq & 7) + (sq >> 4)) & 1;
+
+        if (p.color == Color::White) {
+            switch (p.type) {
+                case PieceType::Bishop: ++whiteBishops; whiteBishopSquareColor = sqColor; break;
+                case PieceType::Knight: ++whiteKnights; break;
+                default: ++whiteOthers; break;
+            }
+        } else {
+            switch (p.type) {
+                case PieceType::Bishop: ++blackBishops; blackBishopSquareColor = sqColor; break;
+                case PieceType::Knight: ++blackKnights; break;
+                default: ++blackOthers; break;
+            }
+        }
+    }
+
+    // K vs K
+    if (whiteBishops == 0 && whiteKnights == 0 && whiteOthers == 0
+        && blackBishops == 0 && blackKnights == 0 && blackOthers == 0)
+        return true;
+
+    // K+B vs K or K+N vs K
+    if (whiteBishops + whiteKnights == 1 && whiteOthers == 0
+        && blackBishops + blackKnights + blackOthers == 0)
+        return true;
+    if (blackBishops + blackKnights == 1 && blackOthers == 0
+        && whiteBishops + whiteKnights + whiteOthers == 0)
+        return true;
+
+    // K+B vs K+B same-color bishops
+    if (whiteBishops == 1 && whiteKnights == 0 && whiteOthers == 0
+        && blackBishops == 1 && blackKnights == 0 && blackOthers == 0
+        && whiteBishopSquareColor == blackBishopSquareColor)
+        return true;
+
+    return false;
+}
+
+bool isLegalMove(const Board& board, const Move& m)
+{
+    auto legal = generateLegalMoves(board);
+    for (const auto& lm : legal) {
+        if (lm.from == m.from && lm.to == m.to && lm.flags == m.flags && lm.promotion == m.promotion)
+            return true;
+    }
+    return false;
 }
 
 } // namespace chess

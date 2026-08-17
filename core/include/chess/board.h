@@ -55,6 +55,7 @@ public:
     std::string toFen() const;
 
     void makeMove(const Move& m);
+    void undoMove(const Move& m);
 
     Piece pieceAt(Square sq) const { return m_board[sq]; }
     void setPiece(Square sq, Piece piece) { m_board[sq] = piece; }
@@ -77,6 +78,8 @@ public:
 
     std::size_t snapshotCount() const { return m_history.size(); }
     const Snapshot& snapshotAt(std::size_t index) const { return m_history[index]; }
+
+    bool isRepetition(int count) const;
 
     void pushSnapshot()
     {

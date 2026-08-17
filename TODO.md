@@ -155,7 +155,7 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [x] `bool offBoard(int sq) { return sq & 0x88; }` helper (the whole point of 0x88)
   - [x] `Square` ↔ algebraic helpers: `"e4"` ↔ index, `file`/`rank` ↔ index
 
-- [~] **1.1.3 Game-state struct**
+- [x] **1.1.3 Game-state struct**
   - [x] Side to move, castling rights (WK/WQ/BK/BQ flags), en-passant target square, halfmove clock, fullmove number
   - [x] Move history stack to support undo (position copies for repetition checks)
   - [x] `Board` class API: `pieceAt(Square)`, `sideToMove()`, `makeMove(Move)` — `undoMove()` deferred to 1.4.2
@@ -225,19 +225,19 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [x] Update castling rights (king/rook moved or square captured), en-passant target, clocks, side-to-move
   - [x] Push full previous state onto history stack for `undoMove`
 
-- [ ] **1.4.2 Implement `undoMove`**
-  - [ ] Pop history, restore pieces/state exactly (including promotion piece restored to pawn)
-  - [ ] Round-trip test: for every generated move, `makeMove` then `undoMove` returns original position
+- [x] **1.4.2 Implement `undoMove`**
+  - [x] Pop history, restore pieces/state exactly (including promotion piece restored to pawn)
+  - [x] Round-trip test: for every generated move, `makeMove` then `undoMove` returns original position
 
-- [ ] **1.4.3 Check detection**
-  - [ ] `isAttacked(sq, byColor)`: reuse movegen — is any enemy piece attacking `sq`?
-  - [ ] Simplify: scan from `sq` outward (knight offsets, king offsets, rook/bishop/queen rays, pawn attacks)
-  - [ ] `inCheck(board, color)` → king square attacked?
+- [x] **1.4.3 Check detection**
+  - [x] `isAttacked(sq, byColor)`: reuse movegen — is any enemy piece attacking `sq`?
+  - [x] Simplify: scan from `sq` outward (knight offsets, king offsets, rook/bishop/queen rays, pawn attacks)
+  - [x] `inCheck(board, color)` → king square attacked?
 
-- [ ] **1.4.4 Legal move filtering**
-  - [ ] Generate pseudo-legal moves, then simulate each with `makeMove` and keep only those where own king is not attacked
-  - [ ] King "moves into check", pinned pieces, castling out of/through check all handled for free by the filter
-  - [ ] Implement efficient-enough version first; optimization is a stretch goal
+- [x] **1.4.4 Legal move filtering**
+  - [x] Generate pseudo-legal moves, then simulate each with `makeMove` and keep only those where own king is not attacked
+  - [x] King "moves into check", pinned pieces, castling out of/through check all handled for free by the filter
+  - [x] Implement efficient-enough version first; optimization is a stretch goal
 
 ### Task 1.5 — Game-end detection and draw rules
 
@@ -245,25 +245,25 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
 
 ▶ [Checkmate](https://www.chessprogramming.org/Checkmate) · [Stalemate](https://www.chessprogramming.org/Stalemate) · [Threefold Repetition](https://www.chessprogramming.org/Threefold_Repetition) · [Fifty-move Rule](https://www.chessprogramming.org/Fifty-move_Rule) · [Insufficient Material](https://www.chessprogramming.org/Insufficient_Material)
 
-- [ ] **1.5.1 Checkmate / stalemate**
-  - [ ] After filtering legal moves: if none and in check → checkmate; if none and not in check → stalemate
-  - [ ] Return a `GameState` enum: `Ongoing, Checkmate, Stalemate, Draw`
+- [x] **1.5.1 Checkmate / stalemate**
+  - [x] After filtering legal moves: if none and in check → checkmate; if none and not in check → stalemate
+  - [x] Return a `GameState` enum: `Ongoing, Checkmate, Stalemate, Draw`
 
-- [ ] **1.5.2 Draw by repetition**
-  - [ ] Track position history (hashed or FEN key per position)
-  - [ ] `threefoldRepetition()` — same position 3 times (side to move matters)
-  - [ ] Include en-passant and castling-rights state in the "same position" test
+- [x] **1.5.2 Draw by repetition**
+  - [x] Track position history (hashed or FEN key per position)
+  - [x] `threefoldRepetition()` — same position 3 times (side to move matters)
+  - [x] Include en-passant and castling-rights state in the "same position" test
 
-- [ ] **1.5.3 Fifty-move rule**
-  - [ ] Halfmove clock reaches 100 → draw
-  - [ ] Reset clock on pawn move or capture (already done in `makeMove`)
+- [x] **1.5.3 Fifty-move rule**
+  - [x] Halfmove clock reaches 100 → draw
+  - [x] Reset clock on pawn move or capture (already done in `makeMove`)
 
-- [ ] **1.5.4 Insufficient material**
-  - [ ] K vs K, K+B vs K, K+N vs K (and K+B vs K+B same-color bishops) → draw
+- [x] **1.5.4 Insufficient material**
+  - [x] K vs K, K+B vs K, K+N vs K (and K+B vs K+B same-color bishops) → draw
 
-- [ ] **1.5.5 Public rules API**
-  - [ ] `GameStatus evaluate(Board)` combining all above
-  - [ ] `bool isLegalMove(Board, Move)` for server-side validation
+- [x] **1.5.5 Public rules API**
+  - [x] `GameStatus evaluate(Board)` combining all above
+  - [x] `bool isLegalMove(Board, Move)` for server-side validation
 
 ### Task 1.6 — SAN (algebraic notation)
 
@@ -271,15 +271,15 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
 
 ▶ [Algebraic Notation](https://www.chessprogramming.org/Algebraic_Notation)
 
-- [ ] **1.6.1 Format moves → SAN (`san::toSan`)**
-  - [ ] Disambiguate identical moves (file/rank/both, e.g. `Nbd2`, `R1e3`, `Qh4e1`)
-  - [ ] Capture marker `x`, promotion `=Q`, check `+`, checkmate `#`, castling `O-O` / `O-O-O`
-  - [ ] En passant in SAN (e.g. `exd6`)
+- [x] **1.6.1 Format moves → SAN (`san::toSan`)**
+  - [x] Disambiguate identical moves (file/rank/both, e.g. `Nbd2`, `R1e3`, `Qh4e1`)
+  - [x] Capture marker `x`, promotion `=Q`, check `+`, checkmate `#`, castling `O-O` / `O-O-O`
+  - [x] En passant in SAN (e.g. `exd6`)
 
-- [ ] **1.6.2 Parse SAN → move (`san::fromSan`)**
-  - [ ] Resolve notation against generated legal moves (find the unique matching move)
-  - [ ] Handle all the same cases as formatting (disambiguation, promotions, castles)
-  - [ ] Return error on ambiguous/illegal input
+- [x] **1.6.2 Parse SAN → move (`san::fromSan`)**
+  - [x] Resolve notation against generated legal moves (find the unique matching move)
+  - [x] Handle all the same cases as formatting (disambiguation, promotions, castles)
+  - [x] Return error on ambiguous/illegal input
 
 ---
 
