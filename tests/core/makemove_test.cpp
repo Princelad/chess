@@ -325,4 +325,151 @@ TEST(MakeMove, RoundTripRestore)
     EXPECT_EQ(board.toFen(), originalFen);
 }
 
+// --- Undo via undoMove ---
+
+TEST(MakeMove, UndoQuietKnight)
+{
+    auto board = Board::fromStartPos();
+    std::string originalFen = board.toFen();
+
+    board.makeMove(move(squareOf(File::B, Rank::R1), squareOf(File::C, Rank::R3)));
+    board.undoMove(move(squareOf(File::B, Rank::R1), squareOf(File::C, Rank::R3)));
+
+    EXPECT_EQ(board.toFen(), originalFen);
+}
+
+TEST(MakeMove, UndoCapture)
+{
+    auto board = *Board::fromFen("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1");
+    std::string originalFen = board.toFen();
+
+    board.makeMove(captureMove(squareOf(File::D, Rank::R7), squareOf(File::E, Rank::R5)));
+    board.undoMove(captureMove(squareOf(File::D, Rank::R7), squareOf(File::E, Rank::R5)));
+
+    EXPECT_EQ(board.toFen(), originalFen);
+}
+
+TEST(MakeMove, UndoDoublePush)
+{
+    auto board = Board::fromStartPos();
+    std::string originalFen = board.toFen();
+
+    board.makeMove(doublePushMove(squareOf(File::E, Rank::R2), squareOf(File::E, Rank::R4)));
+    board.undoMove(doublePushMove(squareOf(File::E, Rank::R2), squareOf(File::E, Rank::R4)));
+
+    EXPECT_EQ(board.toFen(), originalFen);
+}
+
+TEST(MakeMove, UndoEnPassant)
+{
+    auto board = Board::fromStartPos();
+    board.makeMove(doublePushMove(squareOf(File::E, Rank::R2), squareOf(File::E, Rank::R4)));
+    board.makeMove(doublePushMove(squareOf(File::D, Rank::R7), squareOf(File::D, Rank::R5)));
+    std::string beforeEpFen = board.toFen();
+
+    board.makeMove(enPassantMove(squareOf(File::E, Rank::R4), squareOf(File::D, Rank::R5)));
+    board.undoMove(enPassantMove(squareOf(File::E, Rank::R4), squareOf(File::D, Rank::R5)));
+
+    EXPECT_EQ(board.toFen(), beforeEpFen);
+}
+
+TEST(MakeMove, UndoPromotion)
+{
+    auto board = *Board::fromFen("8/4P3/8/8/8/8/8/4K2k w - - 0 1");
+    std::string originalFen = board.toFen();
+
+    board.makeMove(promotionMove(squareOf(File::E, Rank::R7), squareOf(File::E, Rank::R8), PieceType::Queen));
+    board.undoMove(promotionMove(squareOf(File::E, Rank::R7), squareOf(File::E, Rank::R8), PieceType::Queen));
+
+    EXPECT_EQ(board.toFen(), originalFen);
+}
+
+TEST(MakeMove, UndoCapturePromotion)
+{
+    auto board = *Board::fromFen("3r3k/4P3/8/8/8/8/8/4K3 w - - 0 1");
+    std::string originalFen = board.toFen();
+
+    board.makeMove(promotionMove(squareOf(File::E, Rank::R7), squareOf(File::D, Rank::R8), PieceType::Rook));
+    board.undoMove(promotionMove(squareOf(File::E, Rank::R7), squareOf(File::D, Rank::R8), PieceType::Rook));
+
+    EXPECT_EQ(board.toFen(), originalFen);
+}
+
+TEST(MakeMove, UndoKingSideCastle)
+{
+    auto board = *Board::fromFen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1");
+    std::string originalFen = board.toFen();
+
+    board.makeMove(castleMove(squareOf(File::E, Rank::R1), squareOf(File::G, Rank::R1)));
+    board.undoMove(castleMove(squareOf(File::E, Rank::R1), squareOf(File::G, Rank::R1)));
+
+    EXPECT_EQ(board.toFen(), originalFen);
+}
+
+TEST(MakeMove, UndoQueenSideCastle)
+{
+    auto board = *Board::fromFen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1");
+    std::string originalFen = board.toFen();
+
+    board.makeMove(castleMove(squareOf(File::E, Rank::R1), squareOf(File::C, Rank::R1)));
+    board.undoMove(castleMove(squareOf(File::E, Rank::R1), squareOf(File::C, Rank::R1)));
+
+    EXPECT_EQ(board.toFen(), originalFen);
+}
+
+// --- Round-trip all generated moves from start position ---
+
+TEST(MakeMove, UndoAllMovesFromStart)
+{
+    auto board = Board::fromStartPos();
+    auto moves = generateMoves(board);
+    std::string originalFen = board.toFen();
+
+    for (const auto& m : moves) {
+        board.makeMove(m);
+        board.undoMove(m);
+        EXPECT_EQ(board.toFen(), originalFen) << "Failed to restore after move " << m;
+    }
+}
+
+// --- Round-trip all generated moves from a complex position ---
+
+TEST(MakeMove, UndoAllMovesFromComplexPosition)
+{
+    auto board = *Board::fromFen("r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1");
+    auto moves = generateMoves(board);
+    std::string originalFen = board.toFen();
+
+    for (const auto& m : moves) {
+        board.makeMove(m);
+        board.undoMove(m);
+        EXPECT_EQ(board.toFen(), originalFen) << "Failed to restore after move " << m;
+    }
+}
+
+// --- Undo restores castling rights ---
+
+TEST(MakeMove, UndoRestoresCastlingRights)
+{
+    auto board = *Board::fromFen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1");
+    int originalRights = board.castlingRights();
+
+    board.makeMove(move(squareOf(File::E, Rank::R1), squareOf(File::F, Rank::R1)));
+    board.undoMove(move(squareOf(File::E, Rank::R1), squareOf(File::F, Rank::R1)));
+
+    EXPECT_EQ(board.castlingRights(), originalRights);
+}
+
+// --- Undo restores snapshot count ---
+
+TEST(MakeMove, UndoRestoresSnapshotCount)
+{
+    auto board = Board::fromStartPos();
+    board.makeMove(move(squareOf(File::E, Rank::R2), squareOf(File::E, Rank::R3)));
+    EXPECT_EQ(board.snapshotCount(), 1u);
+
+    board.undoMove(move(squareOf(File::E, Rank::R2), squareOf(File::E, Rank::R3)));
+    EXPECT_EQ(board.snapshotCount(), 0u);
+}
+
 } // namespace chess

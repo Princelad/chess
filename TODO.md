@@ -155,7 +155,7 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [x] `bool offBoard(int sq) { return sq & 0x88; }` helper (the whole point of 0x88)
   - [x] `Square` ↔ algebraic helpers: `"e4"` ↔ index, `file`/`rank` ↔ index
 
-- [~] **1.1.3 Game-state struct**
+- [x] **1.1.3 Game-state struct**
   - [x] Side to move, castling rights (WK/WQ/BK/BQ flags), en-passant target square, halfmove clock, fullmove number
   - [x] Move history stack to support undo (position copies for repetition checks)
   - [x] `Board` class API: `pieceAt(Square)`, `sideToMove()`, `makeMove(Move)` — `undoMove()` deferred to 1.4.2
@@ -225,9 +225,9 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [x] Update castling rights (king/rook moved or square captured), en-passant target, clocks, side-to-move
   - [x] Push full previous state onto history stack for `undoMove`
 
-- [ ] **1.4.2 Implement `undoMove`**
-  - [ ] Pop history, restore pieces/state exactly (including promotion piece restored to pawn)
-  - [ ] Round-trip test: for every generated move, `makeMove` then `undoMove` returns original position
+- [x] **1.4.2 Implement `undoMove`**
+  - [x] Pop history, restore pieces/state exactly (including promotion piece restored to pawn)
+  - [x] Round-trip test: for every generated move, `makeMove` then `undoMove` returns original position
 
 - [ ] **1.4.3 Check detection**
   - [ ] `isAttacked(sq, byColor)`: reuse movegen — is any enemy piece attacking `sq`?
