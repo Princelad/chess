@@ -79,6 +79,8 @@ public:
     std::size_t snapshotCount() const { return m_history.size(); }
     const Snapshot& snapshotAt(std::size_t index) const { return m_history[index]; }
 
+    bool isRepetition(int count) const;
+
     void pushSnapshot()
     {
         Snapshot snap;

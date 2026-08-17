@@ -780,4 +780,79 @@ TEST(MoveGen, GameStateWhiteCheckmated)
     EXPECT_EQ(evaluateGameState(board), GameState::Checkmate);
 }
 
+// --- Threefold repetition tests ---
+
+TEST(MoveGen, ThreefoldRepetitionStartPosNeverRepeats)
+{
+    auto board = Board::fromStartPos();
+    EXPECT_FALSE(threefoldRepetition(board));
+}
+
+TEST(MoveGen, ThreefoldRepetitionKnightShuffle)
+{
+    // 1.Nf3 Nf6 2.Ng1 Ng8 3.Nf3 Nf6 4.Ng1 Ng8
+    // After 4...Ng8, the start position has occurred 3 times.
+    auto board = Board::fromStartPos();
+    Square g1 = squareOf(File::G, Rank::R1);
+    Square f3 = squareOf(File::F, Rank::R3);
+    Square g8 = squareOf(File::G, Rank::R8);
+    Square f6 = squareOf(File::F, Rank::R6);
+
+    // Pair 1
+    board.makeMove(move(g1, f3));   // 1.Nf3
+    board.makeMove(move(g8, f6));   // 1...Nf6
+    board.makeMove(move(f3, g1));   // 2.Ng1
+    board.makeMove(move(f6, g8));   // 2...Ng8
+    EXPECT_FALSE(threefoldRepetition(board)); // start pos seen twice
+
+    // Pair 2
+    board.makeMove(move(g1, f3));   // 3.Nf3
+    board.makeMove(move(g8, f6));   // 3...Nf6
+    board.makeMove(move(f3, g1));   // 4.Ng1
+    board.makeMove(move(f6, g8));   // 4...Ng8
+    EXPECT_TRUE(threefoldRepetition(board)); // start pos seen 3 times
+}
+
+TEST(MoveGen, ThreefoldRepetitionWithUndo)
+{
+    // Make moves and undo them; repetition should not persist after undo.
+    auto board = Board::fromStartPos();
+    Square g1 = squareOf(File::G, Rank::R1);
+    Square f3 = squareOf(File::F, Rank::R3);
+    Square g8 = squareOf(File::G, Rank::R8);
+    Square f6 = squareOf(File::F, Rank::R6);
+
+    board.makeMove(move(g1, f3));
+    board.makeMove(move(g8, f6));
+    board.makeMove(move(f3, g1));
+    board.makeMove(move(f6, g8));
+    board.makeMove(move(g1, f3));
+    board.makeMove(move(g8, f6));
+    board.makeMove(move(f3, g1));
+    board.makeMove(move(f6, g8));
+    EXPECT_TRUE(threefoldRepetition(board));
+
+    // Undo last move — back to position after 4.Ng1, only 2 occurrences
+    board.undoMove(move(f6, g8));
+    EXPECT_FALSE(threefoldRepetition(board));
+}
+
+TEST(MoveGen, GameStateDrawByRepetition)
+{
+    auto board = Board::fromStartPos();
+    Square g1 = squareOf(File::G, Rank::R1);
+    Square f3 = squareOf(File::F, Rank::R3);
+    Square g8 = squareOf(File::G, Rank::R8);
+    Square f6 = squareOf(File::F, Rank::R6);
+
+    // Two full cycles + one more pair = 3 occurrences of start position
+    for (int i = 0; i < 2; ++i) {
+        board.makeMove(move(g1, f3));
+        board.makeMove(move(g8, f6));
+        board.makeMove(move(f3, g1));
+        board.makeMove(move(f6, g8));
+    }
+    EXPECT_EQ(evaluateGameState(board), GameState::Draw);
+}
+
 } // namespace chess

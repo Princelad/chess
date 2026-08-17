@@ -249,10 +249,10 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [x] After filtering legal moves: if none and in check → checkmate; if none and not in check → stalemate
   - [x] Return a `GameState` enum: `Ongoing, Checkmate, Stalemate, Draw`
 
-- [ ] **1.5.2 Draw by repetition**
-  - [ ] Track position history (hashed or FEN key per position)
-  - [ ] `threefoldRepetition()` — same position 3 times (side to move matters)
-  - [ ] Include en-passant and castling-rights state in the "same position" test
+- [x] **1.5.2 Draw by repetition**
+  - [x] Track position history (hashed or FEN key per position)
+  - [x] `threefoldRepetition()` — same position 3 times (side to move matters)
+  - [x] Include en-passant and castling-rights state in the "same position" test
 
 - [ ] **1.5.3 Fifty-move rule**
   - [ ] Halfmove clock reaches 100 → draw
