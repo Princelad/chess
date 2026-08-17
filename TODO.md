@@ -234,10 +234,10 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [x] Simplify: scan from `sq` outward (knight offsets, king offsets, rook/bishop/queen rays, pawn attacks)
   - [x] `inCheck(board, color)` → king square attacked?
 
-- [ ] **1.4.4 Legal move filtering**
-  - [ ] Generate pseudo-legal moves, then simulate each with `makeMove` and keep only those where own king is not attacked
-  - [ ] King "moves into check", pinned pieces, castling out of/through check all handled for free by the filter
-  - [ ] Implement efficient-enough version first; optimization is a stretch goal
+- [x] **1.4.4 Legal move filtering**
+  - [x] Generate pseudo-legal moves, then simulate each with `makeMove` and keep only those where own king is not attacked
+  - [x] King "moves into check", pinned pieces, castling out of/through check all handled for free by the filter
+  - [x] Implement efficient-enough version first; optimization is a stretch goal
 
 ### Task 1.5 — Game-end detection and draw rules
 
