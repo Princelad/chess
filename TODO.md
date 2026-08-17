@@ -144,25 +144,25 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
 ▶ [0x88](https://www.chessprogramming.org/0x88)
 ▶ [Board Representation](https://www.chessprogramming.org/Board_Representation)
 
-- [x] **1.1.1 Define enums in `types.h`**
-  - [x] `enum class Color : int { White, Black, None }`, with `opposite()`
-  - [x] `enum class PieceType { Pawn, Knight, Bishop, Rook, Queen, King }`
-  - [x] `Piece` = color + type, `Piece::None` for empty square
-  - [x] `enum class Square` or 0x88 constants: `squareOf(file, rank)` and `fileOf()/rankOf()`
+- [ ] **1.1.1 Define enums in `types.h`**
+  - [ ] `enum class Color : int { White, Black, None }`, with `opposite()`
+  - [ ] `enum class PieceType { Pawn, Knight, Bishop, Rook, Queen, King }`
+  - [ ] `Piece` = color + type, `Piece::None` for empty square
+  - [ ] `enum class Square` or 0x88 constants: `squareOf(file, rank)` and `fileOf()/rankOf()`
 
-- [x] **1.1.2 Implement the 0x88 board**
-  - [x] 0x88 layout: 16 × 8 = 128 array `board[128]`, a1 = 0, b1 = 1, ..., h8 = 119
-  - [x] `bool offBoard(int sq) { return sq & 0x88; }` helper (the whole point of 0x88)
-  - [x] `Square` ↔ algebraic helpers: `"e4"` ↔ index, `file`/`rank` ↔ index
+- [ ] **1.1.2 Implement the 0x88 board**
+  - [ ] 0x88 layout: 16 × 8 = 128 array `board[128]`, a1 = 0, b1 = 1, ..., h8 = 119
+  - [ ] `bool offBoard(int sq) { return sq & 0x88; }` helper (the whole point of 0x88)
+  - [ ] `Square` ↔ algebraic helpers: `"e4"` ↔ index, `file`/`rank` ↔ index
 
-- [~] **1.1.3 Game-state struct**
-  - [x] Side to move, castling rights (WK/WQ/BK/BQ flags), en-passant target square, halfmove clock, fullmove number
-  - [x] Move history stack to support undo (position copies for repetition checks)
-  - [x] `Board` class API: `pieceAt(Square)`, `sideToMove()`, `makeMove(Move)` — `undoMove()` deferred to 1.4.2
+- [ ] **1.1.3 Game-state struct**
+  - [ ] Side to move, castling rights (WK/WQ/BK/BQ flags), en-passant target square, halfmove clock, fullmove number
+  - [ ] Move history stack to support undo (position copies for repetition checks)
+  - [ ] `Board` class API: `pieceAt(Square)`, `sideToMove()`, `makeMove(Move)`, `undoMove()`
 
-- [x] **1.1.4 Set up starting position**
-  - [x] `Board::fromStartPos()` — place 8 pawns, 4 back-rank pieces per side, kings/queens
-  - [x] Sanity test: assert piece counts (16 per side), king on e1/e8
+- [ ] **1.1.4 Set up starting position**
+  - [ ] `Board::fromStartPos()` — place 8 pawns, 4 back-rank pieces per side, kings/queens
+  - [ ] Sanity test: assert piece counts (16 per side), king on e1/e8
 
 ### Task 1.2 — Move representation and FEN
 
@@ -170,20 +170,20 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
 
 ▶ [Forsyth-Edwards Notation](https://www.chessprogramming.org/Forsyth-Edwards_Notation)
 
-- [x] **1.2.1 `Move` struct in `move.h`**
-  - [x] Fields: `from`, `to` (0x88 squares), `flags` (quiet, capture, double-push, castle, en passant, promotion)
-  - [x] Promotion piece type encoded in move (or 4 promotion moves: n/b/r/q)
-  - [x] Encapsulate construction: `move(from, to)`, `promotion(from, to, type)`, `castle(...)`
-  - [x] Streaming/pretty print for debugging
+- [ ] **1.2.1 `Move` struct in `move.h`**
+  - [ ] Fields: `from`, `to` (0x88 squares), `flags` (quiet, capture, double-push, castle, en passant, promotion)
+  - [ ] Promotion piece type encoded in move (or 4 promotion moves: n/b/r/q)
+  - [ ] Encapsulate construction: `move(from, to)`, `promotion(from, to, type)`, `castle(...)`
+  - [ ] Streaming/pretty print for debugging
 
-- [x] **1.2.2 FEN parser (`fen.h`/`fen.cpp`)**
-  - [x] Parse placement field `rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR`
-  - [x] Parse side-to-move, castling, en-passant, halfmove clock, fullmove number
-  - [x] `Board::fromFen(std::string_view)`; handle invalid FEN with an error result
+- [ ] **1.2.2 FEN parser (`fen.h`/`fen.cpp`)**
+  - [ ] Parse placement field `rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR`
+  - [ ] Parse side-to-move, castling, en-passant, halfmove clock, fullmove number
+  - [ ] `Board::fromFen(std::string_view)`; handle invalid FEN with an error result
 
-- [x] **1.2.3 FEN emitter**
-  - [x] `toFen()` producing a canonical FEN from any board state
-  - [x] Round-trip test: `fromFen(toFen(b))` == `b` for many positions
+- [ ] **1.2.3 FEN emitter**
+  - [ ] `toFen()` producing a canonical FEN from any board state
+  - [ ] Round-trip test: `fromFen(toFen(b))` == `b` for many positions
 
 ### Task 1.3 — Move generation (pseudo-legal)
 
@@ -192,24 +192,24 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
 ▶ [Move Generation](https://www.chessprogramming.org/Move_Generation)
 ▶ [Pawn Moves](https://www.chessprogramming.org/Pawn_Moves) · [Knight Moves](https://www.chessprogramming.org/Knight) · [Bishop](https://www.chessprogramming.org/Bishop) · [Rook](https://www.chessprogramming.org/Rook) · [Queen](https://www.chessprogramming.org/Queen) · [King](https://www.chessprogramming.org/King_Moves)
 
-- [x] **1.3.1 Generate moves for fixed-step pieces**
-  - [x] Knight: 8 offsets, `!offBoard(to) && !ownPiece(to)`
-  - [x] King: 8 offsets (excluding castling for now)
-  - [x] Pawns: single push, double push from starting rank, diagonal captures, promotions (4 types), en passant
+- [ ] **1.3.1 Generate moves for fixed-step pieces**
+  - [ ] Knight: 8 offsets, `!offBoard(to) && !ownPiece(to)`
+  - [ ] King: 8 offsets (excluding castling for now)
+  - [ ] Pawns: single push, double push from starting rank, diagonal captures, promotions (4 types), en passant
 
-- [x] **1.3.2 Generate sliding-piece moves**
-  - [x] Rook: walk 4 directions until board edge or blocker
-  - [x] Bishop: same with 4 diagonal directions
-  - [x] Queen: rook + bishop rays combined
-  - [x] Set `capture` flag when landing on enemy piece; stop at first blocker
+- [ ] **1.3.2 Generate sliding-piece moves**
+  - [ ] Rook: walk 4 directions until board edge or blocker
+  - [ ] Bishop: same with 4 diagonal directions
+  - [ ] Queen: rook + bishop rays combined
+  - [ ] Set `capture` flag when landing on enemy piece; stop at first blocker
 
-- [x] **1.3.3 Castling moves**
-  - [x] Only when castling-right flag set, squares between empty, king/rook unmoved
-  - [x] Generate king-side and queen-side castling as moves (legality of "not in/through check" deferred to Task 1.4)
+- [ ] **1.3.3 Castling moves**
+  - [ ] Only when castling-right flag set, squares between empty, king/rook unmoved
+  - [ ] Generate king-side and queen-side castling as moves (legality of "not in/through check" deferred to Task 1.4)
 
-- [x] **1.3.4 Assemble `generateMoves(Board)`**
-  - [x] Iterate 0x88 squares, dispatch on piece type, collect into `std::vector<Move>`
-  - [x] Provide a `generateMoves<Filter>(board)` so callers can ask for captures-only later
+- [ ] **1.3.4 Assemble `generateMoves(Board)`**
+  - [ ] Iterate 0x88 squares, dispatch on piece type, collect into `std::vector<Move>`
+  - [ ] Provide a `generateMoves<Filter>(board)` so callers can ask for captures-only later
 
 ### Task 1.4 — Make/unmake and legality
 
@@ -217,13 +217,13 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
 
 ▶ [Move Making](https://www.chessprogramming.org/Move_Making) · [Check](https://www.chessprogramming.org/Check) · [King Attack](https://www.chessprogramming.org/King_Attack)
 
-- [x] **1.4.1 Implement `makeMove`**
-  - [x] Move piece, handle captures (remove piece, restore on undo)
-  - [x] Handle promotion (replace pawn with chosen piece)
-  - [x] Handle en passant capture (remove the captured pawn, not the target square's piece)
-  - [x] Handle castling (also move the rook)
-  - [x] Update castling rights (king/rook moved or square captured), en-passant target, clocks, side-to-move
-  - [x] Push full previous state onto history stack for `undoMove`
+- [ ] **1.4.1 Implement `makeMove`**
+  - [ ] Move piece, handle captures (remove piece, restore on undo)
+  - [ ] Handle promotion (replace pawn with chosen piece)
+  - [ ] Handle en passant capture (remove the captured pawn, not the target square's piece)
+  - [ ] Handle castling (also move the rook)
+  - [ ] Update castling rights (king/rook moved or square captured), en-passant target, clocks, side-to-move
+  - [ ] Push full previous state onto history stack for `undoMove`
 
 - [ ] **1.4.2 Implement `undoMove`**
   - [ ] Pop history, restore pieces/state exactly (including promotion piece restored to pawn)
