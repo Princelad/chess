@@ -1,6 +1,8 @@
 #include <chess/san.h>
 #include <chess/movegen.h>
 
+#include <cctype>
+
 namespace chess {
 namespace san {
 
@@ -111,6 +113,140 @@ std::string toSan(const Board& board, const Move& m)
     }
 
     return san;
+}
+
+std::optional<Move> fromSan(const Board& board, const std::string& san)
+{
+    if (san.empty()) return std::nullopt;
+
+    std::string s = san;
+
+    // Strip trailing +/#
+    while (!s.empty() && (s.back() == '+' || s.back() == '#')) {
+        s.pop_back();
+    }
+
+    // Parse promotion
+    PieceType promoType = PieceType::None;
+    if (s.size() >= 2 && s[s.size() - 2] == '=') {
+        char pc = s.back();
+        switch (pc) {
+            case 'Q': promoType = PieceType::Queen;  break;
+            case 'R': promoType = PieceType::Rook;   break;
+            case 'B': promoType = PieceType::Bishop; break;
+            case 'N': promoType = PieceType::Knight; break;
+            default: return std::nullopt;
+        }
+        s.pop_back(); // piece letter
+        s.pop_back(); // '='
+    }
+
+    if (s.size() < 2) return std::nullopt;
+
+    // Castling (check before destination parsing since O-O has no square suffix)
+    if (s == "O-O" || s == "O-O-O") {
+        Color side = board.sideToMove();
+        Square from = squareOf(File::E, side == Color::White ? Rank::R1 : Rank::R8);
+        Square to = (s == "O-O")
+            ? squareOf(File::G, side == Color::White ? Rank::R1 : Rank::R8)
+            : squareOf(File::C, side == Color::White ? Rank::R1 : Rank::R8);
+        return castleMove(from, to);
+    }
+
+    // Destination square = last 2 chars
+    std::string destStr = s.substr(s.size() - 2);
+    int destFile = destStr[0] - 'a';
+    int destRank = destStr[1] - '1';
+    if (destFile < 0 || destFile > 7 || destRank < 0 || destRank > 7)
+        return std::nullopt;
+    Square dest = squareOf(destFile, destRank);
+
+    std::string prefix = s.substr(0, s.size() - 2);
+
+    // Determine piece type and disambiguation
+    PieceType pieceType = PieceType::Pawn;
+    int disambigFile = -1;  // -1 = not specified
+    int disambigRank = -1;
+    bool isCapture = false;
+
+    if (!prefix.empty()) {
+        char first = prefix[0];
+        if (std::isupper(static_cast<unsigned char>(first))) {
+            // Piece letter
+            switch (first) {
+                case 'K': pieceType = PieceType::King;   break;
+                case 'Q': pieceType = PieceType::Queen;  break;
+                case 'R': pieceType = PieceType::Rook;   break;
+                case 'B': pieceType = PieceType::Bishop; break;
+                case 'N': pieceType = PieceType::Knight; break;
+                default: return std::nullopt;
+            }
+            prefix = prefix.substr(1);
+        } else if (std::islower(static_cast<unsigned char>(first))) {
+            // Pawn capture: file letter + 'x'
+            if (prefix.size() >= 2 && prefix[1] == 'x') {
+                isCapture = true;
+                disambigFile = prefix[0] - 'a';
+                prefix = prefix.substr(2);
+            } else {
+                // Shouldn't happen in valid SAN but handle gracefully
+                return std::nullopt;
+            }
+        } else if (first == 'x') {
+            isCapture = true;
+            prefix = prefix.substr(1);
+        }
+    }
+
+    // Parse remaining disambiguation
+    for (char c : prefix) {
+        if (c == 'x') {
+            isCapture = true;
+        } else if (c >= 'a' && c <= 'h') {
+            disambigFile = c - 'a';
+        } else if (c >= '1' && c <= '8') {
+            disambigRank = c - '1';
+        } else {
+            return std::nullopt;
+        }
+    }
+
+    // Generate legal moves and find matching
+    auto legal = generateLegalMoves(board);
+    std::optional<Move> result;
+    int matchCount = 0;
+
+    for (const auto& m : legal) {
+        // Destination
+        if (m.to != dest) continue;
+
+        // Piece type
+        Piece piece = board.pieceAt(m.from);
+        if (piece.type != pieceType) continue;
+
+        // Disambiguation
+        int fromFile = m.from & 7;
+        int fromRank = (m.from >> 4) & 7;
+        if (disambigFile >= 0 && fromFile != disambigFile) continue;
+        if (disambigRank >= 0 && fromRank != disambigRank) continue;
+
+        // Capture
+        if (isCapture && !m.isCapture()) continue;
+        if (!isCapture && m.isCapture()) continue;
+
+        // Promotion
+        if (promoType != PieceType::None) {
+            if (!m.isPromotion() || m.promotion != promoType) continue;
+        } else {
+            if (m.isPromotion()) continue;
+        }
+
+        result = m;
+        ++matchCount;
+        if (matchCount > 1) return std::nullopt;  // ambiguous
+    }
+
+    return result;
 }
 
 } // namespace san

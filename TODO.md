@@ -276,10 +276,10 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [x] Capture marker `x`, promotion `=Q`, check `+`, checkmate `#`, castling `O-O` / `O-O-O`
   - [x] En passant in SAN (e.g. `exd6`)
 
-- [ ] **1.6.2 Parse SAN → move (`san::fromSan`)**
-  - [ ] Resolve notation against generated legal moves (find the unique matching move)
-  - [ ] Handle all the same cases as formatting (disambiguation, promotions, castles)
-  - [ ] Return error on ambiguous/illegal input
+- [x] **1.6.2 Parse SAN → move (`san::fromSan`)**
+  - [x] Resolve notation against generated legal moves (find the unique matching move)
+  - [x] Handle all the same cases as formatting (disambiguation, promotions, castles)
+  - [x] Return error on ambiguous/illegal input
 
 ---
 
