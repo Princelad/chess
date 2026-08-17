@@ -261,9 +261,9 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
 - [x] **1.5.4 Insufficient material**
   - [x] K vs K, K+B vs K, K+N vs K (and K+B vs K+B same-color bishops) → draw
 
-- [ ] **1.5.5 Public rules API**
-  - [ ] `GameStatus evaluate(Board)` combining all above
-  - [ ] `bool isLegalMove(Board, Move)` for server-side validation
+- [x] **1.5.5 Public rules API**
+  - [x] `GameStatus evaluate(Board)` combining all above
+  - [x] `bool isLegalMove(Board, Move)` for server-side validation
 
 ### Task 1.6 — SAN (algebraic notation)
 

@@ -25,4 +25,6 @@ bool insufficientMaterial(const Board& board);
 bool isAttacked(const Board& board, Square sq, Color byColor);
 bool inCheck(const Board& board, Color color);
 
+bool isLegalMove(const Board& board, const Move& m);
+
 } // namespace chess
