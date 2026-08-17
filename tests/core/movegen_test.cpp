@@ -664,4 +664,84 @@ TEST(MoveGen, IsAttackedByColor)
     EXPECT_FALSE(isAttacked(board, e5, Color::Black));
 }
 
+// --- Legal move filtering tests ---
+
+TEST(MoveGen, LegalMovesAtStart)
+{
+    auto board = Board::fromStartPos();
+    auto legal = generateLegalMoves(board);
+    EXPECT_EQ(legal.size(), 20u);
+}
+
+TEST(MoveGen, LegalMovesCastlingPosition)
+{
+    auto board = *Board::fromFen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1");
+    auto legal = generateLegalMoves(board);
+    EXPECT_EQ(legal.size(), 25u);
+}
+
+TEST(MoveGen, LegalMovesFiltersKingIntoCheck)
+{
+    // Black rook on d5 attacks d1; white king on e1 cannot go to d1 or d2
+    auto board = *Board::fromFen("8/8/8/3r4/8/8/8/4K2R w - - 0 1");
+    auto legal = generateLegalMoves(board);
+    Square e1 = squareOf(File::E, Rank::R1);
+    EXPECT_FALSE(containsMove(legal, e1, squareOf(File::D, Rank::R1)));
+    EXPECT_FALSE(containsMove(legal, e1, squareOf(File::D, Rank::R2)));
+    EXPECT_TRUE(containsMove(legal, e1, squareOf(File::F, Rank::R1)));
+    EXPECT_TRUE(containsMove(legal, e1, squareOf(File::E, Rank::R2)));
+}
+
+TEST(MoveGen, LegalMovesPinnedPiece)
+{
+    // White rook on e2 pinned by black rook on e5 to white king on e1
+    auto board = *Board::fromFen("8/8/8/4r3/8/8/4R3/4K3 w - - 0 1");
+    auto legal = generateLegalMoves(board);
+    Square e2 = squareOf(File::E, Rank::R2);
+    // Rook on e2 cannot move off the e-file (would expose king to check)
+    EXPECT_FALSE(containsMove(legal, e2, squareOf(File::D, Rank::R2)));
+    EXPECT_FALSE(containsMove(legal, e2, squareOf(File::F, Rank::R2)));
+    // But can move along e-file
+    EXPECT_TRUE(containsMove(legal, e2, squareOf(File::E, Rank::R3)));
+}
+
+TEST(MoveGen, LegalMovesCastlingThroughCheck)
+{
+    // Black rook on f4 attacks transit square f1; KS castle illegal, QS legal
+    auto board = *Board::fromFen("8/8/8/8/5r2/8/8/R3K2R w KQ - 0 1");
+    auto legal = generateLegalMoves(board);
+    Square e1 = squareOf(File::E, Rank::R1);
+    // KS castle (e1→g1) should be illegal (f1 attacked)
+    EXPECT_FALSE(containsMove(legal, e1, squareOf(File::G, Rank::R1), Castle));
+    // QS castle (e1→c1) should be legal
+    EXPECT_TRUE(containsMove(legal, e1, squareOf(File::C, Rank::R1), Castle));
+}
+
+TEST(MoveGen, LegalMovesCastlingOutOfCheck)
+{
+    // Black rook on e5 gives check (no e2 pawn blocking); neither castle is legal
+    auto board = *Board::fromFen("r3k2r/pppppppp/8/4r3/8/8/PPPP1PPP/R3K2R w KQkq - 0 1");
+    auto legal = generateLegalMoves(board);
+    Square e1 = squareOf(File::E, Rank::R1);
+    EXPECT_FALSE(containsMove(legal, e1, squareOf(File::G, Rank::R1), Castle));
+    EXPECT_FALSE(containsMove(legal, e1, squareOf(File::C, Rank::R1), Castle));
+}
+
+TEST(MoveGen, LegalMovesCapturesOnly)
+{
+    auto board = *Board::fromFen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1");
+    auto legal = generateLegalMoves(board, MoveFilter::CapturesOnly);
+    for (const auto& m : legal) {
+        EXPECT_TRUE(m.isCapture());
+    }
+    EXPECT_EQ(legal.size(), 0u);
+}
+
+TEST(MoveGen, LegalMovesBlackToMove)
+{
+    auto board = *Board::fromFen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R b KQkq - 0 1");
+    auto legal = generateLegalMoves(board);
+    EXPECT_EQ(legal.size(), 25u);
+}
+
 } // namespace chess

@@ -322,4 +322,30 @@ std::vector<Move> generateMoves(const Board& board, MoveFilter filter)
     return moves;
 }
 
+std::vector<Move> generateLegalMoves(const Board& board, MoveFilter filter)
+{
+    auto pseudo = generateMoves(board, filter);
+    Board b = board;
+    std::vector<Move> legal;
+    const Color side = b.sideToMove();
+    const Color enemy = opposite(side);
+
+    for (const auto& m : pseudo) {
+        if (m.isCastle()) {
+            if (inCheck(b, side)) continue;
+            const Square transit = (m.to > m.from) ? m.from + 1 : m.from - 1;
+            if (isAttacked(b, transit, enemy)) continue;
+            if (isAttacked(b, m.to, enemy)) continue;
+        } else {
+            b.makeMove(m);
+            bool leftInCheck = inCheck(b, side);
+            b.undoMove(m);
+            if (leftInCheck) continue;
+        }
+        legal.push_back(m);
+    }
+
+    return legal;
+}
+
 } // namespace chess

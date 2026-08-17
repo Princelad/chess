@@ -10,6 +10,7 @@ namespace chess {
 enum class MoveFilter { All, CapturesOnly };
 
 std::vector<Move> generateMoves(const Board& board, MoveFilter filter = MoveFilter::All);
+std::vector<Move> generateLegalMoves(const Board& board, MoveFilter filter = MoveFilter::All);
 
 bool isAttacked(const Board& board, Square sq, Color byColor);
 bool inCheck(const Board& board, Color color);
