@@ -150,7 +150,12 @@ std::optional<Move> fromSan(const Board& board, const std::string& san)
         Square to = (s == "O-O")
             ? squareOf(File::G, side == Color::White ? Rank::R1 : Rank::R8)
             : squareOf(File::C, side == Color::White ? Rank::R1 : Rank::R8);
-        return castleMove(from, to);
+        Move target = castleMove(from, to);
+        auto legal = generateLegalMoves(board);
+        for (const auto& m : legal) {
+            if (m.isCastle() && m.from == from && m.to == to) return m;
+        }
+        return std::nullopt;
     }
 
     // Destination square = last 2 chars

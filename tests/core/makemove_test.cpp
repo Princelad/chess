@@ -91,20 +91,16 @@ TEST(MakeMove, EnPassantSquareClearedOnNonDoublePush)
 
 TEST(MakeMove, EnPassantCapture)
 {
-    // White e2-e4, Black d7-d5, White e4xd5 en passant
-    auto board = Board::fromStartPos();
-    board.makeMove(doublePushMove(squareOf(File::E, Rank::R2), squareOf(File::E, Rank::R4)));
-    board.makeMove(doublePushMove(squareOf(File::D, Rank::R7), squareOf(File::D, Rank::R5)));
-
-    Square e4 = squareOf(File::E, Rank::R4);
+    // Position after 1.e4 e5 2.e5 d5: white pawn e5, black pawn d5, EP target d6
+    auto board = *Board::fromFen("rnbqkbnr/ppp1p1pp/8/3pP3/8/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 3");
+    Square e5 = squareOf(File::E, Rank::R5);
+    Square d6 = squareOf(File::D, Rank::R6);
     Square d5 = squareOf(File::D, Rank::R5);
-    board.makeMove(enPassantMove(e4, d5));
+    board.makeMove(enPassantMove(e5, d6));
 
-    EXPECT_TRUE(board.isEmpty(e4));
-    EXPECT_EQ(board.pieceAt(d5), Piece::of(Color::White, PieceType::Pawn));
-    // The captured pawn on d5 should be gone (it was replaced by the white pawn)
-    // The pawn that was on e4 should be gone
-    EXPECT_TRUE(board.isEmpty(squareOf(File::E, Rank::R5)));  // captured pawn's square
+    EXPECT_TRUE(board.isEmpty(e5));    // white pawn moved away
+    EXPECT_TRUE(board.isEmpty(d5));    // black pawn captured (en passant)
+    EXPECT_EQ(board.pieceAt(d6), Piece::of(Color::White, PieceType::Pawn));  // white pawn on d6
 }
 
 // --- Promotion ---
@@ -362,13 +358,14 @@ TEST(MakeMove, UndoDoublePush)
 
 TEST(MakeMove, UndoEnPassant)
 {
-    auto board = Board::fromStartPos();
-    board.makeMove(doublePushMove(squareOf(File::E, Rank::R2), squareOf(File::E, Rank::R4)));
-    board.makeMove(doublePushMove(squareOf(File::D, Rank::R7), squareOf(File::D, Rank::R5)));
+    // Position after 1.e4 e5 2.e5 d5: EP target d6
+    auto board = *Board::fromFen("rnbqkbnr/ppp1p1pp/8/3pP3/8/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 3");
     std::string beforeEpFen = board.toFen();
 
-    board.makeMove(enPassantMove(squareOf(File::E, Rank::R4), squareOf(File::D, Rank::R5)));
-    board.undoMove(enPassantMove(squareOf(File::E, Rank::R4), squareOf(File::D, Rank::R5)));
+    Square e5 = squareOf(File::E, Rank::R5);
+    Square d6 = squareOf(File::D, Rank::R6);
+    board.makeMove(enPassantMove(e5, d6));
+    board.undoMove(enPassantMove(e5, d6));
 
     EXPECT_EQ(board.toFen(), beforeEpFen);
 }

@@ -979,4 +979,83 @@ TEST(MoveGen, IsLegalMovePinnedPiece)
     EXPECT_FALSE(isLegalMove(board, move(e2, f2)));
 }
 
+TEST(MoveGen, EnPassantPinnedDiagonally)
+{
+    // White king e5, white pawn d5, black pawn e5 is the double-pushed pawn
+    // Wait, I need a position where en passant would expose the king.
+    // White king on a5, white pawn on b5, black pawn just double-pushed to c5 (EP target c6).
+    // If bxc6 en passant, the a5 king would be on the same rank as the black rook on h5 — exposed!
+    auto board = *Board::fromFen("8/8/8/RPk5/1P6/8/8/8 b - c6 0 1");
+    // Black pawn on c5, en passant target c6. White pawn on b5 can capture en passant: bxc6.
+    // But wait, it's black to move. Let me flip: white to move, white pawn captures.
+    // Position: 8/8/8/R1kP4/8/8/8/8 w - - 0 1. No EP available.
+    // Better: King on b5, pawn on a5, enemy pawn on b4 just double-pushed (a3 EP target).
+    // If axb3 EP, then b5 king is on the same file as enemy rook on b8 — exposed!
+    auto board2 = *Board::fromFen("r6k/8/8/1P6/Pp6/8/8/8 w - b3 0 1");
+    // White pawn a4, black pawn b4 (just double pushed, EP target b3).
+    // axb3 en passant: removes pawn on b4, moves pawn from a4 to b3.
+    // After the EP, the a-file is clear for black rook on a8 to attack a1... but king is on... hmm let me reconsider.
+    // Let me use a cleaner setup:
+    // White king on f3, white pawn on e5, black pawn just double-pushed to d5 (EP target d6).
+    // If exd6 EP, the e5 pawn leaves f3 exposed to the black bishop on b7 along the a8-h1 diagonal? No...
+    // Simplest: white king on d3, white pawn on e5, black rook on h5, black pawn just double-pushed to f5 (EP target f6).
+    // If exf6 EP, the e5 pawn leaves d3 exposed to the black rook on h5? No, rook moves along ranks/files.
+    // OK let me think clearly. En passant pin: pawn A captures en passant, removing pawn B. After the capture,
+    // pawn A moves to a different square than where pawn B was. If pawn B was shielding the king from an
+    // attack along a rank or file, removing it (and A not being on that square) exposes the king.
+    // Position: White king c3, white pawn d5, black pawn e5 just double-pushed (EP target e6).
+    // dxe6 EP: pawn moves from d5 to e6, black pawn on e5 is removed.
+    // After EP: white king c3, white pawn e6, black rook on a5 attacks along rank 5 — but d5 is now empty, so a5 rook attacks... no, king is on c3.
+    // Let me try: white king c4, white pawn d5, black pawn e5 (EP target e6), black rook on a4.
+    // dxe6 EP: pawn goes d5→e6, black pawn on e5 removed.
+    // After EP: king on c4, rook on a4 attacks along rank 4 to c4 — CHECK! So dxe6 should be illegal.
+    auto board3 = *Board::fromFen("8/8/8/3Pp3/2Rk4/8/8/8 w - e6 0 1");
+    // This has: white king c4 (wait, R is on c4 and k is on d4 — that can't be right, two pieces on adjacent squares).
+    // Let me fix: "3Pp3/8/8/8/2Rk4/8/8/8" — white pawn d5? No, that's rank 8 for d5...
+    // FEN: rank8/rank7/rank6/rank5/rank4/rank3/rank2/rank1
+    // I want: white pawn on d5, black pawn on e5, white king on c4, black rook on a4, en passant target e6.
+    // Rank 5: 3Pp3 = d5=P(white), e5=p(black). Rank 4: 2Rk4 = c4=R(white? no, R is white rook), d4=k(black king? no).
+    // This is getting confused. Let me use a simpler, well-known example:
+    // The classic EP pin: white Ke1, white Pe5, black Rh5, black d-pawn just double-pushed to d5.
+    // If exd6 EP, the e5 pawn leaves the 5th rank, and Rh5 has a clear path to e1 along rank 5? No, there are other pieces.
+    // Classic: Ke5, pe4(double push), Rh1. exd3 EP exposes king to Rh1? No.
+    // Let me just use a well-known test position:
+    // White king on f3, white pawn on g5, black pawn on h5 just double-pushed (EP target h6).
+    // gxh6 EP: pawn moves g5→h6, removes black pawn on h5.
+    // After: king f3, pawn h6. Black rook on h8 attacks along h-file — but pawn on h6 blocks. Not a pin.
+    // 
+    // SIMPLEST: White Ke1, white pawn e5, black pawn d5 (EP target d6), black rook on a5.
+    // exd6 EP: pawn moves e5→d6, removes pawn on d5.
+    // After: Ke1, pawn d6, Ra5. Ra5 attacks along 5th rank — but e5 is now empty. Does rook reach e1? No, rook is on rank 5, king on rank 1.
+    // 
+    // OK: White Ke5, white pawn d5, black pawn c5 just double pushed (EP target c6), black rook on a5.
+    // dxc6 EP: pawn moves d5→c6, removes black pawn on c5.
+    // After: Ke5, pawn c6, Ra5. Ra5 attacks along rank 5 — e5 is now clear of the pawn (it was on d5, moved to c6). But Ke5 is ON rank 5! Ra5→e5 is check!
+    // But wait, does the d5 pawn moving away expose the king? The pawn was on d5, king on e5. Removing the pawn from d5 and the black pawn from c5 doesn't directly affect the path from a5 to e5.
+    // Actually, Ra5 attacks along rank 5: a5, b5, c5, d5, e5. c5 and d5 had pawns. After dxc6: d5 is empty (pawn moved), c5 is empty (pawn captured). So Ra5→e5 is now open. CHECK!
+    // YES! This is the en passant pin. dxc6 should be ILLEGAL because it exposes the white king to the black rook.
+    auto board4 = *Board::fromFen("8/8/8/R1pP4/4K3/8/8/8 w - c6 0 1");
+    // Rank 5: R1pP4 = a5=R(black), b5=empty, c5=p(black), d5=P(white), e5=K(white, but K should be uppercase)... 
+    // Wait, FEN uses lowercase for black, uppercase for white. Let me be careful:
+    // a5=R is a WHITE rook? No! In FEN, uppercase = white, lowercase = black.
+    // I need: black rook on a5 = 'r', white pawn d5 = 'P', black pawn c5 = 'p', white king e5 = 'K'.
+    // Rank 5: r1pP4 — but 'r' is black rook, then 1 empty, 'p' black pawn, 'P' white pawn, 4 empty.
+    // That's only: r(a5), 1 empty(b5), p(c5), P(d5), 4 empty(e5-h5). That's 8 squares. But where's the white king?
+    // The king should be on e5. So rank 5 = r1pPK3. That's: r(a5), empty(b5), p(c5), P(d5), K(e5), 3 empty(f5-h5) = 8. Yes!
+    // But wait, if black rook is on a5 and white king is on e5, and c5/d5 have pawns blocking — is the king already in check? 
+    // Ra5 attacks: a5→b5→c5(pawn blocks). So no, the king is safe. After dxc6: d5 empty, c5 empty, Ra5→e5 = check!
+    auto epBoard = *Board::fromFen("8/8/8/r1pPK3/8/8/8/8 w - c6 0 1");
+    // This should have white to move. dxc6 EP should be generated as pseudo-legal but should NOT be in legal moves.
+    auto pseudoLegal = generateMoves(epBoard);
+    bool hasEP = false;
+    for (const auto& m : pseudoLegal) {
+        if (m.isEnPassant() && m.from == squareOf(File::D, Rank::R5) && m.to == squareOf(File::C, Rank::R6)) {
+            hasEP = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(hasEP); // EP is generated as pseudo-legal
+    EXPECT_FALSE(isLegalMove(epBoard, enPassantMove(squareOf(File::D, Rank::R5), squareOf(File::C, Rank::R6))));
+}
+
 } // namespace chess

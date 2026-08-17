@@ -237,5 +237,110 @@ TEST(SAN, RoundTripCastlingPosition)
     }
 }
 
+// --- En passant SAN ---
+
+TEST(SAN, ToSanEnPassant)
+{
+    auto board = *Board::fromFen("8/8/8/3pP3/8/8/8/8 w - d6 0 1");
+    Move m = enPassantMove(squareOf(File::E, Rank::R5), squareOf(File::D, Rank::R6));
+    EXPECT_EQ(san::toSan(board, m), "exd6");
+}
+
+TEST(SAN, FromSanEnPassant)
+{
+    auto board = *Board::fromFen("8/8/8/3pP3/8/8/8/8 w - d6 0 1");
+    auto m = san::fromSan(board, "exd6");
+    ASSERT_TRUE(m.has_value());
+    EXPECT_EQ(*m, enPassantMove(squareOf(File::E, Rank::R5), squareOf(File::D, Rank::R6)));
+}
+
+// --- Disambiguation by both file and rank ---
+
+TEST(SAN, ToSanDisambiguationByBoth)
+{
+    // Rooks on a1, a5, c3. All can reach a3. Need both file and rank disambiguation for Ra1.
+    auto board = *Board::fromFen("8/8/8/R7/8/2R5/8/R3k3 w - - 0 1");
+    Move m = move(squareOf(File::A, Rank::R1), squareOf(File::A, Rank::R3));
+    EXPECT_EQ(san::toSan(board, m), "Ra1a3");
+}
+
+// --- Black-side SAN ---
+
+TEST(SAN, ToSanBlackPawnPush)
+{
+    auto board = *Board::fromFen("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1");
+    Move m = doublePushMove(squareOf(File::D, Rank::R7), squareOf(File::D, Rank::R5));
+    EXPECT_EQ(san::toSan(board, m), "d5");
+}
+
+TEST(SAN, ToSanBlackCastling)
+{
+    auto board = *Board::fromFen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R b KQkq - 0 1");
+    Move m = castleMove(squareOf(File::E, Rank::R8), squareOf(File::G, Rank::R8));
+    EXPECT_EQ(san::toSan(board, m), "O-O");
+}
+
+TEST(SAN, FromSanBlackMove)
+{
+    auto board = *Board::fromFen("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1");
+    auto m = san::fromSan(board, "d5");
+    ASSERT_TRUE(m.has_value());
+    EXPECT_EQ(*m, doublePushMove(squareOf(File::D, Rank::R7), squareOf(File::D, Rank::R5)));
+}
+
+// --- Promotion+check ---
+
+TEST(SAN, ToSanPromotionCheck)
+{
+    // White pawn e7, black king f8. e8=Q+ (queen checks along 8th rank)
+    auto board = *Board::fromFen("5k2/4P3/8/8/8/8/8/4K3 w - - 0 1");
+    Move m = promotionMove(squareOf(File::E, Rank::R7), squareOf(File::E, Rank::R8), PieceType::Queen);
+    EXPECT_EQ(san::toSan(board, m), "e8=Q+");
+}
+
+// --- fromSan castling legality ---
+
+TEST(SAN, FromSanCastlingIllegalReturnsNullopt)
+{
+    // Black can't castle KS here — king on e8, rook on h8, but squares f8/g8 are attacked by white queen on h7? No, let me use a position where castling is not legal.
+    // King moved: position after 1.e3 e6 2.Bb5 — no, simpler: just use a position where rook is missing.
+    auto board = *Board::fromFen("r3k3/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQ - 0 1");
+    // Black can't castle QS because rights are only K (white KS). Wait, the castling field says "K" which means white KS only.
+    // Let me make it clearer: black has no castling rights.
+    auto board2 = *Board::fromFen("4k3/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQ - 0 1");
+    // Now try to castle as black — black has no castling rights
+    // But fromSan always constructs from the sideToMove's perspective. board2 has white to move. Let me use a position with black to move but no castling rights.
+    auto board3 = *Board::fromFen("4k3/pppppppp/8/8/8/8/PPPPPPPP/R3K2R b - - 0 1");
+    auto m = san::fromSan(board3, "O-O");
+    EXPECT_FALSE(m.has_value());
+}
+
+// --- Round-trip with EP, promotion, disambiguation ---
+
+TEST(SAN, RoundTripEnPassantPosition)
+{
+    // Position with en passant available
+    auto board = *Board::fromFen("rnbqkbnr/ppp1p1pp/8/3pPp2/8/8/PPPP1PPP/RNBQKBNR w KQkq f6 0 3");
+    auto legal = generateLegalMoves(board);
+    for (const auto& m : legal) {
+        std::string s = san::toSan(board, m);
+        auto parsed = san::fromSan(board, s);
+        ASSERT_TRUE(parsed.has_value()) << "Failed round-trip for: " << s;
+        EXPECT_EQ(*parsed, m) << "Round-trip mismatch for: " << s;
+    }
+}
+
+TEST(SAN, RoundTripPromotionPosition)
+{
+    auto board = *Board::fromFen("r1bqkb1r/ppppP2p/2n2n2/4p3/2B1P3/8/PPPP1PPP/RNBQK1NR w KQkq - 0 5");
+    auto legal = generateLegalMoves(board);
+    for (const auto& m : legal) {
+        std::string s = san::toSan(board, m);
+        auto parsed = san::fromSan(board, s);
+        ASSERT_TRUE(parsed.has_value()) << "Failed round-trip for: " << s;
+        EXPECT_EQ(*parsed, m) << "Round-trip mismatch for: " << s;
+    }
+}
+
 } // namespace
 } // namespace chess
