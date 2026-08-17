@@ -245,9 +245,9 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
 
 ▶ [Checkmate](https://www.chessprogramming.org/Checkmate) · [Stalemate](https://www.chessprogramming.org/Stalemate) · [Threefold Repetition](https://www.chessprogramming.org/Threefold_Repetition) · [Fifty-move Rule](https://www.chessprogramming.org/Fifty-move_Rule) · [Insufficient Material](https://www.chessprogramming.org/Insufficient_Material)
 
-- [ ] **1.5.1 Checkmate / stalemate**
-  - [ ] After filtering legal moves: if none and in check → checkmate; if none and not in check → stalemate
-  - [ ] Return a `GameState` enum: `Ongoing, Checkmate, Stalemate, Draw`
+- [x] **1.5.1 Checkmate / stalemate**
+  - [x] After filtering legal moves: if none and in check → checkmate; if none and not in check → stalemate
+  - [x] Return a `GameState` enum: `Ongoing, Checkmate, Stalemate, Draw`
 
 - [ ] **1.5.2 Draw by repetition**
   - [ ] Track position history (hashed or FEN key per position)
