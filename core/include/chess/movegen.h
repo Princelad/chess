@@ -20,6 +20,8 @@ bool threefoldRepetition(const Board& board);
 
 bool fiftyMoveRule(const Board& board);
 
+bool insufficientMaterial(const Board& board);
+
 bool isAttacked(const Board& board, Square sq, Color byColor);
 bool inCheck(const Board& board, Color color);
 
