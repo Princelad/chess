@@ -211,6 +211,78 @@ void genCastling(Square from, Color color, const Board& board, MoveFilter filter
 
 } // namespace
 
+bool isAttacked(const Board& board, Square sq, Color byColor)
+{
+    // Knight attacks
+    for (int offset : knightOffsets) {
+        const Square to = sq + offset;
+        if (offBoard(to)) continue;
+        const Piece p = board.pieceAt(to);
+        if (p.color == byColor && p.type == PieceType::Knight) return true;
+    }
+
+    // King attacks
+    for (int offset : kingOffsets) {
+        const Square to = sq + offset;
+        if (offBoard(to)) continue;
+        const Piece p = board.pieceAt(to);
+        if (p.color == byColor && p.type == PieceType::King) return true;
+    }
+
+    // Pawn attacks — check the two squares a pawn of byColor would attack from
+    // White pawns capture at +15/+17, so attackers are at sq-15/sq-17
+    // Black pawns capture at -15/-17, so attackers are at sq+15/sq+17
+    const int pawnDir = (byColor == Color::White) ? -1 : 1;
+    const int pawnAttackOffsets[2] = {15 * pawnDir, 17 * pawnDir};
+    for (int offset : pawnAttackOffsets) {
+        const Square to = sq + offset;
+        if (offBoard(to)) continue;
+        const Piece p = board.pieceAt(to);
+        if (p.color == byColor && p.type == PieceType::Pawn) return true;
+    }
+
+    // Sliding attacks — rook rays
+    for (int d = 0; d < 4; ++d) {
+        Square to = sq + rookDirs[d];
+        while (!offBoard(to)) {
+            const Piece p = board.pieceAt(to);
+            if (!p.isNone()) {
+                if (p.color == byColor && (p.type == PieceType::Rook || p.type == PieceType::Queen))
+                    return true;
+                break;
+            }
+            to += rookDirs[d];
+        }
+    }
+
+    // Sliding attacks — bishop rays
+    for (int d = 0; d < 4; ++d) {
+        Square to = sq + bishopDirs[d];
+        while (!offBoard(to)) {
+            const Piece p = board.pieceAt(to);
+            if (!p.isNone()) {
+                if (p.color == byColor && (p.type == PieceType::Bishop || p.type == PieceType::Queen))
+                    return true;
+                break;
+            }
+            to += bishopDirs[d];
+        }
+    }
+
+    return false;
+}
+
+bool inCheck(const Board& board, Color color)
+{
+    for (int sq = 0; sq < BoardSize; ++sq) {
+        if (offBoard(sq)) continue;
+        const Piece p = board.pieceAt(sq);
+        if (p.color == color && p.type == PieceType::King)
+            return isAttacked(board, sq, opposite(color));
+    }
+    return false;
+}
+
 std::vector<Move> generateMoves(const Board& board, MoveFilter filter)
 {
     std::vector<Move> moves;

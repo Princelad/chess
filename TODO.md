@@ -229,10 +229,10 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [x] Pop history, restore pieces/state exactly (including promotion piece restored to pawn)
   - [x] Round-trip test: for every generated move, `makeMove` then `undoMove` returns original position
 
-- [ ] **1.4.3 Check detection**
-  - [ ] `isAttacked(sq, byColor)`: reuse movegen — is any enemy piece attacking `sq`?
-  - [ ] Simplify: scan from `sq` outward (knight offsets, king offsets, rook/bishop/queen rays, pawn attacks)
-  - [ ] `inCheck(board, color)` → king square attacked?
+- [x] **1.4.3 Check detection**
+  - [x] `isAttacked(sq, byColor)`: reuse movegen — is any enemy piece attacking `sq`?
+  - [x] Simplify: scan from `sq` outward (knight offsets, king offsets, rook/bishop/queen rays, pawn attacks)
+  - [x] `inCheck(board, color)` → king square attacked?
 
 - [ ] **1.4.4 Legal move filtering**
   - [ ] Generate pseudo-legal moves, then simulate each with `makeMove` and keep only those where own king is not attacked

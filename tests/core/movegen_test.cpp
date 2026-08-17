@@ -507,4 +507,161 @@ TEST(MoveGen, CapturesOnlyOnEmptyBoard)
     EXPECT_EQ(moves.size(), 0u);
 }
 
+// --- isAttacked tests ---
+
+TEST(MoveGen, KnightAttacksSquare)
+{
+    // White knight on f3 (37) attacks d4 (51) via offset +14
+    auto board = *Board::fromFen("8/8/8/8/8/5N2/8/8 w - - 0 1");
+    Square d4 = squareOf(File::D, Rank::R4);
+    EXPECT_TRUE(isAttacked(board, d4, Color::White));
+}
+
+TEST(MoveGen, BlackKnightAttacksSquare)
+{
+    // Black knight on c6 (82) attacks d4 (51) via offset -31
+    auto board = *Board::fromFen("8/8/2n5/8/8/8/8/8 w - - 0 1");
+    Square d4 = squareOf(File::D, Rank::R4);
+    EXPECT_TRUE(isAttacked(board, d4, Color::Black));
+}
+
+TEST(MoveGen, KnightDoesNotAttackFar)
+{
+    auto board = Board::fromStartPos();
+    Square a1 = squareOf(File::A, Rank::R1);
+    EXPECT_FALSE(isAttacked(board, a1, Color::White));
+}
+
+TEST(MoveGen, KingAdjacentAttack)
+{
+    auto board = *Board::fromFen("8/8/8/4k3/4K3/8/8/8 w - - 0 1");
+    Square d4 = squareOf(File::D, Rank::R4);
+    EXPECT_TRUE(isAttacked(board, d4, Color::Black));
+    EXPECT_TRUE(isAttacked(board, squareOf(File::F, Rank::R5), Color::White));
+}
+
+TEST(MoveGen, PawnAttacksForward)
+{
+    // White pawn on d5 (67) attacks c6 (82) and e6 (84) via +15/+17
+    auto board = *Board::fromFen("8/8/8/3P4/8/8/8/8 w - - 0 1");
+    Square c6 = squareOf(File::C, Rank::R6);
+    Square e6 = squareOf(File::E, Rank::R6);
+    EXPECT_TRUE(isAttacked(board, c6, Color::White));
+    EXPECT_TRUE(isAttacked(board, e6, Color::White));
+}
+
+TEST(MoveGen, BlackPawnAttacksForward)
+{
+    // Black pawn on e5 (68) attacks d4 (51) and f4 (53) via -15/-17
+    auto board = *Board::fromFen("8/8/8/4p3/8/8/8/8 w - - 0 1");
+    Square d4 = squareOf(File::D, Rank::R4);
+    Square f4 = squareOf(File::F, Rank::R4);
+    EXPECT_TRUE(isAttacked(board, d4, Color::Black));
+    EXPECT_TRUE(isAttacked(board, f4, Color::Black));
+}
+
+TEST(MoveGen, PawnDoesNotAttackBackward)
+{
+    // White pawn on d4 (51) does NOT attack c3 (34) or e3 (36)
+    auto board = *Board::fromFen("8/8/8/8/3P4/8/8/8 w - - 0 1");
+    Square c3 = squareOf(File::C, Rank::R3);
+    Square e3 = squareOf(File::E, Rank::R3);
+    EXPECT_FALSE(isAttacked(board, c3, Color::White));
+    EXPECT_FALSE(isAttacked(board, e3, Color::White));
+}
+
+TEST(MoveGen, RookOnOpenFile)
+{
+    auto board = *Board::fromFen("8/8/8/4R3/8/8/8/8 w - - 0 1");
+    Square e1 = squareOf(File::E, Rank::R1);
+    Square e8 = squareOf(File::E, Rank::R8);
+    Square a5 = squareOf(File::A, Rank::R5);
+    EXPECT_TRUE(isAttacked(board, e1, Color::White));
+    EXPECT_TRUE(isAttacked(board, e8, Color::White));
+    EXPECT_TRUE(isAttacked(board, a5, Color::White));
+}
+
+TEST(MoveGen, RookBlocked)
+{
+    // Own bishop on e4 blocks rook on e5 from reaching e1
+    auto board = *Board::fromFen("8/8/8/4R3/4B3/8/8/8 w - - 0 1");
+    Square e1 = squareOf(File::E, Rank::R1);
+    EXPECT_FALSE(isAttacked(board, e1, Color::White));
+}
+
+TEST(MoveGen, BishopOnOpenDiagonal)
+{
+    auto board = *Board::fromFen("8/8/8/4B3/8/8/8/8 w - - 0 1");
+    Square h8 = squareOf(File::H, Rank::R8);
+    Square a1 = squareOf(File::A, Rank::R1);
+    EXPECT_TRUE(isAttacked(board, h8, Color::White));
+    EXPECT_TRUE(isAttacked(board, a1, Color::White));
+}
+
+TEST(MoveGen, BishopBlocked)
+{
+    // Bishop d4, pawn c3 blocks diagonal to b2
+    auto board = *Board::fromFen("8/8/8/8/3B4/2P5/8/8 w - - 0 1");
+    Square b2 = squareOf(File::B, Rank::R2);
+    EXPECT_FALSE(isAttacked(board, b2, Color::White));
+}
+
+TEST(MoveGen, QueenCombinesRookAndBishop)
+{
+    auto board = *Board::fromFen("8/8/8/4Q3/8/8/8/8 w - - 0 1");
+    Square e1 = squareOf(File::E, Rank::R1);
+    Square a5 = squareOf(File::A, Rank::R5);
+    Square h8 = squareOf(File::H, Rank::R8);
+    EXPECT_TRUE(isAttacked(board, e1, Color::White));
+    EXPECT_TRUE(isAttacked(board, a5, Color::White));
+    EXPECT_TRUE(isAttacked(board, h8, Color::White));
+}
+
+TEST(MoveGen, SlidingBlockedByFriendly)
+{
+    // White rook on e5, white bishop on g5 blocks rook from reaching h5
+    auto board = *Board::fromFen("8/8/8/4R1B1/8/8/8/8 w - - 0 1");
+    Square h5 = squareOf(File::H, Rank::R5);
+    EXPECT_FALSE(isAttacked(board, h5, Color::White));
+}
+
+// --- inCheck tests ---
+
+TEST(MoveGen, InCheckAtStart)
+{
+    auto board = Board::fromStartPos();
+    EXPECT_FALSE(inCheck(board, Color::White));
+    EXPECT_FALSE(inCheck(board, Color::Black));
+}
+
+TEST(MoveGen, WhiteKingInCheck)
+{
+    // Black rook on a1 checks white king on e1 via open first rank
+    auto board = *Board::fromFen("8/8/8/8/8/8/8/r3K2R w - - 0 1");
+    EXPECT_TRUE(inCheck(board, Color::White));
+}
+
+TEST(MoveGen, BlackKingInCheck)
+{
+    // White rook on a8 checks black king on e8 via open eighth rank
+    auto board = *Board::fromFen("R3k2r/8/8/8/8/8/8/4K3 b - - 0 1");
+    EXPECT_TRUE(inCheck(board, Color::Black));
+}
+
+TEST(MoveGen, NotInCheckNearbyThreat)
+{
+    auto board = *Board::fromFen("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1");
+    EXPECT_FALSE(inCheck(board, Color::White));
+    EXPECT_FALSE(inCheck(board, Color::Black));
+}
+
+TEST(MoveGen, IsAttackedByColor)
+{
+    // White rook on e5 attacks e-file; black king on e5
+    auto board = *Board::fromFen("8/8/8/4kR2/8/8/8/8 w - - 0 1");
+    Square e5 = squareOf(File::E, Rank::R5);
+    EXPECT_TRUE(isAttacked(board, e5, Color::White));
+    EXPECT_FALSE(isAttacked(board, e5, Color::Black));
+}
+
 } // namespace chess
