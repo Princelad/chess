@@ -420,4 +420,14 @@ bool insufficientMaterial(const Board& board)
     return false;
 }
 
+bool isLegalMove(const Board& board, const Move& m)
+{
+    auto legal = generateLegalMoves(board);
+    for (const auto& lm : legal) {
+        if (lm.from == m.from && lm.to == m.to && lm.flags == m.flags && lm.promotion == m.promotion)
+            return true;
+    }
+    return false;
+}
+
 } // namespace chess

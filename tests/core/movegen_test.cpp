@@ -943,4 +943,40 @@ TEST(MoveGen, SufficientMaterialKnightAndBishop)
     EXPECT_FALSE(insufficientMaterial(board));
 }
 
+// --- isLegalMove tests ---
+
+TEST(MoveGen, IsLegalMoveStartPos)
+{
+    auto board = Board::fromStartPos();
+    Square e2 = squareOf(File::E, Rank::R2);
+    Square e4 = squareOf(File::E, Rank::R4);
+    EXPECT_TRUE(isLegalMove(board, doublePushMove(e2, e4)));
+}
+
+TEST(MoveGen, IsLegalMoveCapture)
+{
+    auto board = *Board::fromFen("8/8/8/3p4/4P3/8/8/4K3 w - - 0 1");
+    Square e4 = squareOf(File::E, Rank::R4);
+    Square d5 = squareOf(File::D, Rank::R5);
+    EXPECT_TRUE(isLegalMove(board, captureMove(e4, d5)));
+}
+
+TEST(MoveGen, IsLegalMoveKingIntoCheck)
+{
+    // Black rook on d5 attacks d1; king e1 cannot go to d1
+    auto board = *Board::fromFen("8/8/8/3r4/8/8/8/4K3 w - - 0 1");
+    Square e1 = squareOf(File::E, Rank::R1);
+    Square d1 = squareOf(File::D, Rank::R1);
+    EXPECT_FALSE(isLegalMove(board, move(e1, d1)));
+}
+
+TEST(MoveGen, IsLegalMovePinnedPiece)
+{
+    // White rook on e2 pinned by black rook on e5
+    auto board = *Board::fromFen("8/8/8/4r3/8/8/4R3/4K3 w - - 0 1");
+    Square e2 = squareOf(File::E, Rank::R2);
+    Square f2 = squareOf(File::F, Rank::R2);
+    EXPECT_FALSE(isLegalMove(board, move(e2, f2)));
+}
+
 } // namespace chess
