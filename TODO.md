@@ -207,9 +207,9 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [x] Only when castling-right flag set, squares between empty, king/rook unmoved
   - [x] Generate king-side and queen-side castling as moves (legality of "not in/through check" deferred to Task 1.4)
 
-- [ ] **1.3.4 Assemble `generateMoves(Board)`**
-  - [ ] Iterate 0x88 squares, dispatch on piece type, collect into `std::vector<Move>`
-  - [ ] Provide a `generateMoves<Filter>(board)` so callers can ask for captures-only later
+- [x] **1.3.4 Assemble `generateMoves(Board)`**
+  - [x] Iterate 0x88 squares, dispatch on piece type, collect into `std::vector<Move>`
+  - [x] Provide a `generateMoves<Filter>(board)` so callers can ask for captures-only later
 
 ### Task 1.4 — Make/unmake and legality
 
