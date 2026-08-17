@@ -348,4 +348,12 @@ std::vector<Move> generateLegalMoves(const Board& board, MoveFilter filter)
     return legal;
 }
 
+GameState evaluateGameState(const Board& board)
+{
+    auto legal = generateLegalMoves(board);
+    if (!legal.empty()) return GameState::Ongoing;
+    if (inCheck(board, board.sideToMove())) return GameState::Checkmate;
+    return GameState::Stalemate;
+}
+
 } // namespace chess

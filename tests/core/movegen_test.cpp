@@ -744,4 +744,40 @@ TEST(MoveGen, LegalMovesBlackToMove)
     EXPECT_EQ(legal.size(), 25u);
 }
 
+// --- Game state tests ---
+
+TEST(MoveGen, GameStateOngoing)
+{
+    auto board = Board::fromStartPos();
+    EXPECT_EQ(evaluateGameState(board), GameState::Ongoing);
+}
+
+TEST(MoveGen, GameStateCheckmate)
+{
+    // Black king a8, white queen a7 protected by pawn b6. No escape.
+    auto board = *Board::fromFen("k1K5/Q7/1P6/8/8/8/8/8 b - - 0 1");
+    EXPECT_EQ(evaluateGameState(board), GameState::Checkmate);
+}
+
+TEST(MoveGen, GameStateStalemate)
+{
+    // Black king a8, white king c7, white queen b6. No legal moves, not in check.
+    auto board = *Board::fromFen("k7/2K5/1Q6/8/8/8/8/8 b - - 0 1");
+    EXPECT_EQ(evaluateGameState(board), GameState::Stalemate);
+}
+
+TEST(MoveGen, GameStateInCheckNotMate)
+{
+    // Black king e8 in check from rook e2; can escape to d8/f8/f7.
+    auto board = *Board::fromFen("4k3/8/8/8/8/8/4R3/4K3 b - - 0 1");
+    EXPECT_EQ(evaluateGameState(board), GameState::Ongoing);
+}
+
+TEST(MoveGen, GameStateWhiteCheckmated)
+{
+    // White king e1 checkmated by black queen e2 (protected by rook a2).
+    auto board = *Board::fromFen("4k3/8/8/8/8/8/r3q3/4K2R w - - 0 1");
+    EXPECT_EQ(evaluateGameState(board), GameState::Checkmate);
+}
+
 } // namespace chess
