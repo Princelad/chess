@@ -6,6 +6,8 @@ namespace {
 
 constexpr int knightOffsets[8] = {33, 18, -14, -31, -33, -18, 14, 31};
 constexpr int kingOffsets[8] = {1, 17, 16, 15, -1, -17, -16, -15};
+constexpr int rookDirs[4] = {16, -16, 1, -1};
+constexpr int bishopDirs[4] = {17, 15, -15, -17};
 
 void genKnight(Square from, Color color, const Board& board, MoveFilter filter,
                std::vector<Move>& moves)
@@ -145,6 +147,28 @@ void genPawn(Square from, Color color, const Board& board, MoveFilter filter,
     }
 }
 
+void genSliding(Square from, Color color, const Board& board, MoveFilter filter,
+                const int* dirs, int dirCount, std::vector<Move>& moves)
+{
+    for (int d = 0; d < dirCount; ++d) {
+        const int dir = dirs[d];
+        Square to = from + dir;
+        while (!offBoard(to)) {
+            const Piece target = board.pieceAt(to);
+            if (target.color == color) break;
+            if (target.isNone()) {
+                if (filter != MoveFilter::CapturesOnly) {
+                    moves.push_back(move(from, to));
+                }
+            } else {
+                moves.push_back(captureMove(from, to));
+                break;
+            }
+            to += dir;
+        }
+    }
+}
+
 } // namespace
 
 std::vector<Move> generateMoves(const Board& board, MoveFilter filter)
@@ -160,6 +184,16 @@ std::vector<Move> generateMoves(const Board& board, MoveFilter filter)
         switch (piece.type) {
             case PieceType::Knight:
                 genKnight(sq, side, board, filter, moves);
+                break;
+            case PieceType::Bishop:
+                genSliding(sq, side, board, filter, bishopDirs, 4, moves);
+                break;
+            case PieceType::Rook:
+                genSliding(sq, side, board, filter, rookDirs, 4, moves);
+                break;
+            case PieceType::Queen:
+                genSliding(sq, side, board, filter, rookDirs, 4, moves);
+                genSliding(sq, side, board, filter, bishopDirs, 4, moves);
                 break;
             case PieceType::King:
                 genKing(sq, side, board, filter, moves);

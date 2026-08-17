@@ -319,6 +319,112 @@ TEST(MoveGen, StartPositionBlackHasTwentyMoves)
     EXPECT_EQ(moves.size(), 20u);
 }
 
+// --- Rook tests ---
+
+TEST(MoveGen, RookOpenFileAndRank)
+{
+    auto board = fromFen("8/8/8/4R3/8/8/8/8 w - - 0 1");
+    ASSERT_TRUE(board.has_value());
+    auto moves = generateMoves(*board);
+    Square e5 = squareOf(File::E, Rank::R5);
+    EXPECT_EQ(std::count_if(moves.begin(), moves.end(), [&](const Move& m) { return m.from == e5; }), 14);
+}
+
+TEST(MoveGen, RookBlockedByOwnPiece)
+{
+    auto board = fromFen("8/8/8/2P1R3/8/8/8/8 w - - 0 1");
+    ASSERT_TRUE(board.has_value());
+    auto moves = generateMoves(*board);
+    Square e5 = squareOf(File::E, Rank::R5);
+    Square d5 = squareOf(File::D, Rank::R5);
+    Square c5 = squareOf(File::C, Rank::R5);
+    EXPECT_TRUE(containsMove(moves, e5, d5));
+    EXPECT_FALSE(containsMove(moves, e5, c5));
+    EXPECT_EQ(std::count_if(moves.begin(), moves.end(), [&](const Move& m) { return m.from == e5; }), 11);
+}
+
+TEST(MoveGen, RookCapturesEnemy)
+{
+    auto board = fromFen("8/8/8/2p1R3/8/8/8/8 w - - 0 1");
+    ASSERT_TRUE(board.has_value());
+    auto moves = generateMoves(*board);
+    Square e5 = squareOf(File::E, Rank::R5);
+    Square c5 = squareOf(File::C, Rank::R5);
+    EXPECT_TRUE(containsMove(moves, e5, c5, Capture));
+    EXPECT_EQ(std::count_if(moves.begin(), moves.end(), [&](const Move& m) { return m.from == e5; }), 12);
+}
+
+// --- Bishop tests ---
+
+TEST(MoveGen, BishopOpenDiagonals)
+{
+    auto board = fromFen("8/8/8/4B3/8/8/8/8 w - - 0 1");
+    ASSERT_TRUE(board.has_value());
+    auto moves = generateMoves(*board);
+    Square e5 = squareOf(File::E, Rank::R5);
+    EXPECT_EQ(std::count_if(moves.begin(), moves.end(), [&](const Move& m) { return m.from == e5; }), 13);
+}
+
+TEST(MoveGen, BishopCorner)
+{
+    auto board = fromFen("B7/8/8/8/8/8/8/8 w - - 0 1");
+    ASSERT_TRUE(board.has_value());
+    auto moves = generateMoves(*board);
+    Square a8 = squareOf(File::A, Rank::R8);
+    EXPECT_EQ(std::count_if(moves.begin(), moves.end(), [&](const Move& m) { return m.from == a8; }), 7);
+}
+
+TEST(MoveGen, BishopBlockedMidDiag)
+{
+    auto board = fromFen("8/8/1B6/8/8/8/8/8 w - - 0 1");
+    ASSERT_TRUE(board.has_value());
+    auto moves = generateMoves(*board);
+    Square b6 = squareOf(File::B, Rank::R6);
+    EXPECT_TRUE(containsMove(moves, b6, squareOf(File::A, Rank::R7)));
+    EXPECT_TRUE(containsMove(moves, b6, squareOf(File::C, Rank::R7)));
+    EXPECT_TRUE(containsMove(moves, b6, squareOf(File::D, Rank::R8)));
+    EXPECT_TRUE(containsMove(moves, b6, squareOf(File::C, Rank::R5)));
+    EXPECT_TRUE(containsMove(moves, b6, squareOf(File::D, Rank::R4)));
+    EXPECT_TRUE(containsMove(moves, b6, squareOf(File::E, Rank::R3)));
+    EXPECT_TRUE(containsMove(moves, b6, squareOf(File::F, Rank::R2)));
+    EXPECT_TRUE(containsMove(moves, b6, squareOf(File::G, Rank::R1)));
+    EXPECT_TRUE(containsMove(moves, b6, squareOf(File::A, Rank::R5)));
+    EXPECT_EQ(std::count_if(moves.begin(), moves.end(), [&](const Move& m) { return m.from == b6; }), 9);
+}
+
+// --- Queen tests ---
+
+TEST(MoveGen, QueenOpenBoard)
+{
+    auto board = fromFen("8/8/8/4Q3/8/8/8/8 w - - 0 1");
+    ASSERT_TRUE(board.has_value());
+    auto moves = generateMoves(*board);
+    Square e5 = squareOf(File::E, Rank::R5);
+    EXPECT_EQ(std::count_if(moves.begin(), moves.end(), [&](const Move& m) { return m.from == e5; }), 27);
+}
+
+TEST(MoveGen, QueenCorner)
+{
+    auto board = fromFen("Q7/8/8/8/8/8/8/8 w - - 0 1");
+    ASSERT_TRUE(board.has_value());
+    auto moves = generateMoves(*board);
+    Square a8 = squareOf(File::A, Rank::R8);
+    EXPECT_EQ(std::count_if(moves.begin(), moves.end(), [&](const Move& m) { return m.from == a8; }), 21);
+}
+
+// --- CapturesOnly filter ---
+
+TEST(MoveGen, CapturesOnlyRook)
+{
+    auto board = fromFen("8/8/8/2p1R3/8/8/8/8 w - - 0 1");
+    ASSERT_TRUE(board.has_value());
+    auto moves = generateMoves(*board, MoveFilter::CapturesOnly);
+    Square e5 = squareOf(File::E, Rank::R5);
+    Square c5 = squareOf(File::C, Rank::R5);
+    EXPECT_EQ(moves.size(), 1u);
+    EXPECT_TRUE(containsMove(moves, e5, c5, Capture));
+}
+
 // --- Filter tests ---
 
 TEST(MoveGen, CapturesOnlyFilter)
