@@ -197,11 +197,11 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [x] King: 8 offsets (excluding castling for now)
   - [x] Pawns: single push, double push from starting rank, diagonal captures, promotions (4 types), en passant
 
-- [ ] **1.3.2 Generate sliding-piece moves**
-  - [ ] Rook: walk 4 directions until board edge or blocker
-  - [ ] Bishop: same with 4 diagonal directions
-  - [ ] Queen: rook + bishop rays combined
-  - [ ] Set `capture` flag when landing on enemy piece; stop at first blocker
+- [x] **1.3.2 Generate sliding-piece moves**
+  - [x] Rook: walk 4 directions until board edge or blocker
+  - [x] Bishop: same with 4 diagonal directions
+  - [x] Queen: rook + bishop rays combined
+  - [x] Set `capture` flag when landing on enemy piece; stop at first blocker
 
 - [ ] **1.3.3 Castling moves**
   - [ ] Only when castling-right flag set, squares between empty, king/rook unmoved
