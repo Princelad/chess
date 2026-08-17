@@ -147,4 +147,19 @@ Square stringToSquare(std::string_view name)
     return squareOf(file - 'a', rank - '1');
 }
 
+bool Board::isRepetition(int count) const
+{
+    int matches = 1; // current position counts as one occurrence
+    for (std::size_t i = 0; i < m_history.size(); ++i) {
+        const auto& snap = m_history[i];
+        if (m_board != snap.pieces) continue;
+        if (m_state.sideToMove != snap.state.sideToMove) continue;
+        if (m_state.castlingRights != snap.state.castlingRights) continue;
+        if (m_state.enPassant != snap.state.enPassant) continue;
+        ++matches;
+        if (matches >= count) return true;
+    }
+    return false;
+}
+
 } // namespace chess

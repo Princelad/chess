@@ -350,10 +350,16 @@ std::vector<Move> generateLegalMoves(const Board& board, MoveFilter filter)
 
 GameState evaluateGameState(const Board& board)
 {
+    if (threefoldRepetition(board)) return GameState::Draw;
     auto legal = generateLegalMoves(board);
     if (!legal.empty()) return GameState::Ongoing;
     if (inCheck(board, board.sideToMove())) return GameState::Checkmate;
     return GameState::Stalemate;
+}
+
+bool threefoldRepetition(const Board& board)
+{
+    return board.isRepetition(3);
 }
 
 } // namespace chess
