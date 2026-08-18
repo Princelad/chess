@@ -430,4 +430,21 @@ bool isLegalMove(const Board& board, const Move& m)
     return false;
 }
 
+uint64_t perft(Board& board, int depth)
+{
+    if (depth == 0)
+        return 1;
+
+    auto moves = generateLegalMoves(board);
+    uint64_t nodes = 0;
+
+    for (const auto& m : moves) {
+        board.makeMove(m);
+        nodes += perft(board, depth - 1);
+        board.undoMove(m);
+    }
+
+    return nodes;
+}
+
 } // namespace chess
