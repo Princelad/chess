@@ -403,9 +403,9 @@ TEST(SAN, FromSanPromotionCheck)
     EXPECT_EQ(*m, promotionMove(squareOf(File::E, Rank::R7), squareOf(File::E, Rank::R8), PieceType::Queen));
 }
 
-TEST(SAN, FromSanPromotionCheckmate)
+TEST(SAN, FromSanPromotionCaptureCheckmateSuffix)
 {
-    // Black pawn on b2 promotes to knight on a1 delivering checkmate.
+    // Verifies fromSan strips '#' from promotion+capture (e.g. "bxa1=N#")
     auto board = *Board::fromFen("4k2K/8/8/8/8/8/1p6/R7 b - - 0 1");
     auto m = san::fromSan(board, "bxa1=N#");
     ASSERT_TRUE(m.has_value());
