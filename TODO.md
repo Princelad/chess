@@ -328,11 +328,11 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [x] Server→Client: `WELCOME {color} {opponent}`, `OPPONENT_JOINED {name}`, `OPPONENT_LEFT`, `MOVE {san}`, `DRAW_OFFER`, `GAME_OVER {result} {reason}`, `CHAT {name} {text}`, `PONG`, `ERROR {message}`
   - [x] Define a `Result` enum: `WHITE_WINS, BLACK_WINS, DRAW, RESIGNATION, ABORT`
 
-- [ ] **3.2 Wire format (`protocol.h`/`protocol.cpp`)**
-  - [ ] Encode messages as `sf::Packet` (size-prefixed, binary) OR newline-delimited text — pick one and document it
-  - [ ] `bool serialize(Packet&, Message&)` and `bool deserialize(Packet&, Message&)`
-  - [ ] Version/`HELLO` handshake field to reject mismatched clients
-  - [ ] Human-readable `debugString(Message)` for logs
+- [x] **3.2 Wire format (`protocol.h`/`protocol.cpp`)**
+  - [x] Encode messages as `sf::Packet` (size-prefixed, binary) OR newline-delimited text — pick one and document it
+  - [x] `bool serialize(Packet&, Message&)` and `bool deserialize(Packet&, Message&)`
+  - [x] Version/`HELLO` handshake field to reject mismatched clients
+  - [x] Human-readable `debugString(Message)` for logs
 
 - [ ] **3.3 Protocol tests**
   - [ ] Round-trip every message type through serialization
