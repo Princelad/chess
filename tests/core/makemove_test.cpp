@@ -103,6 +103,32 @@ TEST(MakeMove, EnPassantCapture)
     EXPECT_EQ(board.pieceAt(d6), Piece::of(Color::White, PieceType::Pawn));  // white pawn on d6
 }
 
+TEST(MakeMove, BlackEnPassantCapture)
+{
+    // After 1.d4: black pawn on e4 can capture en passant on d3
+    auto board = *Board::fromFen("rnbqkbnr/pppp1ppp/8/8/3Pp3/8/PPP1PPPP/RNBQKBNR b KQkq d3 0 1");
+    Square e4 = squareOf(File::E, Rank::R4);
+    Square d3 = squareOf(File::D, Rank::R3);
+    Square d4 = squareOf(File::D, Rank::R4);
+    board.makeMove(enPassantMove(e4, d3));
+
+    EXPECT_TRUE(board.isEmpty(e4));    // black pawn moved away
+    EXPECT_TRUE(board.isEmpty(d4));    // white pawn captured (en passant)
+    EXPECT_EQ(board.pieceAt(d3), Piece::of(Color::Black, PieceType::Pawn));
+}
+
+TEST(MakeMove, EnPassantResetsHalfmoveClock)
+{
+    auto board = *Board::fromFen("rnbqkbnr/ppp1p1pp/8/3pP3/8/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 3");
+    board.setHalfmoveClock(15);
+
+    Square e5 = squareOf(File::E, Rank::R5);
+    Square d6 = squareOf(File::D, Rank::R6);
+    board.makeMove(enPassantMove(e5, d6));
+
+    EXPECT_EQ(board.halfmoveClock(), 0);
+}
+
 // --- Promotion ---
 
 TEST(MakeMove, QuietPromotion)
@@ -125,6 +151,61 @@ TEST(MakeMove, CapturePromotion)
 
     EXPECT_TRUE(board.isEmpty(e7));
     EXPECT_EQ(board.pieceAt(d8), Piece::of(Color::White, PieceType::Rook));
+}
+
+TEST(MakeMove, QuietPromotionKnight)
+{
+    auto board = *Board::fromFen("8/4P3/8/8/8/8/8/4K2k w - - 0 1");
+    Square e7 = squareOf(File::E, Rank::R7);
+    Square e8 = squareOf(File::E, Rank::R8);
+    board.makeMove(promotionMove(e7, e8, PieceType::Knight));
+
+    EXPECT_TRUE(board.isEmpty(e7));
+    EXPECT_EQ(board.pieceAt(e8), Piece::of(Color::White, PieceType::Knight));
+}
+
+TEST(MakeMove, QuietPromotionBishop)
+{
+    auto board = *Board::fromFen("8/4P3/8/8/8/8/8/4K2k w - - 0 1");
+    Square e7 = squareOf(File::E, Rank::R7);
+    Square e8 = squareOf(File::E, Rank::R8);
+    board.makeMove(promotionMove(e7, e8, PieceType::Bishop));
+
+    EXPECT_TRUE(board.isEmpty(e7));
+    EXPECT_EQ(board.pieceAt(e8), Piece::of(Color::White, PieceType::Bishop));
+}
+
+TEST(MakeMove, QuietPromotionRook)
+{
+    auto board = *Board::fromFen("8/4P3/8/8/8/8/8/4K2k w - - 0 1");
+    Square e7 = squareOf(File::E, Rank::R7);
+    Square e8 = squareOf(File::E, Rank::R8);
+    board.makeMove(promotionMove(e7, e8, PieceType::Rook));
+
+    EXPECT_TRUE(board.isEmpty(e7));
+    EXPECT_EQ(board.pieceAt(e8), Piece::of(Color::White, PieceType::Rook));
+}
+
+TEST(MakeMove, BlackQuietPromotion)
+{
+    auto board = *Board::fromFen("4k2K/8/8/8/8/8/4p3/8 b - - 0 1");
+    Square e2 = squareOf(File::E, Rank::R2);
+    Square e1 = squareOf(File::E, Rank::R1);
+    board.makeMove(promotionMove(e2, e1, PieceType::Queen));
+
+    EXPECT_TRUE(board.isEmpty(e2));
+    EXPECT_EQ(board.pieceAt(e1), Piece::of(Color::Black, PieceType::Queen));
+}
+
+TEST(MakeMove, BlackCapturePromotion)
+{
+    auto board = *Board::fromFen("4k2K/8/8/8/8/8/1p6/R7 b - - 0 1");
+    Square b2 = squareOf(File::B, Rank::R2);
+    Square a1 = squareOf(File::A, Rank::R1);
+    board.makeMove(promotionMove(b2, a1, PieceType::Knight));
+
+    EXPECT_TRUE(board.isEmpty(b2));
+    EXPECT_EQ(board.pieceAt(a1), Piece::of(Color::Black, PieceType::Knight));
 }
 
 // --- Castling ---
@@ -224,6 +305,56 @@ TEST(MakeMove, CaptureOnRookHomeRevokesRights)
     EXPECT_TRUE(canCastle(board.castlingRights(), BlackQueenSide));
     EXPECT_TRUE(canCastle(board.castlingRights(), WhiteKingSide));
     EXPECT_TRUE(canCastle(board.castlingRights(), WhiteQueenSide));
+}
+
+TEST(MakeMove, QueenSideRookMoveRevokesOwnCastlingRight)
+{
+    auto board = *Board::fromFen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1");
+    Square a1 = squareOf(File::A, Rank::R1);
+    Square a2 = squareOf(File::A, Rank::R2);
+    board.makeMove(move(a1, a2));
+
+    EXPECT_FALSE(canCastle(board.castlingRights(), WhiteQueenSide));
+    EXPECT_TRUE(canCastle(board.castlingRights(), WhiteKingSide));
+    EXPECT_TRUE(canCastle(board.castlingRights(), BlackKingSide));
+    EXPECT_TRUE(canCastle(board.castlingRights(), BlackQueenSide));
+}
+
+TEST(MakeMove, CaptureOnA1RevokesWhiteQueenSide)
+{
+    auto board = *Board::fromFen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1");
+    Square b3 = squareOf(File::B, Rank::R3);
+    Square a1 = squareOf(File::A, Rank::R1);
+    board.setPiece(b3, Piece::of(Color::Black, PieceType::Knight));
+    board.makeMove(captureMove(b3, a1));
+
+    EXPECT_FALSE(canCastle(board.castlingRights(), WhiteQueenSide));
+    EXPECT_TRUE(canCastle(board.castlingRights(), WhiteKingSide));
+    EXPECT_TRUE(canCastle(board.castlingRights(), BlackKingSide));
+    EXPECT_TRUE(canCastle(board.castlingRights(), BlackQueenSide));
+}
+
+TEST(MakeMove, CaptureOnA8RevokesBlackQueenSide)
+{
+    auto board = *Board::fromFen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1");
+    Square b6 = squareOf(File::B, Rank::R6);
+    Square a8 = squareOf(File::A, Rank::R8);
+    board.setPiece(b6, Piece::of(Color::White, PieceType::Knight));
+    board.makeMove(captureMove(b6, a8));
+
+    EXPECT_FALSE(canCastle(board.castlingRights(), BlackQueenSide));
+    EXPECT_TRUE(canCastle(board.castlingRights(), BlackKingSide));
+    EXPECT_TRUE(canCastle(board.castlingRights(), WhiteKingSide));
+    EXPECT_TRUE(canCastle(board.castlingRights(), WhiteQueenSide));
+}
+
+TEST(MakeMove, CastlingRightsSurviveUnrelatedMove)
+{
+    auto board = *Board::fromFen("r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1");
+    int before = board.castlingRights();
+    // White knight moves — no castling rights affected
+    board.makeMove(move(squareOf(File::B, Rank::R1), squareOf(File::C, Rank::R3)));
+    EXPECT_EQ(board.castlingRights(), before);
 }
 
 // --- Side to move ---
