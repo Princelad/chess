@@ -259,14 +259,84 @@ std::optional<ServerMessage> deserializeServer(sf::Packet& packet)
     }
 }
 
-std::string debugString(const ClientMessage& /*msg*/)
+std::string debugString(const ClientMessage& msg)
 {
-    return ""; // placeholder
+    return std::visit([](auto&& m) -> std::string {
+        using T = std::decay_t<decltype(m)>;
+        if constexpr (std::is_same_v<T, JoinMsg>)
+            return "Join{name=\"" + m.name + "\"}";
+        else if constexpr (std::is_same_v<T, MoveMsg>)
+            return "Move{san=\"" + m.san + "\"}";
+        else if constexpr (std::is_same_v<T, DrawOfferMsg>)
+            return "DrawOffer{}";
+        else if constexpr (std::is_same_v<T, DrawAcceptMsg>)
+            return "DrawAccept{}";
+        else if constexpr (std::is_same_v<T, DrawDeclineMsg>)
+            return "DrawDecline{}";
+        else if constexpr (std::is_same_v<T, ResignMsg>)
+            return "Resign{}";
+        else if constexpr (std::is_same_v<T, ChatMsg>)
+            return "Chat{text=\"" + m.text + "\"}";
+        else if constexpr (std::is_same_v<T, PingMsg>)
+            return "Ping{}";
+    }, msg);
 }
 
-std::string debugString(const ServerMessage& /*msg*/)
+namespace {
+
+const char* resultStr(GameResult r)
 {
-    return ""; // placeholder
+    switch (r) {
+        case GameResult::WhiteWins:    return "WhiteWins";
+        case GameResult::BlackWins:    return "BlackWins";
+        case GameResult::Draw:         return "Draw";
+        case GameResult::Resignation:  return "Resignation";
+        case GameResult::Abort:        return "Abort";
+    }
+    return "Unknown";
+}
+
+const char* reasonStr(GameOverReason r)
+{
+    switch (r) {
+        case GameOverReason::Checkmate:           return "Checkmate";
+        case GameOverReason::Stalemate:           return "Stalemate";
+        case GameOverReason::FiftyMove:           return "FiftyMove";
+        case GameOverReason::Repetition:          return "Repetition";
+        case GameOverReason::InsufficientMaterial: return "InsufficientMaterial";
+        case GameOverReason::Resignation:         return "Resignation";
+        case GameOverReason::Disconnection:       return "Disconnection";
+        case GameOverReason::Abort:               return "Abort";
+    }
+    return "Unknown";
+}
+
+} // anonymous namespace
+
+std::string debugString(const ServerMessage& msg)
+{
+    return std::visit([](auto&& m) -> std::string {
+        using T = std::decay_t<decltype(m)>;
+        if constexpr (std::is_same_v<T, WelcomeMsg>) {
+            const char* c = (m.color == Color::White) ? "White" : "Black";
+            return "Welcome{color=" + std::string(c) + ", opponent=\"" + m.opponent + "\"}";
+        } else if constexpr (std::is_same_v<T, OpponentJoinedMsg>)
+            return "OpponentJoined{name=\"" + m.name + "\"}";
+        else if constexpr (std::is_same_v<T, OpponentLeftMsg>)
+            return "OpponentLeft{}";
+        else if constexpr (std::is_same_v<T, ServerMoveMsg>)
+            return "Move{san=\"" + m.san + "\"}";
+        else if constexpr (std::is_same_v<T, ServerDrawOfferMsg>)
+            return "DrawOffer{}";
+        else if constexpr (std::is_same_v<T, GameOverMsg>)
+            return "GameOver{" + std::string(resultStr(m.result)) + ", " + std::string(reasonStr(m.reason)) + "}";
+        else if constexpr (std::is_same_v<T, ServerChatMsg>)
+            return "Chat{name=\"" + m.name + "\", text=\"" + m.text + "\"}";
+        else if constexpr (std::is_same_v<T, PongMsg>)
+            return "Pong{}";
+        else if constexpr (std::is_same_v<T, ErrorMsg>)
+            return "Error{message=\"" + m.message + "\"}";
+    }, msg);
 }
 
 } // namespace net
