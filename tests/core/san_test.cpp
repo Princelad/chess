@@ -342,5 +342,77 @@ TEST(SAN, RoundTripPromotionPosition)
     }
 }
 
+// --- Game playthrough round-trip ---
+
+TEST(SAN, GamePlaythroughRoundTrip)
+{
+    // Italian Game: 10 full moves covering pawn pushes, captures, knights,
+    // bishops, disambiguation, check, and castling.
+    const char* moves[] = {
+        "e4", "e5", "Nf3", "Nc6", "Bc4", "Bc5",
+        "c3", "Nf6", "d4", "exd4", "cxd4", "Bb4+",
+        "Bd2", "Bxd2+", "Nbxd2", "d5", "exd5", "Nxd5",
+        "O-O", "O-O",
+    };
+
+    auto board = Board::fromStartPos();
+    for (const char* san : moves) {
+        // Verify fromSan resolves
+        auto m = san::fromSan(board, san);
+        ASSERT_TRUE(m.has_value()) << "fromSan failed for: " << san
+                                   << " at FEN: " << board.toFen();
+
+        // Verify toSan round-trips
+        std::string formatted = san::toSan(board, *m);
+        auto reparsed = san::fromSan(board, formatted);
+        ASSERT_TRUE(reparsed.has_value()) << "Round-trip reparse failed for: " << formatted;
+        EXPECT_EQ(*reparsed, *m) << "Round-trip mismatch for: " << formatted;
+
+        board.makeMove(*m);
+    }
+}
+
+// --- fromSan disambiguation by both file and rank ---
+
+TEST(SAN, FromSanDisambiguationByBoth)
+{
+    // Three rooks can reach a3. "Ra1a3" specifies both file and rank.
+    auto board = *Board::fromFen("8/8/8/R7/8/2R5/8/R3k3 w - - 0 1");
+    auto m = san::fromSan(board, "Ra1a3");
+    ASSERT_TRUE(m.has_value());
+    EXPECT_EQ(*m, move(squareOf(File::A, Rank::R1), squareOf(File::A, Rank::R3)));
+}
+
+// --- Ambiguous SAN returns nullopt ---
+
+TEST(SAN, FromSanAmbiguousReturnsNullopt)
+{
+    // Two white knights (c3 and e3) can both reach d5. Plain "Nd5" is ambiguous.
+    auto board = *Board::fromFen("rnbqkbnr/pppppppp/8/8/8/2N1N3/PPPPPPPP/R1BQKB1R w KQkq - 0 1");
+    auto m = san::fromSan(board, "Nd5");
+    EXPECT_FALSE(m.has_value());
+}
+
+// --- fromSan promotion with check/checkmate suffix ---
+
+TEST(SAN, FromSanPromotionCheck)
+{
+    auto board = *Board::fromFen("5k2/4P3/8/8/8/8/8/4K3 w - - 0 1");
+    auto m = san::fromSan(board, "e8=Q+");
+    ASSERT_TRUE(m.has_value());
+    EXPECT_EQ(*m, promotionMove(squareOf(File::E, Rank::R7), squareOf(File::E, Rank::R8), PieceType::Queen));
+}
+
+TEST(SAN, FromSanPromotionCheckmate)
+{
+    // Black pawn on b2 promotes to knight on a1 delivering checkmate.
+    auto board = *Board::fromFen("4k2K/8/8/8/8/8/1p6/R7 b - - 0 1");
+    auto m = san::fromSan(board, "bxa1=N#");
+    ASSERT_TRUE(m.has_value());
+    Move expected{squareOf(File::B, Rank::R2), squareOf(File::A, Rank::R1), Promotion | Capture};
+    expected.promotion = PieceType::Knight;
+    EXPECT_EQ(*m, expected);
+}
+
 } // namespace
 } // namespace chess
