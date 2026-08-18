@@ -323,10 +323,10 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
 
 **Exit version:** `v0.4.0` — protocol defined + tested
 
-- [ ] **3.1 Define message types (`messages.h`)**
-  - [ ] Client→Server: `JOIN {name}`, `MOVE {san}`, `DRAW_OFFER`, `DRAW_ACCEPT`, `DRAW_DECLINE`, `RESIGN`, `CHAT {text}`, `PING`
-  - [ ] Server→Client: `WELCOME {color} {opponent}`, `OPPONENT_JOINED {name}`, `OPPONENT_LEFT`, `MOVE {san}`, `DRAW_OFFER`, `GAME_OVER {result} {reason}`, `CHAT {name} {text}`, `PONG`, `ERROR {message}`
-  - [ ] Define a `Result` enum: `WHITE_WINS, BLACK_WINS, DRAW, RESIGNATION, ABORT`
+- [x] **3.1 Define message types (`messages.h`)**
+  - [x] Client→Server: `JOIN {name}`, `MOVE {san}`, `DRAW_OFFER`, `DRAW_ACCEPT`, `DRAW_DECLINE`, `RESIGN`, `CHAT {text}`, `PING`
+  - [x] Server→Client: `WELCOME {color} {opponent}`, `OPPONENT_JOINED {name}`, `OPPONENT_LEFT`, `MOVE {san}`, `DRAW_OFFER`, `GAME_OVER {result} {reason}`, `CHAT {name} {text}`, `PONG`, `ERROR {message}`
+  - [x] Define a `Result` enum: `WHITE_WINS, BLACK_WINS, DRAW, RESIGNATION, ABORT`
 
 - [ ] **3.2 Wire format (`protocol.h`/`protocol.cpp`)**
   - [ ] Encode messages as `sf::Packet` (size-prefixed, binary) OR newline-delimited text — pick one and document it
