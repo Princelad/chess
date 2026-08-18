@@ -311,9 +311,9 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [x] Stalemate position, threefold repetition, fifty-move counter, insufficient material
   - [x] Legal vs illegal: pinned-piece move, king-into-check, castling through check all rejected
 
-- [ ] **2.5 SAN tests**
-  - [ ] `toSan`↔`fromSan` round-trips across a game's move list
-  - [ ] Disambiguation correctness (`Nbd2` vs `Nfd2`), castling, promotion with check
+- [x] **2.5 SAN tests**
+  - [x] `toSan`↔`fromSan` round-trips across a game's move list
+  - [x] Disambiguation correctness (`Nbd2` vs `Nfd2`), castling, promotion with check
 
 ---
 
