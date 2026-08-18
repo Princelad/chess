@@ -334,10 +334,10 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [x] Version/`HELLO` handshake field to reject mismatched clients
   - [x] Human-readable `debugString(Message)` for logs
 
-- [ ] **3.3 Protocol tests**
-  - [ ] Round-trip every message type through serialization
-  - [ ] Truncated/garbage packet → clean error, no crash
-  - [ ] Validate that `MOVE` payload is always valid SAN (deferred content check → server re-validates against engine)
+- [x] **3.3 Protocol tests**
+  - [x] Round-trip every message type through serialization
+  - [x] Truncated/garbage packet → clean error, no crash
+  - [x] Validate that `MOVE` payload is always valid SAN (deferred content check → server re-validates against engine)
 
 ---
 
