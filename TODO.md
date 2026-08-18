@@ -291,11 +291,11 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
 
 ▶ [Perft](https://www.chessprogramming.org/Perft) · [Engine Testing](https://www.chessprogramming.org/Engine_Testing)
 
-- [ ] **2.1 Perft (move-path counting)**
-  - [ ] Implement `perft(board, depth)` counting leaf nodes
-  - [ ] Verify starting position: `perft(1)=20, perft(2)=400, perft(3)=8902, perft(4)=197281`
-  - [ ] Verify the standard "Kiwipete" position (e.g. `r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1`) at depths 1–3
-  - [ ] Verify another known position (`8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - - 0 1`) and the castling/en-passant-heavy position (`r3k2r/Pppp1ppp/1b3nbN/nP6/BBP1P3/q4N2/Pp1P2PP/R2Q1RK1 w kq - 0 1`)
+- [x] **2.1 Perft (move-path counting)**
+  - [x] Implement `perft(board, depth)` counting leaf nodes
+  - [x] Verify starting position: `perft(1)=20, perft(2)=400, perft(3)=8902, perft(4)=197281, perft(5)=4865609`
+  - [x] Verify the standard "Kiwipete" position (e.g. `r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1`) at depths 1–3
+  - [x] Verify positions 3–6 from CPW (castling, en passant, promotions, pinned pieces, fianchetto symmetrical position)
 
 - [ ] **2.2 FEN tests**
   - [ ] Round-trip start position and several midgames
