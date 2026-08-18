@@ -77,13 +77,10 @@ TEST(Endgame, DrawByFiftyMovePlaythrough)
     play(board, "Nf3");
     play(board, "Nf6");
 
-    // Set clock to 99 on both sides so one more quiet move triggers the rule.
     board.setHalfmoveClock(99);
-    // Undo and redo the snapshot to apply the setHalfmoveClock in the state
-    // Actually, setHalfmoveClock modifies m_state directly, no snapshot needed.
 
-    play(board, "Ng1");
-    play(board, "Ng8");
+    play(board, "Ng1");  // clock increments to 100
+    play(board, "Ng8");  // clock increments to 101
 
     EXPECT_EQ(evaluateGameState(board), GameState::Draw);
 }
