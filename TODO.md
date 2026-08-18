@@ -306,10 +306,10 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [x] En passant captured pawn removed; ep target square correct timing
   - [x] All 4 promotions legal and revert on undo
 
-- [ ] **2.4 Endgame/draw tests**
-  - [ ] Fool's mate (checkmate in 2), scholar's mate, back-rank mate
-  - [ ] Stalemate position, threefold repetition, fifty-move counter, insufficient material
-  - [ ] Legal vs illegal: pinned-piece move, king-into-check, castling through check all rejected
+- [x] **2.4 Endgame/draw tests**
+  - [x] Fool's mate (checkmate in 2), scholar's mate, back-rank mate
+  - [x] Stalemate position, threefold repetition, fifty-move counter, insufficient material
+  - [x] Legal vs illegal: pinned-piece move, king-into-check, castling through check all rejected
 
 - [ ] **2.5 SAN tests**
   - [ ] `toSan`↔`fromSan` round-trips across a game's move list
