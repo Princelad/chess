@@ -148,14 +148,115 @@ bool serialize(sf::Packet& packet, const ServerMessage& msg)
     return std::visit([&](auto&& m) { return writeServer(packet, m); }, msg);
 }
 
-std::optional<ClientMessage> deserializeClient(sf::Packet& /*packet*/)
+std::optional<ClientMessage> deserializeClient(sf::Packet& packet)
 {
-    return std::nullopt; // placeholder
+    uint8_t version = 0;
+    packet >> version;
+    if (!static_cast<bool>(packet) || version != ProtocolVersion)
+        return std::nullopt;
+
+    uint8_t tag = 0;
+    packet >> tag;
+    if (!static_cast<bool>(packet))
+        return std::nullopt;
+
+    switch (static_cast<ClientMsgType>(tag)) {
+        case ClientMsgType::Join: {
+            JoinMsg msg;
+            packet >> msg.name;
+            if (!static_cast<bool>(packet)) return std::nullopt;
+            return msg;
+        }
+        case ClientMsgType::Move: {
+            MoveMsg msg;
+            packet >> msg.san;
+            if (!static_cast<bool>(packet)) return std::nullopt;
+            return msg;
+        }
+        case ClientMsgType::DrawOffer:
+            return DrawOfferMsg{};
+        case ClientMsgType::DrawAccept:
+            return DrawAcceptMsg{};
+        case ClientMsgType::DrawDecline:
+            return DrawDeclineMsg{};
+        case ClientMsgType::Resign:
+            return ResignMsg{};
+        case ClientMsgType::Chat: {
+            ChatMsg msg;
+            packet >> msg.text;
+            if (!static_cast<bool>(packet)) return std::nullopt;
+            return msg;
+        }
+        case ClientMsgType::Ping:
+            return PingMsg{};
+        default:
+            return std::nullopt;
+    }
 }
 
-std::optional<ServerMessage> deserializeServer(sf::Packet& /*packet*/)
+std::optional<ServerMessage> deserializeServer(sf::Packet& packet)
 {
-    return std::nullopt; // placeholder
+    uint8_t version = 0;
+    packet >> version;
+    if (!static_cast<bool>(packet) || version != ProtocolVersion)
+        return std::nullopt;
+
+    uint8_t tag = 0;
+    packet >> tag;
+    if (!static_cast<bool>(packet))
+        return std::nullopt;
+
+    switch (static_cast<ServerMsgType>(tag)) {
+        case ServerMsgType::Welcome: {
+            WelcomeMsg msg;
+            int32_t color = 0;
+            packet >> color >> msg.opponent;
+            if (!static_cast<bool>(packet)) return std::nullopt;
+            msg.color = static_cast<Color>(color);
+            return msg;
+        }
+        case ServerMsgType::OpponentJoined: {
+            OpponentJoinedMsg msg;
+            packet >> msg.name;
+            if (!static_cast<bool>(packet)) return std::nullopt;
+            return msg;
+        }
+        case ServerMsgType::OpponentLeft:
+            return OpponentLeftMsg{};
+        case ServerMsgType::Move: {
+            ServerMoveMsg msg;
+            packet >> msg.san;
+            if (!static_cast<bool>(packet)) return std::nullopt;
+            return msg;
+        }
+        case ServerMsgType::DrawOffer:
+            return ServerDrawOfferMsg{};
+        case ServerMsgType::GameOver: {
+            GameOverMsg msg;
+            int32_t result = 0, reason = 0;
+            packet >> result >> reason;
+            if (!static_cast<bool>(packet)) return std::nullopt;
+            msg.result = static_cast<GameResult>(result);
+            msg.reason = static_cast<GameOverReason>(reason);
+            return msg;
+        }
+        case ServerMsgType::Chat: {
+            ServerChatMsg msg;
+            packet >> msg.name >> msg.text;
+            if (!static_cast<bool>(packet)) return std::nullopt;
+            return msg;
+        }
+        case ServerMsgType::Pong:
+            return PongMsg{};
+        case ServerMsgType::Error: {
+            ErrorMsg msg;
+            packet >> msg.message;
+            if (!static_cast<bool>(packet)) return std::nullopt;
+            return msg;
+        }
+        default:
+            return std::nullopt;
+    }
 }
 
 std::string debugString(const ClientMessage& /*msg*/)
