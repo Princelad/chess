@@ -211,6 +211,13 @@ TEST(SAN, FromSanInvalidReturnsNullopt)
     EXPECT_FALSE(san::fromSan(board, "e5").has_value());  // not a legal move from start
 }
 
+TEST(SAN, FromSanPieceCannotReach)
+{
+    // White queen on d1 cannot reach h5 (blocked by own pieces).
+    auto board = *Board::fromFen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/R1BQKBNR w KQkq - 0 1");
+    EXPECT_FALSE(san::fromSan(board, "Qh5").has_value());
+}
+
 // --- Round-trip tests ---
 
 TEST(SAN, RoundTripStartPos)
@@ -302,16 +309,9 @@ TEST(SAN, ToSanPromotionCheck)
 
 TEST(SAN, FromSanCastlingIllegalReturnsNullopt)
 {
-    // Black can't castle KS here — king on e8, rook on h8, but squares f8/g8 are attacked by white queen on h7? No, let me use a position where castling is not legal.
-    // King moved: position after 1.e3 e6 2.Bb5 — no, simpler: just use a position where rook is missing.
-    auto board = *Board::fromFen("r3k3/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQ - 0 1");
-    // Black can't castle QS because rights are only K (white KS). Wait, the castling field says "K" which means white KS only.
-    // Let me make it clearer: black has no castling rights.
-    auto board2 = *Board::fromFen("4k3/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQ - 0 1");
-    // Now try to castle as black — black has no castling rights
-    // But fromSan always constructs from the sideToMove's perspective. board2 has white to move. Let me use a position with black to move but no castling rights.
-    auto board3 = *Board::fromFen("4k3/pppppppp/8/8/8/8/PPPPPPPP/R3K2R b - - 0 1");
-    auto m = san::fromSan(board3, "O-O");
+    // Black to move but no castling rights → O-O should fail.
+    auto board = *Board::fromFen("4k3/pppppppp/8/8/8/8/PPPPPPPP/R3K2R b - - 0 1");
+    auto m = san::fromSan(board, "O-O");
     EXPECT_FALSE(m.has_value());
 }
 
