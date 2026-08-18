@@ -231,6 +231,119 @@ TEST(ProtocolRoundTrip, ServerError)
     EXPECT_EQ(m->message, "illegal move");
 }
 
+// ── Garbage / truncated packets ─────────────────────────────────────────────
+
+TEST(ProtocolGarbage, EmptyPacket)
+{
+    sf::Packet empty;
+    EXPECT_FALSE(deserializeClient(empty).has_value());
+}
+
+TEST(ProtocolGarbage, EmptyPacketServer)
+{
+    sf::Packet empty;
+    EXPECT_FALSE(deserializeServer(empty).has_value());
+}
+
+TEST(ProtocolGarbage, SingleByte)
+{
+    sf::Packet p;
+    p << static_cast<uint8_t>(0xFF);
+    EXPECT_FALSE(deserializeClient(p).has_value());
+}
+
+TEST(ProtocolGarbage, WrongVersion)
+{
+    sf::Packet p;
+    p << static_cast<uint8_t>(99) << static_cast<uint8_t>(0);
+    EXPECT_FALSE(deserializeClient(p).has_value());
+}
+
+TEST(ProtocolGarbage, UnknownClientTag)
+{
+    sf::Packet p;
+    p << static_cast<uint8_t>(ProtocolVersion) << static_cast<uint8_t>(0xFF);
+    EXPECT_FALSE(deserializeClient(p).has_value());
+}
+
+TEST(ProtocolGarbage, UnknownServerTag)
+{
+    sf::Packet p;
+    p << static_cast<uint8_t>(ProtocolVersion) << static_cast<uint8_t>(0xFF);
+    EXPECT_FALSE(deserializeServer(p).has_value());
+}
+
+TEST(ProtocolGarbage, TruncatedClientPayload)
+{
+    sf::Packet p;
+    p << static_cast<uint8_t>(ProtocolVersion) << static_cast<uint8_t>(0);
+    EXPECT_FALSE(deserializeClient(p).has_value());
+}
+
+TEST(ProtocolGarbage, TruncatedServerPayload)
+{
+    sf::Packet p;
+    p << static_cast<uint8_t>(ProtocolVersion) << static_cast<uint8_t>(0);
+    p << static_cast<int>(Color::White);
+    EXPECT_FALSE(deserializeServer(p).has_value());
+}
+
+TEST(ProtocolGarbage, RandomNoiseClient)
+{
+    sf::Packet p;
+    for (int i = 0; i < 64; ++i)
+        p << static_cast<uint8_t>(i & 0xFF);
+    EXPECT_FALSE(deserializeClient(p).has_value());
+}
+
+TEST(ProtocolGarbage, RandomNoiseServer)
+{
+    sf::Packet p;
+    for (int i = 0; i < 64; ++i)
+        p << static_cast<uint8_t>(i & 0xFF);
+    EXPECT_FALSE(deserializeServer(p).has_value());
+}
+
+// ── debugString ─────────────────────────────────────────────────────────────
+
+TEST(ProtocolDebug, ClientMessages)
+{
+    EXPECT_FALSE(debugString(ClientMessage{JoinMsg{"test"}}).empty());
+    EXPECT_FALSE(debugString(ClientMessage{MoveMsg{"e4"}}).empty());
+    EXPECT_FALSE(debugString(ClientMessage{DrawOfferMsg{}}).empty());
+    EXPECT_FALSE(debugString(ClientMessage{DrawAcceptMsg{}}).empty());
+    EXPECT_FALSE(debugString(ClientMessage{DrawDeclineMsg{}}).empty());
+    EXPECT_FALSE(debugString(ClientMessage{ResignMsg{}}).empty());
+    EXPECT_FALSE(debugString(ClientMessage{ChatMsg{"hi"}}).empty());
+    EXPECT_FALSE(debugString(ClientMessage{PingMsg{}}).empty());
+}
+
+TEST(ProtocolDebug, ServerMessages)
+{
+    EXPECT_FALSE(debugString(ServerMessage{WelcomeMsg{Color::White, "Bob"}}).empty());
+    EXPECT_FALSE(debugString(ServerMessage{OpponentJoinedMsg{"Eve"}}).empty());
+    EXPECT_FALSE(debugString(ServerMessage{OpponentLeftMsg{}}).empty());
+    EXPECT_FALSE(debugString(ServerMessage{ServerMoveMsg{"Nf3"}}).empty());
+    EXPECT_FALSE(debugString(ServerMessage{ServerDrawOfferMsg{}}).empty());
+    EXPECT_FALSE(debugString(ServerMessage{GameOverMsg{GameResult::Draw, GameOverReason::Stalemate}}).empty());
+    EXPECT_FALSE(debugString(ServerMessage{ServerChatMsg{"A", "B"}}).empty());
+    EXPECT_FALSE(debugString(ServerMessage{PongMsg{}}).empty());
+    EXPECT_FALSE(debugString(ServerMessage{ErrorMsg{"nope"}}).empty());
+}
+
+TEST(ProtocolDebug, ClientContainsTypeName)
+{
+    EXPECT_NE(debugString(ClientMessage{JoinMsg{"x"}}).find("Join"), std::string::npos);
+    EXPECT_NE(debugString(ClientMessage{MoveMsg{"x"}}).find("Move"), std::string::npos);
+}
+
+TEST(ProtocolDebug, ServerContainsTypeName)
+{
+    EXPECT_NE(debugString(ServerMessage{WelcomeMsg{Color::White, "x"}}).find("Welcome"), std::string::npos);
+    EXPECT_NE(debugString(ServerMessage{GameOverMsg{GameResult::Draw, GameOverReason::Checkmate}}).find("GameOver"), std::string::npos);
+    EXPECT_NE(debugString(ServerMessage{ErrorMsg{"x"}}).find("Error"), std::string::npos);
+}
+
 } // namespace
 } // namespace net
 } // namespace chess
