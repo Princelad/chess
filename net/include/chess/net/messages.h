@@ -59,5 +59,52 @@ using ClientMessage = std::variant<
     PingMsg
 >;
 
+// ── Server → Client ─────────────────────────────────────────────────────────
+
+struct WelcomeMsg {
+    Color color;
+    std::string opponent;
+};
+
+struct OpponentJoinedMsg {
+    std::string name;
+};
+
+struct OpponentLeftMsg {};
+
+struct ServerMoveMsg {
+    std::string san;
+};
+
+struct ServerDrawOfferMsg {};
+
+struct GameOverMsg {
+    GameResult result;
+    GameOverReason reason;
+};
+
+struct ServerChatMsg {
+    std::string name;
+    std::string text;
+};
+
+struct PongMsg {};
+
+struct ErrorMsg {
+    std::string message;
+};
+
+using ServerMessage = std::variant<
+    WelcomeMsg,
+    OpponentJoinedMsg,
+    OpponentLeftMsg,
+    ServerMoveMsg,
+    ServerDrawOfferMsg,
+    GameOverMsg,
+    ServerChatMsg,
+    PongMsg,
+    ErrorMsg
+>;
+
 } // namespace net
 } // namespace chess
