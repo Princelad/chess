@@ -1,5 +1,6 @@
 #include <chess/net/protocol.h>
 
+#include <type_traits>
 #include <variant>
 
 namespace chess {
@@ -81,7 +82,7 @@ bool writeClient(sf::Packet& packet, PingMsg)
 bool writeServer(sf::Packet& packet, const WelcomeMsg& msg)
 {
     packet << static_cast<uint8_t>(ServerMsgType::Welcome)
-           << static_cast<int32_t>(msg.color) << msg.opponent;
+           << static_cast<int>(msg.color) << msg.opponent;
     return static_cast<bool>(packet);
 }
 
@@ -112,7 +113,7 @@ bool writeServer(sf::Packet& packet, ServerDrawOfferMsg)
 bool writeServer(sf::Packet& packet, const GameOverMsg& msg)
 {
     packet << static_cast<uint8_t>(ServerMsgType::GameOver)
-           << static_cast<int32_t>(msg.result) << static_cast<int32_t>(msg.reason);
+           << static_cast<int>(msg.result) << static_cast<int>(msg.reason);
     return static_cast<bool>(packet);
 }
 
@@ -132,6 +133,57 @@ bool writeServer(sf::Packet& packet, const ErrorMsg& msg)
 {
     packet << static_cast<uint8_t>(ServerMsgType::Error) << msg.message;
     return static_cast<bool>(packet);
+}
+
+bool validColor(int v)
+{
+    return v == 0 || v == 1;
+}
+
+bool validResult(int v)
+{
+    return v >= 0 && v <= static_cast<int>(GameResult::Abort);
+}
+
+bool validReason(int v)
+{
+    return v >= 0 && v <= static_cast<int>(GameOverReason::Abort);
+}
+
+const char* resultStr(GameResult r)
+{
+    switch (r) {
+        case GameResult::WhiteWins:    return "WhiteWins";
+        case GameResult::BlackWins:    return "BlackWins";
+        case GameResult::Draw:         return "Draw";
+        case GameResult::Resignation:  return "Resignation";
+        case GameResult::Abort:        return "Abort";
+        default:                       return "Unknown";
+    }
+}
+
+const char* reasonStr(GameOverReason r)
+{
+    switch (r) {
+        case GameOverReason::Checkmate:           return "Checkmate";
+        case GameOverReason::Stalemate:           return "Stalemate";
+        case GameOverReason::FiftyMove:           return "FiftyMove";
+        case GameOverReason::Repetition:          return "Repetition";
+        case GameOverReason::InsufficientMaterial: return "InsufficientMaterial";
+        case GameOverReason::Resignation:         return "Resignation";
+        case GameOverReason::Disconnection:       return "Disconnection";
+        case GameOverReason::Abort:               return "Abort";
+        default:                                  return "Unknown";
+    }
+}
+
+const char* colorStr(Color c)
+{
+    switch (c) {
+        case Color::White: return "White";
+        case Color::Black: return "Black";
+        default:           return "Unknown";
+    }
 }
 
 } // anonymous namespace
@@ -209,9 +261,10 @@ std::optional<ServerMessage> deserializeServer(sf::Packet& packet)
     switch (static_cast<ServerMsgType>(tag)) {
         case ServerMsgType::Welcome: {
             WelcomeMsg msg;
-            int32_t color = 0;
+            int color = 0;
             packet >> color >> msg.opponent;
             if (!static_cast<bool>(packet)) return std::nullopt;
+            if (!validColor(color)) return std::nullopt;
             msg.color = static_cast<Color>(color);
             return msg;
         }
@@ -233,9 +286,10 @@ std::optional<ServerMessage> deserializeServer(sf::Packet& packet)
             return ServerDrawOfferMsg{};
         case ServerMsgType::GameOver: {
             GameOverMsg msg;
-            int32_t result = 0, reason = 0;
+            int result = 0, reason = 0;
             packet >> result >> reason;
             if (!static_cast<bool>(packet)) return std::nullopt;
+            if (!validResult(result) || !validReason(reason)) return std::nullopt;
             msg.result = static_cast<GameResult>(result);
             msg.reason = static_cast<GameOverReason>(reason);
             return msg;
@@ -282,45 +336,13 @@ std::string debugString(const ClientMessage& msg)
     }, msg);
 }
 
-namespace {
-
-const char* resultStr(GameResult r)
-{
-    switch (r) {
-        case GameResult::WhiteWins:    return "WhiteWins";
-        case GameResult::BlackWins:    return "BlackWins";
-        case GameResult::Draw:         return "Draw";
-        case GameResult::Resignation:  return "Resignation";
-        case GameResult::Abort:        return "Abort";
-    }
-    return "Unknown";
-}
-
-const char* reasonStr(GameOverReason r)
-{
-    switch (r) {
-        case GameOverReason::Checkmate:           return "Checkmate";
-        case GameOverReason::Stalemate:           return "Stalemate";
-        case GameOverReason::FiftyMove:           return "FiftyMove";
-        case GameOverReason::Repetition:          return "Repetition";
-        case GameOverReason::InsufficientMaterial: return "InsufficientMaterial";
-        case GameOverReason::Resignation:         return "Resignation";
-        case GameOverReason::Disconnection:       return "Disconnection";
-        case GameOverReason::Abort:               return "Abort";
-    }
-    return "Unknown";
-}
-
-} // anonymous namespace
-
 std::string debugString(const ServerMessage& msg)
 {
     return std::visit([](auto&& m) -> std::string {
         using T = std::decay_t<decltype(m)>;
-        if constexpr (std::is_same_v<T, WelcomeMsg>) {
-            const char* c = (m.color == Color::White) ? "White" : "Black";
-            return "Welcome{color=" + std::string(c) + ", opponent=\"" + m.opponent + "\"}";
-        } else if constexpr (std::is_same_v<T, OpponentJoinedMsg>)
+        if constexpr (std::is_same_v<T, WelcomeMsg>)
+            return "Welcome{color=" + std::string(colorStr(m.color)) + ", opponent=\"" + m.opponent + "\"}";
+        else if constexpr (std::is_same_v<T, OpponentJoinedMsg>)
             return "OpponentJoined{name=\"" + m.name + "\"}";
         else if constexpr (std::is_same_v<T, OpponentLeftMsg>)
             return "OpponentLeft{}";

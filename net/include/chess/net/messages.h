@@ -8,7 +8,7 @@
 namespace chess {
 namespace net {
 
-enum class GameResult {
+enum class GameResult : int {
     WhiteWins,
     BlackWins,
     Draw,
@@ -16,7 +16,7 @@ enum class GameResult {
     Abort,
 };
 
-enum class GameOverReason {
+enum class GameOverReason : int {
     Checkmate,
     Stalemate,
     FiftyMove,
