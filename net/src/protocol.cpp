@@ -1,7 +1,6 @@
 #include <chess/net/protocol.h>
 
 #include <type_traits>
-#include <variant>
 
 namespace chess {
 namespace net {
@@ -186,6 +185,22 @@ const char* colorStr(Color c)
     }
 }
 
+std::string escape(const std::string& s)
+{
+    std::string out;
+    out.reserve(s.size());
+    for (char c : s) {
+        switch (c) {
+            case '\\':  out += "\\\\"; break;
+            case '"':   out += "\\\""; break;
+            case '\n':  out += "\\n"; break;
+            case '\t':  out += "\\t"; break;
+            default:    out += c; break;
+        }
+    }
+    return out;
+}
+
 } // anonymous namespace
 
 bool serialize(sf::Packet& packet, const ClientMessage& msg)
@@ -318,9 +333,9 @@ std::string debugString(const ClientMessage& msg)
     return std::visit([](auto&& m) -> std::string {
         using T = std::decay_t<decltype(m)>;
         if constexpr (std::is_same_v<T, JoinMsg>)
-            return "Join{name=\"" + m.name + "\"}";
+            return "Join{name=\"" + escape(m.name) + "\"}";
         else if constexpr (std::is_same_v<T, MoveMsg>)
-            return "Move{san=\"" + m.san + "\"}";
+            return "Move{san=\"" + escape(m.san) + "\"}";
         else if constexpr (std::is_same_v<T, DrawOfferMsg>)
             return "DrawOffer{}";
         else if constexpr (std::is_same_v<T, DrawAcceptMsg>)
@@ -330,7 +345,7 @@ std::string debugString(const ClientMessage& msg)
         else if constexpr (std::is_same_v<T, ResignMsg>)
             return "Resign{}";
         else if constexpr (std::is_same_v<T, ChatMsg>)
-            return "Chat{text=\"" + m.text + "\"}";
+            return "Chat{text=\"" + escape(m.text) + "\"}";
         else if constexpr (std::is_same_v<T, PingMsg>)
             return "Ping{}";
     }, msg);
@@ -341,23 +356,23 @@ std::string debugString(const ServerMessage& msg)
     return std::visit([](auto&& m) -> std::string {
         using T = std::decay_t<decltype(m)>;
         if constexpr (std::is_same_v<T, WelcomeMsg>)
-            return "Welcome{color=" + std::string(colorStr(m.color)) + ", opponent=\"" + m.opponent + "\"}";
+            return "Welcome{color=" + std::string(colorStr(m.color)) + ", opponent=\"" + escape(m.opponent) + "\"}";
         else if constexpr (std::is_same_v<T, OpponentJoinedMsg>)
-            return "OpponentJoined{name=\"" + m.name + "\"}";
+            return "OpponentJoined{name=\"" + escape(m.name) + "\"}";
         else if constexpr (std::is_same_v<T, OpponentLeftMsg>)
             return "OpponentLeft{}";
         else if constexpr (std::is_same_v<T, ServerMoveMsg>)
-            return "Move{san=\"" + m.san + "\"}";
+            return "Move{san=\"" + escape(m.san) + "\"}";
         else if constexpr (std::is_same_v<T, ServerDrawOfferMsg>)
             return "DrawOffer{}";
         else if constexpr (std::is_same_v<T, GameOverMsg>)
             return "GameOver{" + std::string(resultStr(m.result)) + ", " + std::string(reasonStr(m.reason)) + "}";
         else if constexpr (std::is_same_v<T, ServerChatMsg>)
-            return "Chat{name=\"" + m.name + "\", text=\"" + m.text + "\"}";
+            return "Chat{name=\"" + escape(m.name) + "\", text=\"" + escape(m.text) + "\"}";
         else if constexpr (std::is_same_v<T, PongMsg>)
             return "Pong{}";
         else if constexpr (std::is_same_v<T, ErrorMsg>)
-            return "Error{message=\"" + m.message + "\"}";
+            return "Error{message=\"" + escape(m.message) + "\"}";
     }, msg);
 }
 

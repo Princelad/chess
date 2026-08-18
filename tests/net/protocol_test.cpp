@@ -109,6 +109,50 @@ TEST(ProtocolRoundTrip, ClientPing)
     EXPECT_TRUE(std::holds_alternative<PingMsg>(*result));
 }
 
+TEST(ProtocolRoundTrip, ClientJoinEmptyName)
+{
+    ClientMessage msg = JoinMsg{""};
+    sf::Packet p = freshPacket(serializeClient(msg));
+    auto result = deserializeClient(p);
+    ASSERT_TRUE(result.has_value());
+    auto* m = std::get_if<JoinMsg>(&*result);
+    ASSERT_NE(m, nullptr);
+    EXPECT_EQ(m->name, "");
+}
+
+TEST(ProtocolRoundTrip, ClientMoveEmptySan)
+{
+    ClientMessage msg = MoveMsg{""};
+    sf::Packet p = freshPacket(serializeClient(msg));
+    auto result = deserializeClient(p);
+    ASSERT_TRUE(result.has_value());
+    auto* m = std::get_if<MoveMsg>(&*result);
+    ASSERT_NE(m, nullptr);
+    EXPECT_EQ(m->san, "");
+}
+
+TEST(ProtocolRoundTrip, ClientChatEmptyText)
+{
+    ClientMessage msg = ChatMsg{""};
+    sf::Packet p = freshPacket(serializeClient(msg));
+    auto result = deserializeClient(p);
+    ASSERT_TRUE(result.has_value());
+    auto* m = std::get_if<ChatMsg>(&*result);
+    ASSERT_NE(m, nullptr);
+    EXPECT_EQ(m->text, "");
+}
+
+TEST(ProtocolRoundTrip, ServerErrorEmptyMessage)
+{
+    ServerMessage msg = ErrorMsg{""};
+    sf::Packet p = freshPacket(serializeServer(msg));
+    auto result = deserializeServer(p);
+    ASSERT_TRUE(result.has_value());
+    auto* m = std::get_if<ErrorMsg>(&*result);
+    ASSERT_NE(m, nullptr);
+    EXPECT_EQ(m->message, "");
+}
+
 // ── Server round-trip ───────────────────────────────────────────────────────
 
 TEST(ProtocolRoundTrip, ServerWelcome)
@@ -301,6 +345,36 @@ TEST(ProtocolGarbage, RandomNoiseServer)
     sf::Packet p;
     for (int i = 0; i < 64; ++i)
         p << static_cast<uint8_t>(i & 0xFF);
+    EXPECT_FALSE(deserializeServer(p).has_value());
+}
+
+TEST(ProtocolGarbage, InvalidColorValue)
+{
+    sf::Packet p;
+    p << static_cast<uint8_t>(ProtocolVersion)
+      << static_cast<uint8_t>(0)
+      << static_cast<int>(2)
+      << std::string("opponent");
+    EXPECT_FALSE(deserializeServer(p).has_value());
+}
+
+TEST(ProtocolGarbage, InvalidGameResultValue)
+{
+    sf::Packet p;
+    p << static_cast<uint8_t>(ProtocolVersion)
+      << static_cast<uint8_t>(5)
+      << static_cast<int>(99)
+      << static_cast<int>(0);
+    EXPECT_FALSE(deserializeServer(p).has_value());
+}
+
+TEST(ProtocolGarbage, InvalidGameOverReasonValue)
+{
+    sf::Packet p;
+    p << static_cast<uint8_t>(ProtocolVersion)
+      << static_cast<uint8_t>(5)
+      << static_cast<int>(0)
+      << static_cast<int>(99);
     EXPECT_FALSE(deserializeServer(p).has_value());
 }
 
