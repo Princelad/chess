@@ -100,6 +100,9 @@ TEST(Fen, ToFenMatchesCanonicalStrings)
         "8/8/8/8/3p4/8/8/8 w - d3 0 1",
         "r3k2r/8/8/8/8/8/8/R3K2R b Kk - 7 33",
         "3q3k/5p2/8/8/8/8/2P5/6K1 b - - 0 27",
+        "r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4",
+        "5k2/8/8/8/8/8/4R3/4K3 w - - 0 1",
+        "rnbqkb1r/pp1p1ppp/4p3/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq c6 0 4",
     };
     for (const char* fen : cases) {
         auto board = fromFen(fen);
@@ -156,6 +159,9 @@ TEST(Fen, RejectsMalformedStrings)
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - abc 1",
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - -1 1",
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0",
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w kqkq - 0 1",
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR W KQkq - 0 1",
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 0",
     };
     for (const char* fen : invalid) {
         EXPECT_FALSE(fromFen(fen).has_value()) << "expected rejection: " << fen;

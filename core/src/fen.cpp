@@ -203,7 +203,7 @@ std::optional<Board> fromFen(std::string_view fen)
 
     auto halfmove = parseNumber((*fields)[4]);
     auto fullmove = parseNumber((*fields)[5]);
-    if (!halfmove || !fullmove) {
+    if (!halfmove || !fullmove || *fullmove < 1) {
         return std::nullopt;
     }
     board.setHalfmoveClock(*halfmove);
