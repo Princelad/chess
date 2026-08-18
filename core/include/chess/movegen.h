@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <vector>
 
 #include <chess/board.h>
@@ -26,5 +27,7 @@ bool isAttacked(const Board& board, Square sq, Color byColor);
 bool inCheck(const Board& board, Color color);
 
 bool isLegalMove(const Board& board, const Move& m);
+
+uint64_t perft(Board& board, int depth);
 
 } // namespace chess
