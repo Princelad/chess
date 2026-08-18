@@ -109,6 +109,128 @@ TEST(ProtocolRoundTrip, ClientPing)
     EXPECT_TRUE(std::holds_alternative<PingMsg>(*result));
 }
 
+// ── Server round-trip ───────────────────────────────────────────────────────
+
+TEST(ProtocolRoundTrip, ServerWelcome)
+{
+    ServerMessage msg = WelcomeMsg{Color::White, "Bob"};
+    sf::Packet p = freshPacket(serializeServer(msg));
+    auto result = deserializeServer(p);
+    ASSERT_TRUE(result.has_value());
+    auto* m = std::get_if<WelcomeMsg>(&*result);
+    ASSERT_NE(m, nullptr);
+    EXPECT_EQ(m->color, Color::White);
+    EXPECT_EQ(m->opponent, "Bob");
+}
+
+TEST(ProtocolRoundTrip, ServerWelcomeBlack)
+{
+    ServerMessage msg = WelcomeMsg{Color::Black, "Alice"};
+    sf::Packet p = freshPacket(serializeServer(msg));
+    auto result = deserializeServer(p);
+    ASSERT_TRUE(result.has_value());
+    auto* m = std::get_if<WelcomeMsg>(&*result);
+    ASSERT_NE(m, nullptr);
+    EXPECT_EQ(m->color, Color::Black);
+    EXPECT_EQ(m->opponent, "Alice");
+}
+
+TEST(ProtocolRoundTrip, ServerOpponentJoined)
+{
+    ServerMessage msg = OpponentJoinedMsg{"Eve"};
+    sf::Packet p = freshPacket(serializeServer(msg));
+    auto result = deserializeServer(p);
+    ASSERT_TRUE(result.has_value());
+    auto* m = std::get_if<OpponentJoinedMsg>(&*result);
+    ASSERT_NE(m, nullptr);
+    EXPECT_EQ(m->name, "Eve");
+}
+
+TEST(ProtocolRoundTrip, ServerOpponentLeft)
+{
+    ServerMessage msg = OpponentLeftMsg{};
+    sf::Packet p = freshPacket(serializeServer(msg));
+    auto result = deserializeServer(p);
+    ASSERT_TRUE(result.has_value());
+    EXPECT_TRUE(std::holds_alternative<OpponentLeftMsg>(*result));
+}
+
+TEST(ProtocolRoundTrip, ServerMove)
+{
+    ServerMessage msg = ServerMoveMsg{"Nf3"};
+    sf::Packet p = freshPacket(serializeServer(msg));
+    auto result = deserializeServer(p);
+    ASSERT_TRUE(result.has_value());
+    auto* m = std::get_if<ServerMoveMsg>(&*result);
+    ASSERT_NE(m, nullptr);
+    EXPECT_EQ(m->san, "Nf3");
+}
+
+TEST(ProtocolRoundTrip, ServerDrawOffer)
+{
+    ServerMessage msg = ServerDrawOfferMsg{};
+    sf::Packet p = freshPacket(serializeServer(msg));
+    auto result = deserializeServer(p);
+    ASSERT_TRUE(result.has_value());
+    EXPECT_TRUE(std::holds_alternative<ServerDrawOfferMsg>(*result));
+}
+
+TEST(ProtocolRoundTrip, ServerGameOver)
+{
+    ServerMessage msg = GameOverMsg{GameResult::WhiteWins, GameOverReason::Checkmate};
+    sf::Packet p = freshPacket(serializeServer(msg));
+    auto result = deserializeServer(p);
+    ASSERT_TRUE(result.has_value());
+    auto* m = std::get_if<GameOverMsg>(&*result);
+    ASSERT_NE(m, nullptr);
+    EXPECT_EQ(m->result, GameResult::WhiteWins);
+    EXPECT_EQ(m->reason, GameOverReason::Checkmate);
+}
+
+TEST(ProtocolRoundTrip, ServerGameOverDraw)
+{
+    ServerMessage msg = GameOverMsg{GameResult::Draw, GameOverReason::Stalemate};
+    sf::Packet p = freshPacket(serializeServer(msg));
+    auto result = deserializeServer(p);
+    ASSERT_TRUE(result.has_value());
+    auto* m = std::get_if<GameOverMsg>(&*result);
+    ASSERT_NE(m, nullptr);
+    EXPECT_EQ(m->result, GameResult::Draw);
+    EXPECT_EQ(m->reason, GameOverReason::Stalemate);
+}
+
+TEST(ProtocolRoundTrip, ServerChat)
+{
+    ServerMessage msg = ServerChatMsg{"Alice", "good game"};
+    sf::Packet p = freshPacket(serializeServer(msg));
+    auto result = deserializeServer(p);
+    ASSERT_TRUE(result.has_value());
+    auto* m = std::get_if<ServerChatMsg>(&*result);
+    ASSERT_NE(m, nullptr);
+    EXPECT_EQ(m->name, "Alice");
+    EXPECT_EQ(m->text, "good game");
+}
+
+TEST(ProtocolRoundTrip, ServerPong)
+{
+    ServerMessage msg = PongMsg{};
+    sf::Packet p = freshPacket(serializeServer(msg));
+    auto result = deserializeServer(p);
+    ASSERT_TRUE(result.has_value());
+    EXPECT_TRUE(std::holds_alternative<PongMsg>(*result));
+}
+
+TEST(ProtocolRoundTrip, ServerError)
+{
+    ServerMessage msg = ErrorMsg{"illegal move"};
+    sf::Packet p = freshPacket(serializeServer(msg));
+    auto result = deserializeServer(p);
+    ASSERT_TRUE(result.has_value());
+    auto* m = std::get_if<ErrorMsg>(&*result);
+    ASSERT_NE(m, nullptr);
+    EXPECT_EQ(m->message, "illegal move");
+}
+
 } // namespace
 } // namespace net
 } // namespace chess
