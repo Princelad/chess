@@ -33,11 +33,29 @@ static void printUsage(const char* prog)
 {
     std::cout << "Usage: " << prog << " [options]\n"
               << "  --port <N>        Listen port (default: 5555)\n"
-              << "  --host <addr>     Bind address (default: 0.0.0.0)\n"
-              << "  --timeout <secs>  Idle timeout in seconds (default: 0 = disabled)\n"
-              << "  --log-file <path> Log to file in addition to stdout\n"
-              << "  --log-level <L>   Min log level: info, warn, error (default: info)\n"
-              << "  --help            Show this help\n";
+              "  --host <addr>     Bind address (default: 0.0.0.0)\n"
+              "  --timeout <secs>  Idle timeout in seconds (default: 0 = disabled)\n"
+              "  --log-file <path> Log to file in addition to stdout\n"
+              "  --log-level <L>   Min log level: info, warn, error (default: info)\n"
+              "  --help            Show this help\n";
+}
+
+using ClientVec = std::vector<std::unique_ptr<Client>>;
+using MatchVec = std::vector<std::unique_ptr<Match>>;
+
+static ClientVec::iterator disconnectClient(
+    ClientVec::iterator it, ClientVec& clients,
+    sf::SocketSelector& selector, Matchmaker& matchmaker)
+{
+    Client& client = **it;
+    auto addr = client.socket->getRemoteAddress();
+    LOG_INFO("Client disconnected: " + (addr.has_value() ? addr->toString() : "unknown"));
+    if (client.state == ClientState::Queued)
+        matchmaker.remove(client);
+    else if (client.state == ClientState::InMatch)
+        client.match->handleDisconnect(client);
+    selector.remove(*client.socket);
+    return clients.erase(it);
 }
 
 int main(int argc, char* argv[])
@@ -106,8 +124,8 @@ int main(int argc, char* argv[])
     sf::SocketSelector selector;
     selector.add(listener);
 
-    std::vector<std::unique_ptr<Client>> clients;
-    std::vector<std::unique_ptr<Match>> matches;
+    ClientVec clients;
+    MatchVec matches;
     Matchmaker matchmaker;
 
     std::signal(SIGINT, signalHandler);
@@ -146,8 +164,7 @@ int main(int argc, char* argv[])
 
                     if (packet.getDataSize() > MaxPacketSize) {
                         LOG_WARN("Packet too large (" + std::to_string(packet.getDataSize()) + " bytes), disconnecting");
-                        selector.remove(*client.socket);
-                        it = clients.erase(it);
+                        it = disconnectClient(it, clients, selector, matchmaker);
                         continue;
                     }
 
@@ -160,6 +177,10 @@ int main(int argc, char* argv[])
                             if (auto* join = std::get_if<chess::net::JoinMsg>(&*msg)) {
                                 if (!client.name.empty()) {
                                     sendTo(client, chess::net::ErrorMsg{"Already joined"});
+                                    break;
+                                }
+                                if (join->name.empty()) {
+                                    sendTo(client, chess::net::ErrorMsg{"Name required"});
                                     break;
                                 }
                                 client.name = join->name;
@@ -192,20 +213,12 @@ int main(int argc, char* argv[])
                         LOG_WARN("Failed to deserialize message (bad " + std::to_string(client.badMessages) + "/" + std::to_string(MaxBadMessages) + ")");
                         if (client.badMessages >= MaxBadMessages) {
                             LOG_WARN("Too many bad messages, disconnecting");
-                            selector.remove(*client.socket);
-                            it = clients.erase(it);
+                            it = disconnectClient(it, clients, selector, matchmaker);
                             continue;
                         }
                     }
                 } else {
-                    auto addr = client.socket->getRemoteAddress();
-                    LOG_INFO("Client disconnected: " + (addr.has_value() ? addr->toString() : "unknown"));
-                    if (client.state == ClientState::Queued)
-                        matchmaker.remove(client);
-                    else if (client.state == ClientState::InMatch)
-                        client.match->handleDisconnect(client);
-                    selector.remove(*client.socket);
-                    it = clients.erase(it);
+                    it = disconnectClient(it, clients, selector, matchmaker);
                     continue;
                 }
             }
@@ -219,12 +232,7 @@ int main(int argc, char* argv[])
                 auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - client.lastActivity).count();
                 if (elapsed > timeout) {
                     LOG_INFO("Client idle timeout (" + std::to_string(elapsed) + "s), disconnecting");
-                    if (client.state == ClientState::Queued)
-                        matchmaker.remove(client);
-                    else if (client.state == ClientState::InMatch)
-                        client.match->handleDisconnect(client);
-                    selector.remove(*client.socket);
-                    it = clients.erase(it);
+                    it = disconnectClient(it, clients, selector, matchmaker);
                     continue;
                 }
                 ++it;
