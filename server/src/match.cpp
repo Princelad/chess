@@ -10,6 +10,8 @@
 #include "log.h"
 #include "send.h"
 
+static constexpr std::size_t MaxChatLength = 500;
+
 Match::Match(Client& white, Client& black)
     : board_(chess::Board::fromStartPos())
     , white_(&white)
@@ -106,6 +108,10 @@ void Match::handleResign(Client& sender)
 
 void Match::handleChat(Client& sender, const chess::net::ChatMsg& msg)
 {
+    if (msg.text.size() > MaxChatLength) {
+        sendTo(sender, chess::net::ErrorMsg{"Message too long"});
+        return;
+    }
     sendTo(*opponent(sender), chess::net::ServerChatMsg{sender.name, msg.text});
 }
 

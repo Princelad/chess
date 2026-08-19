@@ -24,6 +24,8 @@ using namespace std::chrono_literals;
 
 static constexpr std::size_t MaxPacketSize = 4096;
 static constexpr int MaxBadMessages = 3;
+static constexpr std::size_t MaxNameLength = 32;
+static constexpr std::size_t MaxChatLength = 500;
 
 static std::atomic<bool> running{true};
 
@@ -34,6 +36,7 @@ static void printUsage(const char* prog)
     std::cout << "Usage: " << prog << " [options]\n"
               << "  --port <N>        Listen port (default: 5555)\n"
               "  --host <addr>     Bind address (default: 0.0.0.0)\n"
+              "  --max-clients <N> Max simultaneous clients (default: 64)\n"
               "  --timeout <secs>  Idle timeout in seconds (default: 0 = disabled)\n"
               "  --log-file <path> Log to file in addition to stdout\n"
               "  --log-level <L>   Min log level: info, warn, error (default: info)\n"
@@ -63,6 +66,7 @@ int main(int argc, char* argv[])
     unsigned short port = 5555;
     std::string host = "0.0.0.0";
     int timeout = 0;
+    std::size_t maxClients = 64;
     std::string logFile;
     LogLevel logLevel = LogLevel::Info;
 
@@ -80,6 +84,13 @@ int main(int argc, char* argv[])
             port = static_cast<unsigned short>(p);
         } else if (arg == "--host" && i + 1 < argc) {
             host = argv[++i];
+        } else if (arg == "--max-clients" && i + 1 < argc) {
+            int m = std::atoi(argv[++i]);
+            if (m < 1) {
+                LOG_ERROR("Max clients must be at least 1");
+                return 1;
+            }
+            maxClients = static_cast<std::size_t>(m);
         } else if (arg == "--timeout" && i + 1 < argc) {
             timeout = std::atoi(argv[++i]);
             if (timeout < 0) {
@@ -140,6 +151,11 @@ int main(int argc, char* argv[])
             newClient->lastActivity = std::chrono::steady_clock::now();
 
             if (listener.accept(*newClient->socket) == sf::Socket::Status::Done) {
+                if (clients.size() >= maxClients) {
+                    LOG_WARN("Max clients reached (" + std::to_string(maxClients) + "), rejecting");
+                    newClient->socket->disconnect();
+                    continue;
+                }
                 auto addr = newClient->socket->getRemoteAddress();
                 LOG_INFO("Client connected from " + (addr.has_value() ? addr->toString() : "unknown"));
                 if (!selector.add(*newClient->socket)) {
@@ -181,6 +197,10 @@ int main(int argc, char* argv[])
                                 }
                                 if (join->name.empty()) {
                                     sendTo(client, chess::net::ErrorMsg{"Name required"});
+                                    break;
+                                }
+                                if (join->name.size() > MaxNameLength) {
+                                    sendTo(client, chess::net::ErrorMsg{"Name too long"});
                                     break;
                                 }
                                 client.name = join->name;
