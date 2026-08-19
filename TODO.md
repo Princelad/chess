@@ -347,30 +347,30 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
 
 **Exit version:** `v0.5.0` — server hosts matches
 
-- [ ] **4.1 TCP listener (`main.cpp`)**
-  - [ ] Parse `--port` (default e.g. 5555) and `--host` from argv
-  - [ ] `sf::TcpListener`, bind, `listen()`, accept loop
-  - [ ] Non-blocking select loop across all connected sockets (or one thread per client — document the choice)
-  - [ ] Clean shutdown on SIGINT
+- [x] **4.1 TCP listener (`main.cpp`)**
+  - [x] Parse `--port` (default e.g. 5555) and `--host` from argv
+  - [x] `sf::TcpListener`, bind, `listen()`, accept loop
+  - [x] Non-blocking select loop across all connected sockets (or one thread per client — document the choice)
+  - [x] Clean shutdown on SIGINT
 
-- [ ] **4.2 Matchmaker (`matchmaker.cpp`)**
-  - [ ] Player queue: when 2 players are waiting, pair them
-  - [ ] Assign colors (random or first-joined = white); send `WELCOME` to both
-  - [ ] Handle a player leaving the queue
+- [x] **4.2 Matchmaker (`matchmaker.cpp`)**
+  - [x] Player queue: when 2 players are waiting, pair them
+  - [x] Assign colors (random or first-joined = white); send `WELCOME` to both
+  - [x] Handle a player leaving the queue
 
-- [ ] **4.3 Match session (`match.cpp`)**
-  - [ ] Own a `Board` instance, start from the initial position
-  - [ ] Validate each `MOVE` with `core::isLegalMove`; reject with `ERROR` if illegal
-  - [ ] Forward valid SAN to both clients, update engine state
-  - [ ] Detect game end via `core::GameStatus`; broadcast `GAME_OVER`
-  - [ ] Handle `DRAW_OFFER`/`DRAW_ACCEPT`/`DRAW_DECLINE` and `RESIGN`
-  - [ ] Handle disconnects (opponent wins or game aborted), notify the other player
-  - [ ] `CHAT` relay between the two players
+- [x] **4.3 Match session (`match.cpp`)**
+  - [x] Own a `Board` instance, start from the initial position
+  - [x] Validate each `MOVE` with `core::isLegalMove`; reject with `ERROR` if illegal
+  - [x] Forward valid SAN to both clients, update engine state
+  - [x] Detect game end via `core::GameStatus`; broadcast `GAME_OVER`
+  - [x] Handle `DRAW_OFFER`/`DRAW_ACCEPT`/`DRAW_DECLINE` and `RESIGN`
+  - [x] Handle disconnects (opponent wins or game aborted), notify the other player
+  - [x] `CHAT` relay between the two players
 
-- [ ] **4.4 Server robustness**
-  - [ ] Max message size guard, stale-connection timeout / keepalive
-  - [ ] One bad client must not crash the server
-  - [ ] Logging (`INFO/WARN/ERROR`) to stdout, optional `--log-file`
+- [x] **4.4 Server robustness**
+  - [x] Max message size guard, stale-connection timeout / keepalive
+  - [x] One bad client must not crash the server
+  - [x] Logging (`INFO/WARN/ERROR`) to stdout, optional `--log-file`
 
 ---
 
