@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <csignal>
@@ -14,6 +15,7 @@
 #include <chess/net/protocol.h>
 
 #include "client.h"
+#include "match.h"
 #include "matchmaker.h"
 
 using namespace std::chrono_literals;
@@ -81,6 +83,7 @@ int main(int argc, char* argv[])
     selector.add(listener);
 
     std::vector<std::unique_ptr<Client>> clients;
+    std::vector<std::unique_ptr<Match>> matches;
     Matchmaker matchmaker;
 
     std::signal(SIGINT, signalHandler);
@@ -121,17 +124,36 @@ int main(int argc, char* argv[])
                     if (msg.has_value()) {
                         std::cout << "[INFO] Received: " << chess::net::debugString(*msg) << "\n";
 
-                        if (auto* join = std::get_if<chess::net::JoinMsg>(&*msg)) {
-                            if (!client.name.empty()) {
-                                sendTo(client, chess::net::ErrorMsg{"Already joined"});
-                                continue;
+                        switch (client.state) {
+                        case ClientState::Connected:
+                            if (auto* join = std::get_if<chess::net::JoinMsg>(&*msg)) {
+                                if (!client.name.empty()) {
+                                    sendTo(client, chess::net::ErrorMsg{"Already joined"});
+                                    break;
+                                }
+                                client.name = join->name;
+                                client.state = ClientState::Queued;
+                                auto pair = matchmaker.enqueue(client);
+                                if (pair.has_value()) {
+                                    pair->first->state = ClientState::InMatch;
+                                    pair->second->state = ClientState::InMatch;
+                                    auto match = std::make_unique<Match>(*pair->first, *pair->second);
+                                    pair->first->match = match.get();
+                                    pair->second->match = match.get();
+                                    sendTo(*pair->first, chess::net::WelcomeMsg{chess::Color::White, pair->second->name});
+                                    sendTo(*pair->second, chess::net::WelcomeMsg{chess::Color::Black, pair->first->name});
+                                    matches.push_back(std::move(match));
+                                }
+                            } else {
+                                sendTo(client, chess::net::ErrorMsg{"Join first"});
                             }
-                            client.name = join->name;
-                            auto pair = matchmaker.enqueue(client);
-                            if (pair.has_value()) {
-                                sendTo(*pair->first, chess::net::WelcomeMsg{chess::Color::White, pair->second->name});
-                                sendTo(*pair->second, chess::net::WelcomeMsg{chess::Color::Black, pair->first->name});
-                            }
+                            break;
+                        case ClientState::Queued:
+                            sendTo(client, chess::net::ErrorMsg{"Waiting for match"});
+                            break;
+                        case ClientState::InMatch:
+                            client.match->handleMessage(client, *msg);
+                            break;
                         }
                     } else {
                         std::cout << "[WARN] Failed to deserialize message\n";
@@ -140,7 +162,10 @@ int main(int argc, char* argv[])
                     auto addr = client.socket->getRemoteAddress();
                     std::cout << "[INFO] Client disconnected: "
                               << (addr.has_value() ? addr->toString() : "unknown") << "\n";
-                    matchmaker.remove(client);
+                    if (client.state == ClientState::Queued)
+                        matchmaker.remove(client);
+                    else if (client.state == ClientState::InMatch)
+                        client.match->handleDisconnect(client);
                     selector.remove(*client.socket);
                     it = clients.erase(it);
                     continue;
@@ -148,12 +173,18 @@ int main(int argc, char* argv[])
             }
             ++it;
         }
+
+        matches.erase(
+            std::remove_if(matches.begin(), matches.end(),
+                [](const auto& m) { return !m->isActive(); }),
+            matches.end());
     }
 
     std::cout << "[INFO] Shutting down with " << clients.size() << " client(s) connected\n";
     for (auto& client : clients)
         client->socket->disconnect();
     clients.clear();
+    matches.clear();
     listener.close();
     return 0;
 }
