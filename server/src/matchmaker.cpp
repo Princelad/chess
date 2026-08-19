@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <iostream>
 
+#include "client.h"
+
 std::optional<std::pair<Client*, Client*>> Matchmaker::enqueue(Client& client)
 {
     for (auto* c : queue_) {
@@ -30,9 +32,4 @@ void Matchmaker::remove(Client& client)
     queue_.erase(
         std::remove(queue_.begin(), queue_.end(), &client),
         queue_.end());
-}
-
-bool Matchmaker::inQueue(const Client& client) const
-{
-    return std::find(queue_.begin(), queue_.end(), &client) != queue_.end();
 }
