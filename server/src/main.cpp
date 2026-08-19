@@ -13,6 +13,9 @@
 
 #include <chess/net/protocol.h>
 
+#include "client.h"
+#include "matchmaker.h"
+
 using namespace std::chrono_literals;
 
 static std::atomic<bool> running{true};
@@ -26,12 +29,6 @@ static void printUsage(const char* prog)
               << "  --host <addr> Bind address (default: 0.0.0.0)\n"
               << "  --help        Show this help\n";
 }
-
-struct Client {
-    std::unique_ptr<sf::TcpSocket> socket;
-    std::string name;
-    std::chrono::steady_clock::time_point lastActivity;
-};
 
 static bool sendTo(Client& client, const chess::net::ServerMessage& msg)
 {
