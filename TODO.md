@@ -347,11 +347,11 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
 
 **Exit version:** `v0.5.0` — server hosts matches
 
-- [ ] **4.1 TCP listener (`main.cpp`)**
-  - [ ] Parse `--port` (default e.g. 5555) and `--host` from argv
-  - [ ] `sf::TcpListener`, bind, `listen()`, accept loop
-  - [ ] Non-blocking select loop across all connected sockets (or one thread per client — document the choice)
-  - [ ] Clean shutdown on SIGINT
+- [x] **4.1 TCP listener (`main.cpp`)**
+  - [x] Parse `--port` (default e.g. 5555) and `--host` from argv
+  - [x] `sf::TcpListener`, bind, `listen()`, accept loop
+  - [x] Non-blocking select loop across all connected sockets (or one thread per client — document the choice)
+  - [x] Clean shutdown on SIGINT
 
 - [ ] **4.2 Matchmaker (`matchmaker.cpp`)**
   - [ ] Player queue: when 2 players are waiting, pair them
