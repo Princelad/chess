@@ -1,4 +1,4 @@
-#include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <csignal>
 #include <cstdlib>
@@ -15,9 +15,9 @@
 
 using namespace std::chrono_literals;
 
-static bool running = true;
+static std::atomic<bool> running{true};
 
-static void signalHandler(int) { running = false; }
+static void signalHandler(int) { running.store(false, std::memory_order_relaxed); }
 
 static void printUsage(const char* prog)
 {
@@ -33,11 +33,11 @@ struct Client {
     std::chrono::steady_clock::time_point lastActivity;
 };
 
-static void sendTo(Client& client, const chess::net::ServerMessage& msg)
+static bool sendTo(Client& client, const chess::net::ServerMessage& msg)
 {
     sf::Packet packet;
     chess::net::serialize(packet, msg);
-    [[maybe_unused]] auto s = client.socket->send(packet);
+    return client.socket->send(packet) == sf::Socket::Status::Done;
 }
 
 int main(int argc, char* argv[])
@@ -51,7 +51,12 @@ int main(int argc, char* argv[])
             printUsage(argv[0]);
             return 0;
         } else if (arg == "--port" && i + 1 < argc) {
-            port = static_cast<unsigned short>(std::atoi(argv[++i]));
+            int p = std::atoi(argv[++i]);
+            if (p < 1 || p > 65535) {
+                std::cerr << "[ERROR] Port must be 1-65535\n";
+                return 1;
+            }
+            port = static_cast<unsigned short>(p);
         } else if (arg == "--host" && i + 1 < argc) {
             host = argv[++i];
         } else {
@@ -95,7 +100,11 @@ int main(int argc, char* argv[])
                 auto addr = newClient->socket->getRemoteAddress();
                 std::cout << "[INFO] Client connected from "
                           << (addr.has_value() ? addr->toString() : "unknown") << "\n";
-                selector.add(*newClient->socket);
+                if (!selector.add(*newClient->socket)) {
+                    std::cerr << "[WARN] Failed to add client to selector\n";
+                    newClient->socket->disconnect();
+                    continue;
+                }
                 clients.push_back(std::move(newClient));
             } else {
                 std::cerr << "[WARN] Failed to accept connection\n";
