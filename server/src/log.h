@@ -1,6 +1,5 @@
 #pragma once
 
-#include <atomic>
 #include <string>
 
 enum class LogLevel : int { Info, Warn, Error };

@@ -65,7 +65,7 @@ int main(int argc, char* argv[])
 {
     unsigned short port = 5555;
     std::string host = "0.0.0.0";
-    int timeout = 0;
+    long long timeout = 0;
     std::size_t maxClients = 64;
     std::string logFile;
     LogLevel logLevel = LogLevel::Info;
@@ -92,7 +92,7 @@ int main(int argc, char* argv[])
             }
             maxClients = static_cast<std::size_t>(m);
         } else if (arg == "--timeout" && i + 1 < argc) {
-            timeout = std::atoi(argv[++i]);
+            timeout = std::atoll(argv[++i]);
             if (timeout < 0) {
                 LOG_ERROR("Timeout must be non-negative");
                 return 1;

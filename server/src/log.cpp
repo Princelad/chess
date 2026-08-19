@@ -1,5 +1,6 @@
 #include "log.h"
 
+#include <atomic>
 #include <chrono>
 #include <ctime>
 #include <fstream>
