@@ -367,10 +367,10 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [x] Handle disconnects (opponent wins or game aborted), notify the other player
   - [x] `CHAT` relay between the two players
 
-- [ ] **4.4 Server robustness**
-  - [ ] Max message size guard, stale-connection timeout / keepalive
-  - [ ] One bad client must not crash the server
-  - [ ] Logging (`INFO/WARN/ERROR`) to stdout, optional `--log-file`
+- [x] **4.4 Server robustness**
+  - [x] Max message size guard, stale-connection timeout / keepalive
+  - [x] One bad client must not crash the server
+  - [x] Logging (`INFO/WARN/ERROR`) to stdout, optional `--log-file`
 
 ---
 

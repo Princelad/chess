@@ -1,6 +1,5 @@
 #include "match.h"
 
-#include <iostream>
 #include <string>
 #include <type_traits>
 
@@ -8,6 +7,7 @@
 #include <chess/san.h>
 
 #include "client.h"
+#include "log.h"
 #include "send.h"
 
 Match::Match(Client& white, Client& black)
@@ -149,8 +149,8 @@ void Match::endGame(chess::net::GameResult result, chess::net::GameOverReason re
     chess::net::GameOverMsg gameOver{result, reason};
     [[maybe_unused]] bool w = sendTo(*white_, gameOver);
     [[maybe_unused]] bool b = sendTo(*black_, gameOver);
-    std::cout << "[INFO] Game over: result=" << static_cast<int>(result)
-              << " reason=" << static_cast<int>(reason) << "\n";
+    LOG_INFO("Game over: result=" + std::to_string(static_cast<int>(result))
+             + " reason=" + std::to_string(static_cast<int>(reason)));
 }
 
 std::pair<chess::net::GameResult, chess::net::GameOverReason>

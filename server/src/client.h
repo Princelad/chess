@@ -16,4 +16,5 @@ struct Client {
     std::chrono::steady_clock::time_point lastActivity;
     ClientState state = ClientState::Connected;
     Match* match = nullptr;
+    int badMessages = 0;
 };

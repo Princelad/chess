@@ -1,9 +1,9 @@
 #include "matchmaker.h"
 
 #include <algorithm>
-#include <iostream>
 
 #include "client.h"
+#include "log.h"
 
 std::optional<std::pair<Client*, Client*>> Matchmaker::enqueue(Client& client)
 {
@@ -21,8 +21,7 @@ std::optional<std::pair<Client*, Client*>> Matchmaker::enqueue(Client& client)
     Client* black = queue_[1];
     queue_.clear();
 
-    std::cout << "[INFO] Matched: " << white->name << " (White) vs "
-              << black->name << " (Black)\n";
+    LOG_INFO("Matched: " + white->name + " (White) vs " + black->name + " (Black)");
 
     return std::make_pair(white, black);
 }

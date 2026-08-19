@@ -15,11 +15,15 @@
 #include <chess/net/protocol.h>
 
 #include "client.h"
+#include "log.h"
 #include "match.h"
 #include "matchmaker.h"
 #include "send.h"
 
 using namespace std::chrono_literals;
+
+static constexpr std::size_t MaxPacketSize = 4096;
+static constexpr int MaxBadMessages = 3;
 
 static std::atomic<bool> running{true};
 
@@ -28,15 +32,21 @@ static void signalHandler(int) { running.store(false, std::memory_order_relaxed)
 static void printUsage(const char* prog)
 {
     std::cout << "Usage: " << prog << " [options]\n"
-              << "  --port <N>    Listen port (default: 5555)\n"
-              << "  --host <addr> Bind address (default: 0.0.0.0)\n"
-              << "  --help        Show this help\n";
+              << "  --port <N>        Listen port (default: 5555)\n"
+              << "  --host <addr>     Bind address (default: 0.0.0.0)\n"
+              << "  --timeout <secs>  Idle timeout in seconds (default: 0 = disabled)\n"
+              << "  --log-file <path> Log to file in addition to stdout\n"
+              << "  --log-level <L>   Min log level: info, warn, error (default: info)\n"
+              << "  --help            Show this help\n";
 }
 
 int main(int argc, char* argv[])
 {
     unsigned short port = 5555;
     std::string host = "0.0.0.0";
+    int timeout = 0;
+    std::string logFile;
+    LogLevel logLevel = LogLevel::Info;
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
@@ -46,32 +56,48 @@ int main(int argc, char* argv[])
         } else if (arg == "--port" && i + 1 < argc) {
             int p = std::atoi(argv[++i]);
             if (p < 1 || p > 65535) {
-                std::cerr << "[ERROR] Port must be 1-65535\n";
+                LOG_ERROR("Port must be 1-65535");
                 return 1;
             }
             port = static_cast<unsigned short>(p);
         } else if (arg == "--host" && i + 1 < argc) {
             host = argv[++i];
+        } else if (arg == "--timeout" && i + 1 < argc) {
+            timeout = std::atoi(argv[++i]);
+        } else if (arg == "--log-file" && i + 1 < argc) {
+            logFile = argv[++i];
+        } else if (arg == "--log-level" && i + 1 < argc) {
+            std::string level = argv[++i];
+            if (level == "warn") logLevel = LogLevel::Warn;
+            else if (level == "error") logLevel = LogLevel::Error;
+            else if (level != "info") {
+                LOG_ERROR("Invalid log level: " + level);
+                return 1;
+            }
         } else {
-            std::cerr << "Unknown option: " << arg << "\n";
+            LOG_ERROR("Unknown option: " + arg);
             printUsage(argv[0]);
             return 1;
         }
     }
 
+    logSetLevel(logLevel);
+    if (!logFile.empty())
+        logSetFile(logFile);
+
     auto ipOpt = sf::IpAddress::fromString(host);
     if (!ipOpt.has_value()) {
-        std::cerr << "[ERROR] Invalid address: " << host << "\n";
+        LOG_ERROR("Invalid address: " + host);
         return 1;
     }
 
     sf::TcpListener listener;
     auto status = listener.listen(port, *ipOpt);
     if (status != sf::Socket::Status::Done) {
-        std::cerr << "[ERROR] Failed to bind listener on " << host << ":" << port << "\n";
+        LOG_ERROR("Failed to bind listener on " + host + ":" + std::to_string(port));
         return 1;
     }
-    std::cout << "[INFO] Listening on " << host << ":" << port << "\n";
+    LOG_INFO("Listening on " + host + ":" + std::to_string(port));
 
     sf::SocketSelector selector;
     selector.add(listener);
@@ -93,16 +119,15 @@ int main(int argc, char* argv[])
 
             if (listener.accept(*newClient->socket) == sf::Socket::Status::Done) {
                 auto addr = newClient->socket->getRemoteAddress();
-                std::cout << "[INFO] Client connected from "
-                          << (addr.has_value() ? addr->toString() : "unknown") << "\n";
+                LOG_INFO("Client connected from " + (addr.has_value() ? addr->toString() : "unknown"));
                 if (!selector.add(*newClient->socket)) {
-                    std::cerr << "[WARN] Failed to add client to selector\n";
+                    LOG_WARN("Failed to add client to selector");
                     newClient->socket->disconnect();
                     continue;
                 }
                 clients.push_back(std::move(newClient));
             } else {
-                std::cerr << "[WARN] Failed to accept connection\n";
+                LOG_WARN("Failed to accept connection");
             }
         }
 
@@ -114,9 +139,17 @@ int main(int argc, char* argv[])
 
                 if (recvStatus == sf::Socket::Status::Done) {
                     client.lastActivity = std::chrono::steady_clock::now();
+
+                    if (packet.getDataSize() > MaxPacketSize) {
+                        LOG_WARN("Packet too large (" + std::to_string(packet.getDataSize()) + " bytes), disconnecting");
+                        selector.remove(*client.socket);
+                        it = clients.erase(it);
+                        continue;
+                    }
+
                     auto msg = chess::net::deserializeClient(packet);
                     if (msg.has_value()) {
-                        std::cout << "[INFO] Received: " << chess::net::debugString(*msg) << "\n";
+                        LOG_INFO("Received: " + chess::net::debugString(*msg));
 
                         switch (client.state) {
                         case ClientState::Connected:
@@ -149,13 +182,20 @@ int main(int argc, char* argv[])
                             client.match->handleMessage(client, *msg);
                             break;
                         }
+                        client.badMessages = 0;
                     } else {
-                        std::cout << "[WARN] Failed to deserialize message\n";
+                        client.badMessages++;
+                        LOG_WARN("Failed to deserialize message (bad " + std::to_string(client.badMessages) + "/" + std::to_string(MaxBadMessages) + ")");
+                        if (client.badMessages >= MaxBadMessages) {
+                            LOG_WARN("Too many bad messages, disconnecting");
+                            selector.remove(*client.socket);
+                            it = clients.erase(it);
+                            continue;
+                        }
                     }
                 } else {
                     auto addr = client.socket->getRemoteAddress();
-                    std::cout << "[INFO] Client disconnected: "
-                              << (addr.has_value() ? addr->toString() : "unknown") << "\n";
+                    LOG_INFO("Client disconnected: " + (addr.has_value() ? addr->toString() : "unknown"));
                     if (client.state == ClientState::Queued)
                         matchmaker.remove(client);
                     else if (client.state == ClientState::InMatch)
@@ -166,6 +206,25 @@ int main(int argc, char* argv[])
                 }
             }
             ++it;
+        }
+
+        if (timeout > 0) {
+            auto now = std::chrono::steady_clock::now();
+            for (auto it = clients.begin(); it != clients.end(); ) {
+                Client& client = **it;
+                auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - client.lastActivity).count();
+                if (elapsed > timeout) {
+                    LOG_INFO("Client idle timeout (" + std::to_string(elapsed) + "s), disconnecting");
+                    if (client.state == ClientState::Queued)
+                        matchmaker.remove(client);
+                    else if (client.state == ClientState::InMatch)
+                        client.match->handleDisconnect(client);
+                    selector.remove(*client.socket);
+                    it = clients.erase(it);
+                    continue;
+                }
+                ++it;
+            }
         }
 
         for (auto& match : matches) {
@@ -180,7 +239,7 @@ int main(int argc, char* argv[])
             matches.end());
     }
 
-    std::cout << "[INFO] Shutting down with " << clients.size() << " client(s) connected\n";
+    LOG_INFO("Shutting down with " + std::to_string(clients.size()) + " client(s) connected");
     for (auto& client : clients)
         client->socket->disconnect();
     clients.clear();
