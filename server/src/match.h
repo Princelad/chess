@@ -3,6 +3,7 @@
 #include <utility>
 
 #include <chess/board.h>
+#include <chess/movegen.h>
 #include <chess/net/messages.h>
 
 struct Client;
@@ -15,6 +16,8 @@ public:
     void handleDisconnect(Client& client);
 
     bool isActive() const;
+    Client* white() const;
+    Client* black() const;
     Client* opponent(const Client& client) const;
 
 private:
@@ -27,7 +30,7 @@ private:
     void handlePing(Client& sender);
 
     void endGame(chess::net::GameResult result, chess::net::GameOverReason reason);
-    std::pair<chess::net::GameResult, chess::net::GameOverReason> classifyState() const;
+    std::pair<chess::net::GameResult, chess::net::GameOverReason> classifyState(chess::GameState state) const;
 
     chess::Board board_;
     Client* white_;

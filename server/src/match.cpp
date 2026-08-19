@@ -2,19 +2,13 @@
 
 #include <iostream>
 #include <string>
+#include <type_traits>
 
 #include <chess/movegen.h>
 #include <chess/san.h>
-#include <chess/net/protocol.h>
 
 #include "client.h"
-
-static bool sendTo(Client& client, const chess::net::ServerMessage& msg)
-{
-    sf::Packet packet;
-    chess::net::serialize(packet, msg);
-    return client.socket->send(packet) == sf::Socket::Status::Done;
-}
+#include "send.h"
 
 Match::Match(Client& white, Client& black)
     : board_(chess::Board::fromStartPos())
@@ -25,6 +19,11 @@ Match::Match(Client& white, Client& black)
 
 void Match::handleMessage(Client& sender, const chess::net::ClientMessage& msg)
 {
+    if (std::get_if<chess::net::PingMsg>(&msg)) {
+        handlePing(sender);
+        return;
+    }
+
     if (!active_) {
         sendTo(sender, chess::net::ErrorMsg{"Game is over"});
         return;
@@ -44,8 +43,6 @@ void Match::handleMessage(Client& sender, const chess::net::ClientMessage& msg)
             handleResign(sender);
         else if constexpr (std::is_same_v<T, chess::net::ChatMsg>)
             handleChat(sender, m);
-        else if constexpr (std::is_same_v<T, chess::net::PingMsg>)
-            handlePing(sender);
     }, msg);
 }
 
@@ -73,7 +70,7 @@ void Match::handleMove(Client& sender, const chess::net::MoveMsg& msg)
 
     auto state = chess::evaluateGameState(board_);
     if (state != chess::GameState::Ongoing) {
-        auto [result, reason] = classifyState();
+        auto [result, reason] = classifyState(state);
         endGame(result, reason);
     }
 }
@@ -90,6 +87,7 @@ void Match::handleDrawAccept(Client& sender)
         sendTo(sender, chess::net::ErrorMsg{"No draw offer pending"});
         return;
     }
+    // No dedicated "AgreedDraw" reason in protocol; Abort is the closest match.
     endGame(chess::net::GameResult::Draw, chess::net::GameOverReason::Abort);
 }
 
@@ -134,6 +132,10 @@ void Match::handleDisconnect(Client& client)
 
 bool Match::isActive() const { return active_; }
 
+Client* Match::white() const { return white_; }
+
+Client* Match::black() const { return black_; }
+
 Client* Match::opponent(const Client& client) const
 {
     if (&client == white_) return black_;
@@ -145,15 +147,15 @@ void Match::endGame(chess::net::GameResult result, chess::net::GameOverReason re
 {
     active_ = false;
     chess::net::GameOverMsg gameOver{result, reason};
-    sendTo(*white_, gameOver);
-    sendTo(*black_, gameOver);
+    [[maybe_unused]] bool w = sendTo(*white_, gameOver);
+    [[maybe_unused]] bool b = sendTo(*black_, gameOver);
     std::cout << "[INFO] Game over: result=" << static_cast<int>(result)
               << " reason=" << static_cast<int>(reason) << "\n";
 }
 
-std::pair<chess::net::GameResult, chess::net::GameOverReason> Match::classifyState() const
+std::pair<chess::net::GameResult, chess::net::GameOverReason>
+Match::classifyState(chess::GameState state) const
 {
-    auto state = chess::evaluateGameState(board_);
     switch (state) {
         case chess::GameState::Checkmate: {
             chess::Color loser = board_.sideToMove();

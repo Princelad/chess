@@ -17,6 +17,7 @@
 #include "client.h"
 #include "match.h"
 #include "matchmaker.h"
+#include "send.h"
 
 using namespace std::chrono_literals;
 
@@ -30,13 +31,6 @@ static void printUsage(const char* prog)
               << "  --port <N>    Listen port (default: 5555)\n"
               << "  --host <addr> Bind address (default: 0.0.0.0)\n"
               << "  --help        Show this help\n";
-}
-
-static bool sendTo(Client& client, const chess::net::ServerMessage& msg)
-{
-    sf::Packet packet;
-    chess::net::serialize(packet, msg);
-    return client.socket->send(packet) == sf::Socket::Status::Done;
 }
 
 int main(int argc, char* argv[])
@@ -174,6 +168,12 @@ int main(int argc, char* argv[])
             ++it;
         }
 
+        for (auto& match : matches) {
+            if (!match->isActive()) {
+                if (match->white()) { match->white()->state = ClientState::Connected; match->white()->match = nullptr; }
+                if (match->black()) { match->black()->state = ClientState::Connected; match->black()->match = nullptr; }
+            }
+        }
         matches.erase(
             std::remove_if(matches.begin(), matches.end(),
                 [](const auto& m) { return !m->isActive(); }),

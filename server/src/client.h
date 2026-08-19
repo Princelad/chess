@@ -8,7 +8,7 @@
 
 class Match;
 
-enum class ClientState { Connected, Queued, InMatch };
+enum class ClientState : int { Connected, Queued, InMatch };
 
 struct Client {
     std::unique_ptr<sf::TcpSocket> socket;
