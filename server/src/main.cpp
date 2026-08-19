@@ -64,6 +64,10 @@ int main(int argc, char* argv[])
             host = argv[++i];
         } else if (arg == "--timeout" && i + 1 < argc) {
             timeout = std::atoi(argv[++i]);
+            if (timeout < 0) {
+                LOG_ERROR("Timeout must be non-negative");
+                return 1;
+            }
         } else if (arg == "--log-file" && i + 1 < argc) {
             logFile = argv[++i];
         } else if (arg == "--log-level" && i + 1 < argc) {

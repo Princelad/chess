@@ -8,5 +8,10 @@ inline bool sendTo(Client& client, const chess::net::ServerMessage& msg)
 {
     sf::Packet packet;
     chess::net::serialize(packet, msg);
-    return client.socket->send(packet) == sf::Socket::Status::Done;
+    auto status = client.socket->send(packet);
+    if (status != sf::Socket::Status::Done) {
+        client.socket->disconnect();
+        return false;
+    }
+    return true;
 }

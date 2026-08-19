@@ -9,7 +9,7 @@
 
 namespace {
 
-LogLevel gLevel = LogLevel::Info;
+std::atomic<LogLevel> gLevel{LogLevel::Info};
 std::ofstream gLogFile;
 std::mutex gMutex;
 
@@ -51,12 +51,12 @@ void logSetFile(const std::string& path)
 
 void logSetLevel(LogLevel level)
 {
-    gLevel = level;
+    gLevel.store(level, std::memory_order_relaxed);
 }
 
 void logMsg(LogLevel level, const char* file, int line, const std::string& msg)
 {
-    if (level < gLevel)
+    if (level < gLevel.load(std::memory_order_relaxed))
         return;
 
     std::lock_guard<std::mutex> lock(gMutex);
