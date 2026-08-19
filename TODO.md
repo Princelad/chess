@@ -353,10 +353,10 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [x] Non-blocking select loop across all connected sockets (or one thread per client — document the choice)
   - [x] Clean shutdown on SIGINT
 
-- [ ] **4.2 Matchmaker (`matchmaker.cpp`)**
-  - [ ] Player queue: when 2 players are waiting, pair them
-  - [ ] Assign colors (random or first-joined = white); send `WELCOME` to both
-  - [ ] Handle a player leaving the queue
+- [x] **4.2 Matchmaker (`matchmaker.cpp`)**
+  - [x] Player queue: when 2 players are waiting, pair them
+  - [x] Assign colors (random or first-joined = white); send `WELCOME` to both
+  - [x] Handle a player leaving the queue
 
 - [ ] **4.3 Match session (`match.cpp`)**
   - [ ] Own a `Board` instance, start from the initial position

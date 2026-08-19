@@ -81,6 +81,7 @@ int main(int argc, char* argv[])
     selector.add(listener);
 
     std::vector<std::unique_ptr<Client>> clients;
+    Matchmaker matchmaker;
 
     std::signal(SIGINT, signalHandler);
 
@@ -119,6 +120,19 @@ int main(int argc, char* argv[])
                     auto msg = chess::net::deserializeClient(packet);
                     if (msg.has_value()) {
                         std::cout << "[INFO] Received: " << chess::net::debugString(*msg) << "\n";
+
+                        if (auto* join = std::get_if<chess::net::JoinMsg>(&*msg)) {
+                            if (!client.name.empty()) {
+                                sendTo(client, chess::net::ErrorMsg{"Already joined"});
+                                continue;
+                            }
+                            client.name = join->name;
+                            auto pair = matchmaker.enqueue(client);
+                            if (pair.has_value()) {
+                                sendTo(*pair->first, chess::net::WelcomeMsg{chess::Color::White, pair->second->name});
+                                sendTo(*pair->second, chess::net::WelcomeMsg{chess::Color::Black, pair->first->name});
+                            }
+                        }
                     } else {
                         std::cout << "[WARN] Failed to deserialize message\n";
                     }
@@ -126,6 +140,7 @@ int main(int argc, char* argv[])
                     auto addr = client.socket->getRemoteAddress();
                     std::cout << "[INFO] Client disconnected: "
                               << (addr.has_value() ? addr->toString() : "unknown") << "\n";
+                    matchmaker.remove(client);
                     selector.remove(*client.socket);
                     it = clients.erase(it);
                     continue;
