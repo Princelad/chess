@@ -380,19 +380,19 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
 
 **Exit version:** `v0.6.0` — client connects
 
-- [ ] **5.1 Connection wrapper (`connection.cpp`)**
-  - [ ] Wrap `sf::TcpSocket` in non-blocking mode
-  - [ ] Outgoing message queue (drained each frame)
-  - [ ] Incoming message queue (polled each frame, parsed via `net/`)
-  - [ ] `connect(host, port)` with timeout and friendly error reporting
+- [x] **5.1 Connection wrapper (`connection.cpp`)**
+  - [x] Wrap `sf::TcpSocket` in non-blocking mode
+  - [x] Outgoing message queue (drained each frame)
+  - [x] Incoming message queue (polled each frame, parsed via `net/`)
+  - [x] `connect(host, port)` with timeout and friendly error reporting
 
-- [ ] **5.2 Keepalive**
-  - [ ] Send `PING` every N seconds; if no `PONG` within timeout → mark disconnected
-  - [ ] Detect server closing the socket and surface "connection lost"
+- [x] **5.2 Keepalive**
+  - [x] Send `PING` every N seconds; if no `PONG` within timeout → mark disconnected
+  - [x] Detect server closing the socket and surface "connection lost"
 
-- [ ] **5.3 Connection flow**
-  - [ ] Build `JOIN` on connect, wait for `WELCOME`, surface `OPPONENT_JOINED`
-  - [ ] Map incoming `MOVE`/`GAME_OVER`/`CHAT` events into the GUI's app state
+- [x] **5.3 Connection flow**
+  - [x] Build `JOIN` on connect, wait for `WELCOME`, surface `OPPONENT_JOINED`
+  - [x] Map incoming `MOVE`/`GAME_OVER`/`CHAT` events into the GUI's app state
 
 ---
 

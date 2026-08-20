@@ -13,8 +13,25 @@ if(BUILD_TESTING)
     FetchContent_MakeAvailable(googletest)
     set(BUILD_TESTING ${_gtest_build_testing} CACHE BOOL "Build tests" FORCE)
 
-    add_executable(chess-tests test_main.cpp core/types_test.cpp core/board_test.cpp core/state_test.cpp core/startpos_test.cpp core/move_test.cpp core/fen_test.cpp core/movegen_test.cpp core/makemove_test.cpp core/san_test.cpp core/perft_test.cpp core/endgame_test.cpp net/protocol_test.cpp)
-    target_link_libraries(chess-tests PRIVATE chesscore chessnet GTest::gtest_main)
+    add_executable(chess-tests
+        test_main.cpp
+        core/types_test.cpp
+        core/board_test.cpp
+        core/state_test.cpp
+        core/startpos_test.cpp
+        core/move_test.cpp
+        core/fen_test.cpp
+        core/movegen_test.cpp
+        core/makemove_test.cpp
+        core/san_test.cpp
+        core/perft_test.cpp
+        core/endgame_test.cpp
+        net/protocol_test.cpp
+        server/matchmaker_test.cpp
+        server/match_test.cpp
+        client/connection_test.cpp)
+
+    target_link_libraries(chess-tests PRIVATE chesscore chessnet chessclient chessserver GTest::gtest_main)
 
     include(GoogleTest)
     gtest_discover_tests(chess-tests)
