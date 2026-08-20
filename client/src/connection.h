@@ -21,10 +21,17 @@ public:
     static constexpr auto DefaultPongTimeout = std::chrono::seconds{10};
     static constexpr std::size_t MaxOutboxSize = 128;
     static constexpr std::size_t MaxInboxSize = 256;
+    static constexpr std::size_t MaxDrainPerPoll = 64;
 
     explicit Connection(std::chrono::steady_clock::duration pingInterval = DefaultPingInterval,
                         std::chrono::steady_clock::duration pongTimeout = DefaultPongTimeout);
     ~Connection();
+
+    Connection(const Connection&) = delete;
+    Connection& operator=(const Connection&) = delete;
+    Connection(Connection&&) = delete;
+    Connection& operator=(Connection&&) = delete;
+
     void connect(const std::string& host, unsigned short port);
     void disconnect();
     void join(const std::string& name);

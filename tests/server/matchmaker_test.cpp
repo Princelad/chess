@@ -72,13 +72,20 @@ TEST(MatchmakerTest, EnqueueThreeReturnsNulloptThenPairs)
 TEST(MatchmakerTest, DuplicateEnqueueReturnsNullopt)
 {
     Matchmaker mm;
-    Client a;
+    Client a, b;
     a.socket = std::make_unique<sf::TcpSocket>();
     a.name = "Alice";
+    b.socket = std::make_unique<sf::TcpSocket>();
+    b.name = "Bob";
 
     mm.enqueue(a);
     auto result = mm.enqueue(a);
     EXPECT_FALSE(result.has_value());
+
+    auto pair = mm.enqueue(b);
+    ASSERT_TRUE(pair.has_value());
+    EXPECT_EQ(pair->first, &a);
+    EXPECT_EQ(pair->second, &b);
 }
 
 TEST(MatchmakerTest, RemoveQueuedClient)

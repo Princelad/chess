@@ -29,13 +29,9 @@ if(BUILD_TESTING)
         net/protocol_test.cpp
         server/matchmaker_test.cpp
         server/match_test.cpp
-        client/connection_test.cpp
-        ${CMAKE_SOURCE_DIR}/client/src/connection.cpp)
+        client/connection_test.cpp)
 
-    target_include_directories(chess-tests PRIVATE
-        ${CMAKE_SOURCE_DIR}/client/src)
-
-    target_link_libraries(chess-tests PRIVATE chesscore chessnet chessserver GTest::gtest_main)
+    target_link_libraries(chess-tests PRIVATE chesscore chessnet chessclient chessserver GTest::gtest_main)
 
     include(GoogleTest)
     gtest_discover_tests(chess-tests)

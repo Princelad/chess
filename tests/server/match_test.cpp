@@ -145,6 +145,9 @@ TEST_F(MatchTest, DrawOfferAndAccept)
 
     auto bOver = tryRecvOnClient(*clientBlack_);
     ASSERT_TRUE(bOver.has_value());
+    auto* bOverMsg = std::get_if<chess::net::GameOverMsg>(&*bOver);
+    ASSERT_NE(bOverMsg, nullptr);
+    EXPECT_EQ(bOverMsg->result, chess::net::GameResult::Draw);
 }
 
 TEST_F(MatchTest, DrawAcceptNoOffer)

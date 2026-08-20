@@ -181,7 +181,8 @@ void Connection::drainOutbox()
 
 void Connection::drainInbox()
 {
-    for (;;) {
+    std::size_t count = 0;
+    for (; count < MaxDrainPerPoll; ++count) {
         sf::Packet packet;
         auto status = socket_.receive(packet);
         if (status == sf::Socket::Status::Done) {
