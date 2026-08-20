@@ -119,10 +119,12 @@ void Connection::poll()
     if (state_ == ConnectionState::Connected) drainInbox();
 }
 
-void Connection::send(const ClientMessage& msg)
+bool Connection::send(const ClientMessage& msg)
 {
-    if (state_ != ConnectionState::Connected) return;
+    if (state_ != ConnectionState::Connected) return false;
+    if (outbox_.size() >= MaxOutboxSize) return false;
     outbox_.push(msg);
+    return true;
 }
 
 bool Connection::hasMessages() const
@@ -194,6 +196,11 @@ void Connection::drainInbox()
                     lastPongReceived_ = std::chrono::steady_clock::now();
                 }
                 inbox_.push_back(std::move(*msg));
+                if (inbox_.size() > MaxInboxSize) {
+                    error_ = "Inbox overflow";
+                    state_ = ConnectionState::Disconnected;
+                    return;
+                }
             }
         } else if (status == sf::Socket::Status::Disconnected ||
                    status == sf::Socket::Status::Error) {

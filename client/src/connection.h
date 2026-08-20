@@ -19,6 +19,8 @@ class Connection {
 public:
     static constexpr auto DefaultPingInterval = std::chrono::seconds{30};
     static constexpr auto DefaultPongTimeout = std::chrono::seconds{10};
+    static constexpr std::size_t MaxOutboxSize = 128;
+    static constexpr std::size_t MaxInboxSize = 256;
 
     explicit Connection(std::chrono::steady_clock::duration pingInterval = DefaultPingInterval,
                         std::chrono::steady_clock::duration pongTimeout = DefaultPongTimeout);
@@ -28,7 +30,7 @@ public:
     void join(const std::string& name);
 
     void poll();
-    void send(const chess::net::ClientMessage& msg);
+    bool send(const chess::net::ClientMessage& msg);
 
     bool hasMessages() const;
     std::size_t messageCount() const;
