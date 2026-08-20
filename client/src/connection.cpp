@@ -2,6 +2,7 @@
 
 #include <chess/net/protocol.h>
 
+#include <cassert>
 #include <memory>
 #include <vector>
 
@@ -129,8 +130,14 @@ bool Connection::hasMessages() const
     return !inbox_.empty();
 }
 
+std::size_t Connection::messageCount() const
+{
+    return inbox_.size();
+}
+
 ServerMessage Connection::nextMessage()
 {
+    assert(!inbox_.empty());
     auto msg = std::move(inbox_.front());
     inbox_.pop_front();
     return msg;
@@ -150,7 +157,12 @@ void Connection::drainOutbox()
 {
     while (!outbox_.empty()) {
         sf::Packet packet;
-        serialize(packet, outbox_.front());
+        if (!serialize(packet, outbox_.front())) {
+            outbox_.pop();
+            error_ = "Serialization failed";
+            state_ = ConnectionState::Disconnected;
+            return;
+        }
         auto status = socket_.send(packet);
         if (status == sf::Socket::Status::Done) {
             outbox_.pop();

@@ -209,8 +209,11 @@ TEST_F(MatchTest, MessageAfterGameOver)
     match_->handleMessage(white_, chess::net::ResignMsg{});
     EXPECT_FALSE(match_->isActive());
 
-    tryRecvOnClient(*clientWhite_);
-    tryRecvOnClient(*clientBlack_);
+    for (int i = 0; i < 10; ++i) {
+        tryRecvOnClient(*clientWhite_);
+        tryRecvOnClient(*clientBlack_);
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
 
     match_->handleMessage(black_, chess::net::MoveMsg{"e5"});
     auto msg = tryRecvOnClient(*clientBlack_);

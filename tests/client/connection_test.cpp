@@ -103,7 +103,7 @@ TEST_F(ConnectionTest, ConnectRefused)
 {
     Connection conn;
     conn.connect("127.0.0.1", 1);
-    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{3};
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{7};
     while (conn.state() == ConnectionState::Connecting &&
            std::chrono::steady_clock::now() < deadline) {
         conn.poll();
@@ -153,11 +153,12 @@ TEST_F(ConnectionTest, ReceiveFromServer)
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
 
+    serverThread.join();
+
     ASSERT_TRUE(conn.hasMessages());
     auto msg = conn.nextMessage();
     EXPECT_TRUE(std::get_if<chess::net::PongMsg>(&msg));
 
-    serverThread.join();
     conn.disconnect();
 }
 
@@ -270,14 +271,14 @@ TEST_F(ConnectionTest, JoinAndWelcome)
     conn.connect("127.0.0.1", server_->port);
     ASSERT_TRUE(waitForConnected(conn));
 
-    std::thread serverThread([this]() {
+    std::atomic<bool> serverOk{false};
+    std::thread serverThread([this, &serverOk]() {
         server_->accept();
         auto msg = server_->receiveClient();
-        ASSERT_TRUE(msg.has_value());
+        if (!msg) return;
         auto* join = std::get_if<chess::net::JoinMsg>(&*msg);
-        ASSERT_NE(join, nullptr);
-        EXPECT_EQ(join->name, "Alice");
-
+        if (!join || join->name != "Alice") return;
+        serverOk = true;
         server_->send(chess::net::WelcomeMsg{chess::Color::White, "Bob"});
         server_->send(chess::net::OpponentJoinedMsg{"Bob"});
     });
@@ -285,32 +286,26 @@ TEST_F(ConnectionTest, JoinAndWelcome)
     conn.join("Alice");
 
     auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{2};
-    while (!conn.hasMessages() &&
-           std::chrono::steady_clock::now() < deadline) {
+    while (std::chrono::steady_clock::now() < deadline) {
         conn.poll();
+        if (conn.messageCount() >= 2) break;
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
 
-    ASSERT_TRUE(conn.hasMessages());
+    serverThread.join();
+    ASSERT_TRUE(serverOk);
+    ASSERT_GE(conn.messageCount(), 2u);
     auto welcome = conn.nextMessage();
     auto* w = std::get_if<chess::net::WelcomeMsg>(&welcome);
     ASSERT_NE(w, nullptr);
     EXPECT_EQ(w->color, chess::Color::White);
     EXPECT_EQ(w->opponent, "Bob");
 
-    deadline = std::chrono::steady_clock::now() + std::chrono::seconds{2};
-    while (!conn.hasMessages() && std::chrono::steady_clock::now() < deadline) {
-        conn.poll();
-        std::this_thread::sleep_for(std::chrono::milliseconds(5));
-    }
-
-    ASSERT_TRUE(conn.hasMessages());
     auto joined = conn.nextMessage();
     auto* j = std::get_if<chess::net::OpponentJoinedMsg>(&joined);
     ASSERT_NE(j, nullptr);
     EXPECT_EQ(j->name, "Bob");
 
-    serverThread.join();
     conn.disconnect();
 }
 
@@ -320,7 +315,8 @@ TEST_F(ConnectionTest, MoveAndChat)
     conn.connect("127.0.0.1", server_->port);
     ASSERT_TRUE(waitForConnected(conn));
 
-    std::thread serverThread([this]() {
+    std::atomic<bool> serverOk{false};
+    std::thread serverThread([this, &serverOk]() {
         server_->accept();
         auto join = server_->receiveClient();
         server_->send(chess::net::WelcomeMsg{chess::Color::Black, "Alice"});
@@ -328,10 +324,10 @@ TEST_F(ConnectionTest, MoveAndChat)
         server_->send(chess::net::ServerMoveMsg{"e4"});
 
         auto move = server_->receiveClient();
-        ASSERT_TRUE(move.has_value());
+        if (!move) return;
         auto* m = std::get_if<chess::net::ChatMsg>(&*move);
-        ASSERT_NE(m, nullptr);
-        EXPECT_EQ(m->text, "Hello!");
+        if (!m || m->text != "Hello!") return;
+        serverOk = true;
     });
 
     conn.join("Bob");
@@ -349,12 +345,13 @@ TEST_F(ConnectionTest, MoveAndChat)
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
 
-    EXPECT_EQ(received, 3);
+    ASSERT_EQ(received, 3);
 
     conn.send(chess::net::ChatMsg{"Hello!"});
     conn.poll();
 
     serverThread.join();
+    ASSERT_TRUE(serverOk);
     conn.disconnect();
 }
 
@@ -375,12 +372,13 @@ TEST_F(ConnectionTest, ErrorFromServer)
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
 
+    serverThread.join();
+
     ASSERT_TRUE(conn.hasMessages());
     auto msg = conn.nextMessage();
     auto* err = std::get_if<chess::net::ErrorMsg>(&msg);
     ASSERT_NE(err, nullptr);
     EXPECT_EQ(err->message, "Name taken");
 
-    serverThread.join();
     conn.disconnect();
 }

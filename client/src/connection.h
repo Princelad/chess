@@ -31,6 +31,7 @@ public:
     void send(const chess::net::ClientMessage& msg);
 
     bool hasMessages() const;
+    std::size_t messageCount() const;
     chess::net::ServerMessage nextMessage();
 
     ConnectionState state() const;
