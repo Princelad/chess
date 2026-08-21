@@ -445,9 +445,9 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [x] On promotion move, pause and show 4 piece choices (n/b/r/q)
   - [x] Complete the move with the chosen piece
 
-- [ ] **6.3.3 Other controls**
-  - [ ] Buttons: "Resign", "Offer draw", "Accept/Decline draw" (when offered)
-  - [ ] Chat: text input + send on Enter, event log with received messages
+- [x] **6.3.3 Other controls**
+  - [x] Buttons: "Resign", "Offer draw", "Accept/Decline draw" (when offered)
+  - [x] Chat: text input + send on Enter, event log with received messages
 
 ### Task 6.4 — HUD and game over
 

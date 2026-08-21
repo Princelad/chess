@@ -31,6 +31,10 @@ private:
     void deselect();
     void sendPromotionMove(chess::PieceType type);
     void cancelPromotion();
+    void sendChat();
+    void handleButtonClick(int mx, int my);
+    void drawButtons(sf::RenderWindow& window);
+    void drawChat(sf::RenderWindow& window);
 
     App& app_;
     Board board_;
@@ -45,6 +49,10 @@ private:
     bool gameOver_ = false;
     std::string statusMsg_;
     float statusTimer_ = 0.f;
+    bool drawOfferPending_ = false;
+    std::vector<std::string> chatLog_;
+    std::string chatInput_;
+    bool chatFocused_ = false;
 };
 
 } // namespace chess::client
