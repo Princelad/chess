@@ -62,7 +62,7 @@ void BoardView::drawSquares(sf::RenderWindow& window) const
 
     for (int file = 0; file < 8; ++file) {
         for (int rank = 0; rank < 8; ++rank) {
-            bool light = (file + rank) % 2 == 0;
+            bool light = (file + rank) % 2 != 0;
             sq.setPosition(squareToPixel(file, rank));
             sq.setFillColor(light ? LightSquare : DarkSquare);
             window.draw(sq);
@@ -143,7 +143,7 @@ void BoardView::drawLabels(sf::RenderWindow& window, const sf::Font& font) const
         int rank = flipped_ ? (7 - i) : i;
 
         {
-            bool light = (file + 0) % 2 == 0;
+            bool light = (file + 0) % 2 != 0;
             auto pos = squareToPixel(file, 0);
             sf::Text text(font, std::string(1, files[file]), fontSize);
             text.setFillColor(light ? DarkText : LightText);
@@ -155,7 +155,7 @@ void BoardView::drawLabels(sf::RenderWindow& window, const sf::Font& font) const
         }
 
         {
-            bool light = (0 + rank) % 2 == 0;
+            bool light = (0 + rank) % 2 != 0;
             auto pos = squareToPixel(0, rank);
             sf::Text text(font, std::string(1, ranks[rank]), fontSize);
             text.setFillColor(light ? DarkText : LightText);
@@ -168,7 +168,6 @@ void BoardView::drawLabels(sf::RenderWindow& window, const sf::Font& font) const
 void BoardView::drawPieces(sf::RenderWindow& window, const sf::Font& font,
                             const Board& board, const App& app) const
 {
-    float pieceScale = squareSize_ * 0.8f / 160.f;
     float pieceSize = squareSize_ * 0.8f;
     float offset = (squareSize_ - pieceSize) / 2.f;
 
@@ -187,6 +186,7 @@ void BoardView::drawPieces(sf::RenderWindow& window, const sf::Font& font,
             if (app.piecesLoaded()) {
                 const auto& tex = app.pieceTexture(piece.color, piece.type);
                 sf::Sprite sprite(tex);
+                float pieceScale = pieceSize / static_cast<float>(tex.getSize().x);
                 sprite.setScale({ pieceScale, pieceScale });
                 sprite.setPosition({ pos.x + offset, pos.y + offset });
                 window.draw(sprite);
@@ -198,8 +198,8 @@ void BoardView::drawPieces(sf::RenderWindow& window, const sf::Font& font,
                     : (lightSquare ? sf::Color(40, 40, 40) : sf::Color(200, 200, 200)));
                 auto lb = letter.getGlobalBounds();
                 letter.setPosition({
-                    pos.x + (squareSize_ - lb.size.x) / 2.f,
-                    pos.y + (squareSize_ - lb.size.y) / 2.f
+                    pos.x + (squareSize_ - lb.size.x) / 2.f - lb.position.x,
+                    pos.y + (squareSize_ - lb.size.y) / 2.f - lb.position.y
                 });
                 window.draw(letter);
             }

@@ -20,6 +20,7 @@ private:
     App& app_;
     std::string resultText_;
     std::string reasonText_;
+    bool rematchHovered_ = false;
 };
 
 } // namespace chess::client

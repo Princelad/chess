@@ -3,28 +3,48 @@
 
 namespace chess::client {
 
+namespace {
+constexpr float BtnW = 200.f;
+constexpr float BtnH = 44.f;
+constexpr float BtnY = 340.f;
+}
+
 GameOverScreen::GameOverScreen(App& app,
                                net::GameResult result,
                                net::GameOverReason reason)
     : app_(app)
 {
-    switch (result) {
-        case net::GameResult::WhiteWins:   resultText_ = "White wins"; break;
-        case net::GameResult::BlackWins:   resultText_ = "Black wins"; break;
-        case net::GameResult::Draw:        resultText_ = "Draw"; break;
-        case net::GameResult::Resignation: resultText_ = "Resignation"; break;
-        case net::GameResult::Abort:       resultText_ = "Game aborted"; break;
+    std::string reasonStr;
+    switch (reason) {
+        case net::GameOverReason::Checkmate:          reasonStr = "Checkmate"; break;
+        case net::GameOverReason::Stalemate:          reasonStr = "Stalemate"; break;
+        case net::GameOverReason::FiftyMove:          reasonStr = "Fifty-move rule"; break;
+        case net::GameOverReason::Repetition:         reasonStr = "Threefold repetition"; break;
+        case net::GameOverReason::InsufficientMaterial: reasonStr = "Insufficient material"; break;
+        case net::GameOverReason::Resignation:        reasonStr = "Resignation"; break;
+        case net::GameOverReason::Disconnection:      reasonStr = "Disconnection"; break;
+        case net::GameOverReason::Abort:              reasonStr = "Aborted"; break;
     }
 
-    switch (reason) {
-        case net::GameOverReason::Checkmate:         reasonText_ = "Checkmate"; break;
-        case net::GameOverReason::Stalemate:         reasonText_ = "Stalemate"; break;
-        case net::GameOverReason::FiftyMove:         reasonText_ = "Fifty-move rule"; break;
-        case net::GameOverReason::Repetition:        reasonText_ = "Threefold repetition"; break;
-        case net::GameOverReason::InsufficientMaterial: reasonText_ = "Insufficient material"; break;
-        case net::GameOverReason::Resignation:       reasonText_ = "Resignation"; break;
-        case net::GameOverReason::Disconnection:     reasonText_ = "Disconnection"; break;
-        case net::GameOverReason::Abort:             reasonText_ = "Aborted"; break;
+    std::string resultStr;
+    switch (result) {
+        case net::GameResult::WhiteWins:   resultStr = "White wins"; break;
+        case net::GameResult::BlackWins:   resultStr = "Black wins"; break;
+        case net::GameResult::Draw:        resultStr = "Draw"; break;
+        case net::GameResult::Resignation: resultStr = "Resignation"; break;
+        case net::GameResult::Abort:       resultStr = "Game aborted"; break;
+    }
+
+    switch (result) {
+        case net::GameResult::Draw:
+            resultText_ = reasonStr;
+            break;
+        case net::GameResult::Abort:
+            resultText_ = resultStr;
+            break;
+        default:
+            resultText_ = reasonStr + " — " + resultStr;
+            break;
     }
 }
 
@@ -37,6 +57,27 @@ void GameOverScreen::handleEvent(const sf::Event& event)
             app_.switchScreen(std::make_unique<ConnectScreen>(app_));
         }
     }
+
+    if (const auto* mm = event.getIf<sf::Event::MouseMoved>()) {
+        float mx = static_cast<float>(mm->position.x);
+        float my = static_cast<float>(mm->position.y);
+        float btnX = (App::WindowWidth - BtnW) / 2.f;
+        rematchHovered_ = (mx >= btnX && mx < btnX + BtnW &&
+                           my >= BtnY && my < BtnY + BtnH);
+    }
+
+    if (const auto* mb = event.getIf<sf::Event::MouseButtonPressed>()) {
+        if (mb->button == sf::Mouse::Button::Left) {
+            float mx = static_cast<float>(mb->position.x);
+            float my = static_cast<float>(mb->position.y);
+            float btnX = (App::WindowWidth - BtnW) / 2.f;
+            if (mx >= btnX && mx < btnX + BtnW &&
+                my >= BtnY && my < BtnY + BtnH) {
+                app_.connection().disconnect();
+                app_.switchScreen(std::make_unique<ConnectScreen>(app_));
+            }
+        }
+    }
 }
 
 void GameOverScreen::update(float /*dtSec*/) {}
@@ -45,22 +86,42 @@ void GameOverScreen::draw(sf::RenderWindow& window)
 {
     auto& font = app_.font();
 
-    sf::Text resultLabel(font, resultText_, 36);
+    sf::Text resultLabel(font, resultText_, 30);
     resultLabel.setFillColor(sf::Color(255, 255, 255));
     auto rb = resultLabel.getGlobalBounds();
-    resultLabel.setPosition({(App::WindowWidth - rb.size.x) / 2.f, 220.f});
+    resultLabel.setPosition({(App::WindowWidth - rb.size.x) / 2.f - rb.position.x, 200.f});
     window.draw(resultLabel);
 
-    sf::Text reasonLabel(font, "(" + reasonText_ + ")", 22);
-    reasonLabel.setFillColor(sf::Color(180, 180, 180));
-    auto rr = reasonLabel.getGlobalBounds();
-    reasonLabel.setPosition({(App::WindowWidth - rr.size.x) / 2.f, 280.f});
-    window.draw(reasonLabel);
+    if (!reasonText_.empty()) {
+        sf::Text reasonLabel(font, "(" + reasonText_ + ")", 20);
+        reasonLabel.setFillColor(sf::Color(160, 160, 160));
+        auto rr = reasonLabel.getGlobalBounds();
+        reasonLabel.setPosition({(App::WindowWidth - rr.size.x) / 2.f - rr.position.x, 250.f});
+        window.draw(reasonLabel);
+    }
 
-    sf::Text hint(font, "Press Enter to return", 18);
-    hint.setFillColor(sf::Color(120, 120, 120));
+    float btnX = (App::WindowWidth - BtnW) / 2.f;
+    sf::RectangleShape btn({BtnW, BtnH});
+    btn.setPosition({btnX, BtnY});
+    btn.setFillColor(rematchHovered_
+        ? sf::Color(80, 160, 80) : sf::Color(60, 130, 60));
+    btn.setOutlineColor(sf::Color(100, 100, 100));
+    btn.setOutlineThickness(1.f);
+    window.draw(btn);
+
+    sf::Text btnText(font, "Rematch", 18);
+    btnText.setFillColor(sf::Color(240, 240, 240));
+    auto bb = btnText.getGlobalBounds();
+    btnText.setPosition({
+        btnX + (BtnW - bb.size.x) / 2.f - bb.position.x,
+        BtnY + (BtnH - bb.size.y) / 2.f - bb.position.y
+    });
+    window.draw(btnText);
+
+    sf::Text hint(font, "or press Enter", 14);
+    hint.setFillColor(sf::Color(100, 100, 100));
     auto hb = hint.getGlobalBounds();
-    hint.setPosition({(App::WindowWidth - hb.size.x) / 2.f, 360.f});
+    hint.setPosition({(App::WindowWidth - hb.size.x) / 2.f - hb.position.x, BtnY + BtnH + 16.f});
     window.draw(hint);
 }
 
