@@ -74,9 +74,17 @@ void GameScreen::trySendMove(int targetFile, int targetRank)
     }
 
     if (found->isPromotion()) {
-        statusMsg_ = "Promotion — use 6.3.2 picker";
-        statusTimer_ = 2.0f;
-        deselect();
+        PromotionState ps;
+        ps.fromFile = hl_.selectedSquare->first;
+        ps.fromRank = hl_.selectedSquare->second;
+        ps.toFile = targetFile;
+        ps.toRank = targetRank;
+
+        for (const auto& m : moves) {
+            if (m.from == from && m.to == to && m.isPromotion())
+                ps.candidates.push_back(m);
+        }
+        promo_ = std::move(ps);
         return;
     }
 
@@ -92,15 +100,40 @@ void GameScreen::deselect()
     hl_.legalMoveTargets.clear();
 }
 
+void GameScreen::sendPromotionMove(chess::PieceType type)
+{
+    if (!promo_) return;
+    for (const auto& m : promo_->candidates) {
+        if (m.promotion == type) {
+            std::string san = chess::san::toSan(board_, m);
+            app_.connection().send(chess::net::MoveMsg{san});
+            myTurn_ = false;
+            promo_.reset();
+            deselect();
+            return;
+        }
+    }
+    promo_.reset();
+    deselect();
+}
+
+void GameScreen::cancelPromotion()
+{
+    promo_.reset();
+    deselect();
+}
+
 void GameScreen::handleEvent(const sf::Event& event)
 {
     if (const auto* kp = event.getIf<sf::Event::KeyPressed>()) {
         if (kp->code == sf::Keyboard::Key::Escape) {
+            if (promo_) { cancelPromotion(); return; }
             app_.connection().send(chess::net::ResignMsg{});
             app_.connection().disconnect();
             return;
         }
         if (kp->code == sf::Keyboard::Key::Space) {
+            if (promo_) { cancelPromotion(); return; }
             deselect();
             return;
         }
@@ -110,6 +143,29 @@ void GameScreen::handleEvent(const sf::Event& event)
 
     if (const auto* mb = event.getIf<sf::Event::MouseButtonPressed>()) {
         if (mb->button != sf::Mouse::Button::Left) return;
+
+        if (promo_) {
+            auto pos = static_cast<sf::Vector2f>(mb->position);
+            float sq = boardView_.squareSize();
+
+            bool flipped = boardView_.isFlipped();
+            int promoCol = flipped ? (7 - promo_->toFile) : promo_->toFile;
+            int promoRowStart = flipped ? promo_->toRank : (7 - promo_->toRank);
+
+            sf::Vector2f origin = boardView_.boardOrigin();
+            float px = origin.x + static_cast<float>(promoCol) * sq;
+            float py = origin.y + static_cast<float>(promoRowStart) * sq;
+
+            for (int i = 0; i < static_cast<int>(promo_->candidates.size()); ++i) {
+                sf::FloatRect cell({px, py + i * sq}, {sq, sq});
+                if (cell.contains(pos)) {
+                    sendPromotionMove(promo_->candidates[i].promotion);
+                    return;
+                }
+            }
+            cancelPromotion();
+            return;
+        }
 
         auto square = boardView_.pixelToSquare(
             static_cast<sf::Vector2f>(mb->position));
@@ -204,6 +260,53 @@ void GameScreen::draw(sf::RenderWindow& window)
     boardView_.drawHighlights(window, hl_, board_);
     boardView_.drawLabels(window, font);
     boardView_.drawPieces(window, font, board_, app_);
+
+    if (promo_) {
+        float sq = boardView_.squareSize();
+        sf::Vector2f origin = boardView_.boardOrigin();
+        bool flipped = boardView_.isFlipped();
+
+        int promoCol = flipped ? (7 - promo_->toFile) : promo_->toFile;
+        int promoRowStart = flipped ? promo_->toRank : (7 - promo_->toRank);
+
+        float px = origin.x + static_cast<float>(promoCol) * sq;
+        float py = origin.y + static_cast<float>(promoRowStart) * sq;
+
+        for (int i = 0; i < static_cast<int>(promo_->candidates.size()); ++i) {
+            sf::Vector2f cellPos(px, py + i * sq);
+            sf::RectangleShape cell({sq, sq});
+            cell.setPosition(cellPos);
+            cell.setFillColor(sf::Color(40, 38, 35, 220));
+            cell.setOutlineColor(sf::Color(180, 180, 180, 180));
+            cell.setOutlineThickness(1.f);
+            window.draw(cell);
+
+            PieceType pt = promo_->candidates[i].promotion;
+            float pieceSize = sq * 0.8f;
+            float offset = (sq - pieceSize) / 2.f;
+
+            if (app_.piecesLoaded()) {
+                const auto& tex = app_.pieceTexture(myColor_, pt);
+                sf::Sprite sprite(tex);
+                float scale = pieceSize / 160.f;
+                sprite.setScale({scale, scale});
+                sprite.setPosition({cellPos.x + offset, cellPos.y + offset});
+                window.draw(sprite);
+            } else {
+                const char letters[] = { 'P', 'N', 'B', 'R', 'Q', 'K' };
+                unsigned int letterSize = static_cast<unsigned int>(sq * 0.5f);
+                if (letterSize < 12) letterSize = 12;
+                sf::Text letter(font, std::string(1, letters[static_cast<int>(pt)]), letterSize);
+                letter.setFillColor(sf::Color(240, 240, 240));
+                auto lb = letter.getGlobalBounds();
+                letter.setPosition({
+                    cellPos.x + (sq - lb.size.x) / 2.f,
+                    cellPos.y + (sq - lb.size.y) / 2.f
+                });
+                window.draw(letter);
+            }
+        }
+    }
 
     float px = boardView_.panelX();
 

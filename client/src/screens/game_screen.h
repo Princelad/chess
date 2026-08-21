@@ -5,9 +5,18 @@
 #include <chess/board.h>
 #include <chess/types.h>
 
+#include <chess/move.h>
+
 #include <string>
+#include <vector>
 
 namespace chess::client {
+
+struct PromotionState {
+    int fromFile, fromRank;
+    int toFile, toRank;
+    std::vector<chess::Move> candidates;
+};
 
 class GameScreen : public Screen {
 public:
@@ -20,6 +29,8 @@ private:
     void selectPiece(int file, int rank);
     void trySendMove(int targetFile, int targetRank);
     void deselect();
+    void sendPromotionMove(chess::PieceType type);
+    void cancelPromotion();
 
     App& app_;
     Board board_;
@@ -28,6 +39,7 @@ private:
     BoardView boardView_;
 
     HighlightState hl_;
+    std::optional<PromotionState> promo_;
     bool inCheck_ = false;
     bool myTurn_ = false;
     bool gameOver_ = false;

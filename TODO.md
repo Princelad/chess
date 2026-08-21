@@ -441,9 +441,9 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [x] Ignore input when it's not your turn or game over
   - [x] Show "illegal move" feedback (e.g. status message) if server rejects
 
-- [ ] **6.3.2 Promotion picker**
-  - [ ] On promotion move, pause and show 4 piece choices (n/b/r/q)
-  - [ ] Complete the move with the chosen piece
+- [x] **6.3.2 Promotion picker**
+  - [x] On promotion move, pause and show 4 piece choices (n/b/r/q)
+  - [x] Complete the move with the chosen piece
 
 - [ ] **6.3.3 Other controls**
   - [ ] Buttons: "Resign", "Offer draw", "Accept/Decline draw" (when offered)
