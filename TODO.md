@@ -69,26 +69,34 @@ chess/
 │   ├── include/chess/net/messages.h
 │   ├── include/chess/net/protocol.h
 │   └── src/protocol.cpp
-├── server/                   # chess-server binary (headless, no SFML needed...)
+├── server/                   # chess-server binary (headless, no SFML needed)
 │   ├── CMakeLists.txt
 │   └── src/
 │       ├── main.cpp          # listener loop, CLI args (port)
+│       ├── client.h          # per-client state machine
 │       ├── matchmaker.cpp    # queue players, pair into matches, assign colors
-│       └── match.cpp         # one game session state machine
+│       ├── match.cpp         # one game session state machine
+│       ├── send.h            # sendTo helper
+│       └── log.h             # logging utilities
 ├── client/                   # chess-client binary (SFML GUI)
 │   ├── CMakeLists.txt
 │   └── src/
-│       ├── main.cpp          # app entry, SFML window, main loop
-│       ├── app.cpp           # screen state machine (menu / game / gameover)
-│       ├── connection.cpp    # TCP connection wrapper (non-blocking, queue)
-│       ├── boardview.cpp     # pixel<->square mapping, draw squares/pieces/highlights
-│       ├── input.cpp         # click-click move input, promotion picker
-│       └── hud.cpp           # status text, move history, chat/event log
+│       ├── main.cpp          # app entry
+│       ├── app.h / app.cpp   # screen state machine, asset loading
+│       ├── connection.h / connection.cpp    # TCP wrapper (non-blocking, queue)
+│       ├── boardview.h / boardview.cpp      # pixel<->square mapping, draw board/pieces
+│       └── screens/
+│           ├── connect_screen.h / connect_screen.cpp  # host/port/name input
+│           ├── game_screen.h / game_screen.cpp        # main game UI
+│           ├── game_over_screen.h / game_over_screen.cpp
+│           └── hud.h / hud.cpp                        # status, move history, chat
 ├── assets/
-│   └── pieces/               # 12 PNG sprites (cburnett)
-└── tests/
-    ├── CMakeLists.txt
-    └── core/                 # perft, fen, san, rules tests
+│   ├── pieces/               # 12 PNG sprites (cburnett)
+│   └── fonts/                # Inter-Regular.ttf
+├── tests/
+│   ├── CMakeLists.txt
+│   └── core/                 # perft, fen, san, rules tests
+└── AGENTS.md                 # build commands, conventions
 ```
 
 ---
@@ -435,7 +443,7 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
 
 ### Task 6.3 — Input
 
-- [x] **6.3.1 Click-click moves (`input.cpp`)**
+- [x] **6.3.1 Click-click moves (`game_screen.cpp`)**
   - [x] Click a friendly piece → select + show legal moves
   - [x] Click a legal target (or same piece to reselect) → send `MOVE` (SAN via `core::san::toSan`)
   - [x] Ignore input when it's not your turn or game over
@@ -457,7 +465,7 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [x] Draw-offer / result / disconnection messages
 
 - [x] **6.4.2 Game-over screen**
-  - [x] Display result (e.g. "Checkmate — White wins"), reason, and a "Rematch" button
+  - [x] Display result (e.g. "Checkmate — White wins"), reason, and a "Rematch" button (returns to connect screen)
   - [x] Return to connect screen or exit cleanly
 
 ---

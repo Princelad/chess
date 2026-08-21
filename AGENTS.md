@@ -72,5 +72,11 @@ SemVer-style, pre-1.0: MINOR bump per phase, PATCH for bugfixes within a phase. 
 | Phase | Version | Status |
 |---|---|---|
 | 0 — Project setup | `v0.1.0` | done |
-| 1 — Core rules engine | `v0.2.0` | in progress (1.4.2 next) |
-| 2 — Core unit tests | `v0.3.0` | planned |
+| 1 — Core rules engine | `v0.2.0` | done |
+| 2 — Core unit tests | `v0.3.0` | done |
+| 3 — Network protocol | `v0.4.0` | done |
+| 4 — Server | `v0.5.0` | done |
+| 5 — Client networking | `v0.6.0` | done |
+| 6 — SFML GUI | `v0.7.0` | done |
+| 7 — Integration & polish | `v1.0.0` | planned |
+| 8 — Stretch goals | `v1.x.0` | planned |

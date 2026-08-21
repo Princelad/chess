@@ -98,7 +98,7 @@ void BoardView::drawHighlights(sf::RenderWindow& window, const HighlightState& h
                        sf::Color(255, 0, 0, 100));
 
     float dotRadius = squareSize_ * 0.15f;
-    float ringRadius = squareSize_ * 0.45f;
+    float ringRadius = squareSize_ * 0.40f;
     float ringThickness = squareSize_ * 0.08f;
 
     for (auto& [file, rank] : hl.legalMoveTargets) {
@@ -107,7 +107,8 @@ void BoardView::drawHighlights(sf::RenderWindow& window, const HighlightState& h
         float cy = pos.y + squareSize_ / 2.f;
 
         Piece target = board.pieceAt(squareOf(file, rank));
-        bool isCapture = !target.isNone();
+        bool isCapture = !target.isNone()
+            || (board.enPassantSquare() == squareOf(file, rank));
 
         if (isCapture) {
             sf::CircleShape ring(ringRadius);
@@ -143,10 +144,11 @@ void BoardView::drawLabels(sf::RenderWindow& window, const sf::Font& font) const
         int rank = flipped_ ? (7 - i) : i;
 
         {
-            bool light = (file + 0) % 2 != 0;
-            auto pos = squareToPixel(file, 0);
+            int rank0 = flipped_ ? 7 : 0;
+            bool light = (file + rank0) % 2 != 0;
+            auto pos = squareToPixel(file, rank0);
             sf::Text text(font, std::string(1, files[file]), fontSize);
-            text.setFillColor(light ? DarkText : LightText);
+            text.setFillColor(light ? LightText : DarkText);
             text.setPosition({
                 pos.x + squareSize_ - text.getGlobalBounds().size.x - 2.f,
                 pos.y + squareSize_ - text.getGlobalBounds().size.y - 1.f
@@ -155,10 +157,11 @@ void BoardView::drawLabels(sf::RenderWindow& window, const sf::Font& font) const
         }
 
         {
-            bool light = (0 + rank) % 2 != 0;
-            auto pos = squareToPixel(0, rank);
+            int file0 = flipped_ ? 7 : 0;
+            bool light = (file0 + rank) % 2 != 0;
+            auto pos = squareToPixel(file0, rank);
             sf::Text text(font, std::string(1, ranks[rank]), fontSize);
-            text.setFillColor(light ? DarkText : LightText);
+            text.setFillColor(light ? LightText : DarkText);
             text.setPosition({ pos.x + 2.f, pos.y + 1.f });
             window.draw(text);
         }
@@ -191,7 +194,7 @@ void BoardView::drawPieces(sf::RenderWindow& window, const sf::Font& font,
                 sprite.setPosition({ pos.x + offset, pos.y + offset });
                 window.draw(sprite);
             } else {
-                bool lightSquare = (file + rank) % 2 == 0;
+                bool lightSquare = (file + rank) % 2 != 0;
                 sf::Text letter(font, std::string(1, pieceLetters[static_cast<int>(piece.type)]), letterSize);
                 letter.setFillColor(piece.color == Color::White
                     ? (lightSquare ? sf::Color(80, 80, 80) : sf::Color(240, 240, 240))

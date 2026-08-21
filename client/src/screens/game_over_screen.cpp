@@ -24,6 +24,8 @@ GameOverScreen::GameOverScreen(App& app,
         case net::GameOverReason::Resignation:        reasonStr = "Resignation"; break;
         case net::GameOverReason::Disconnection:      reasonStr = "Disconnection"; break;
         case net::GameOverReason::Abort:              reasonStr = "Aborted"; break;
+        case net::GameOverReason::AgreedDraw:         reasonStr = "Draw by agreement"; break;
+        default:                                      reasonStr = "Unknown"; break;
     }
 
     std::string resultStr;
@@ -33,6 +35,7 @@ GameOverScreen::GameOverScreen(App& app,
         case net::GameResult::Draw:        resultStr = "Draw"; break;
         case net::GameResult::Resignation: resultStr = "Resignation"; break;
         case net::GameResult::Abort:       resultStr = "Game aborted"; break;
+        default:                           resultStr = "Unknown"; break;
     }
 
     switch (result) {

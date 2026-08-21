@@ -1,7 +1,6 @@
 #include "hud.h"
 
 #include <algorithm>
-#include <sstream>
 
 namespace chess::client {
 
@@ -32,10 +31,9 @@ int visibleLines(float listHeight)
 }
 }
 
-Hud::Hud(float panelX, float panelWidth, float windowHeight)
+Hud::Hud(float panelX, float panelWidth)
     : panelX_(panelX)
     , panelW_(panelWidth)
-    , windowHeight_(windowHeight)
 {
 }
 

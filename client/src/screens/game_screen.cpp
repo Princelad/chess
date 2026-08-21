@@ -59,8 +59,7 @@ GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName)
                  static_cast<float>(App::WindowHeight),
                  myColor)
     , hud_(boardView_.panelX(),
-           static_cast<float>(App::WindowWidth) - boardView_.panelX() - 8.f,
-           static_cast<float>(App::WindowHeight))
+           static_cast<float>(App::WindowWidth) - boardView_.panelX() - 8.f)
     , myTurn_(myColor == Color::White)
 {
     inCheck_ = chess::inCheck(board_, myColor_);
@@ -239,8 +238,7 @@ void GameScreen::handleEvent(const sf::Event& event)
 
         if (kp->code == sf::Keyboard::Key::Escape) {
             if (promo_) { cancelPromotion(); return; }
-            app_.connection().send(chess::net::ResignMsg{});
-            app_.connection().disconnect();
+            deselect();
             return;
         }
         if (kp->code == sf::Keyboard::Key::Space) {
@@ -283,7 +281,8 @@ void GameScreen::handleEvent(const sf::Event& event)
         float chatLogTop = chatSepY + 18.f;
         float inputY = static_cast<float>(App::WindowHeight) - 20.f - InputH;
 
-        if (mx >= px && mx < px + 296.f && my >= inputY && my < inputY + InputH) {
+        if (mx >= px && mx < px + static_cast<float>(App::WindowWidth) - px - 8.f
+            && my >= inputY && my < inputY + InputH) {
             chatFocused_ = !chatFocused_;
             return;
         }
@@ -386,6 +385,13 @@ void GameScreen::update(float dtSec)
             if (chatLog_.size() > MaxChatLog)
                 chatLog_.erase(chatLog_.begin());
         }
+        else if (std::holds_alternative<chess::net::ServerDrawDeclineMsg>(msg)) {
+            drawOfferPending_ = false;
+            hud_.setStatus("Draw offer declined", 2.0f);
+            chatLog_.push_back("Draw offer declined");
+            if (chatLog_.size() > MaxChatLog)
+                chatLog_.erase(chatLog_.begin());
+        }
         else if (auto* chat = std::get_if<chess::net::ServerChatMsg>(&msg)) {
             chatLog_.push_back(chat->name + ": " + chat->text);
             if (chatLog_.size() > MaxChatLog)
@@ -393,8 +399,10 @@ void GameScreen::update(float dtSec)
         }
         else if (auto* err = std::get_if<chess::net::ErrorMsg>(&msg)) {
             hud_.setStatus(err->message, 2.0f);
-            myTurn_ = true;
-            hud_.setInfo(opponentName_, myColor_, myTurn_, gameOver_);
+            if (err->message == "Illegal move" || err->message == "Not your turn") {
+                myTurn_ = true;
+                hud_.setInfo(opponentName_, myColor_, myTurn_, gameOver_);
+            }
         }
     }
 

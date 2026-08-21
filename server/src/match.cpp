@@ -89,13 +89,14 @@ void Match::handleDrawAccept(Client& sender)
         sendTo(sender, chess::net::ErrorMsg{"No draw offer pending"});
         return;
     }
-    // No dedicated "AgreedDraw" reason in protocol; Abort is the closest match.
-    endGame(chess::net::GameResult::Draw, chess::net::GameOverReason::Abort);
+    // Agreed draw — both players accepted.
+    endGame(chess::net::GameResult::Draw, chess::net::GameOverReason::AgreedDraw);
 }
 
-void Match::handleDrawDecline(Client&)
+void Match::handleDrawDecline(Client& sender)
 {
     drawOfferPending_ = false;
+    sendTo(*opponent(sender), chess::net::ServerDrawDeclineMsg{});
 }
 
 void Match::handleResign(Client& sender)
