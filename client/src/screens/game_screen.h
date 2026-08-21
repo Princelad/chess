@@ -2,6 +2,7 @@
 
 #include "app.h"
 #include "boardview.h"
+#include "hud.h"
 #include <chess/board.h>
 #include <chess/types.h>
 
@@ -47,8 +48,7 @@ private:
     bool inCheck_ = false;
     bool myTurn_ = false;
     bool gameOver_ = false;
-    std::string statusMsg_;
-    float statusTimer_ = 0.f;
+    Hud hud_;
     bool drawOfferPending_ = false;
     std::vector<std::string> chatLog_;
     std::string chatInput_;

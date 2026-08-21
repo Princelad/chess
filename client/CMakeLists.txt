@@ -4,7 +4,8 @@ add_library(chessclient STATIC
     src/boardview.cpp
     src/screens/connect_screen.cpp
     src/screens/game_screen.cpp
-    src/screens/game_over_screen.cpp)
+    src/screens/game_over_screen.cpp
+    src/screens/hud.cpp)
 target_include_directories(chessclient PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(chessclient PUBLIC chessnet chesscore
     ${CHESS_SFML_GRAPHICS_TARGET}

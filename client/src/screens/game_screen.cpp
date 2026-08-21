@@ -19,8 +19,6 @@ std::pair<int, int> findKingSquare(const Board& board, Color color)
 }
 
 constexpr float BtnH = 30.f;
-constexpr float BtnGap = 8.f;
-constexpr float ChatLogMaxH = 300.f;
 constexpr float InputH = 28.f;
 constexpr std::size_t MaxChatLog = 50;
 
@@ -54,6 +52,7 @@ GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName)
     , myTurn_(myColor == Color::White)
 {
     inCheck_ = chess::inCheck(board_, myColor_);
+    hud_.setInfo(opponentName_, myColor_, myTurn_, gameOver_);
 }
 
 void GameScreen::selectPiece(int file, int rank)
@@ -91,8 +90,7 @@ void GameScreen::trySendMove(int targetFile, int targetRank)
     }
 
     if (!found) {
-        statusMsg_ = "Illegal move";
-        statusTimer_ = 2.0f;
+        hud_.setStatus("Illegal move", 2.0f);
         deselect();
         return;
     }
@@ -113,8 +111,10 @@ void GameScreen::trySendMove(int targetFile, int targetRank)
     }
 
     std::string san = chess::san::toSan(board_, *found);
+    hud_.addMove(san);
     app_.connection().send(chess::net::MoveMsg{san});
     myTurn_ = false;
+    hud_.setInfo(opponentName_, myColor_, myTurn_, gameOver_);
     deselect();
 }
 
@@ -130,8 +130,10 @@ void GameScreen::sendPromotionMove(chess::PieceType type)
     for (const auto& m : promo_->candidates) {
         if (m.promotion == type) {
             std::string san = chess::san::toSan(board_, m);
+            hud_.addMove(san);
             app_.connection().send(chess::net::MoveMsg{san});
             myTurn_ = false;
+            hud_.setInfo(opponentName_, myColor_, myTurn_, gameOver_);
             promo_.reset();
             deselect();
             return;
@@ -160,13 +162,14 @@ void GameScreen::sendChat()
 void GameScreen::handleButtonClick(int mx, int my)
 {
     float px = boardView_.panelX();
+    float btnY = hud_.contentBottom();
 
     auto inRect = [mx, my](float x, float y, float w, float h) {
         return mx >= x && mx < x + w && my >= y && my < y + h;
     };
 
     if (drawOfferPending_) {
-        if (inRect(px, 195.f, 90.f, BtnH)) {
+        if (inRect(px, btnY, 90.f, BtnH)) {
             app_.connection().send(chess::net::DrawDeclineMsg{});
             drawOfferPending_ = false;
             chatLog_.push_back("Draw declined");
@@ -174,17 +177,17 @@ void GameScreen::handleButtonClick(int mx, int my)
                 chatLog_.erase(chatLog_.begin());
             return;
         }
-        if (inRect(px + 98.f, 195.f, 90.f, BtnH)) {
+        if (inRect(px + 98.f, btnY, 90.f, BtnH)) {
             app_.connection().send(chess::net::DrawAcceptMsg{});
             drawOfferPending_ = false;
             return;
         }
     } else {
-        if (inRect(px, 195.f, 140.f, BtnH)) {
+        if (inRect(px, btnY, 140.f, BtnH)) {
             app_.connection().send(chess::net::ResignMsg{});
             return;
         }
-        if (inRect(px + 148.f, 195.f, 140.f, BtnH)) {
+        if (inRect(px + 148.f, btnY, 140.f, BtnH)) {
             app_.connection().send(chess::net::DrawOfferMsg{});
             chatLog_.push_back("Draw offer sent");
             if (chatLog_.size() > MaxChatLog)
@@ -237,13 +240,25 @@ void GameScreen::handleEvent(const sf::Event& event)
         }
     }
 
+    if (const auto* we = event.getIf<sf::Event::MouseWheelScrolled>()) {
+        float px = boardView_.panelX();
+        if (we->position.x >= px) {
+            hud_.handleScroll(-we->delta);
+            return;
+        }
+    }
+
     if (const auto* mb = event.getIf<sf::Event::MouseButtonPressed>()) {
         if (mb->button != sf::Mouse::Button::Left) return;
         int mx = mb->position.x;
         int my = mb->position.y;
 
         float px = boardView_.panelX();
+        float btnY = hud_.contentBottom();
+        float chatSepY = btnY + BtnH + 8.f;
+        float chatLogTop = chatSepY + 18.f;
         float inputY = static_cast<float>(App::WindowHeight) - 20.f - InputH;
+
         if (mx >= px && mx < px + 296.f && my >= inputY && my < inputY + InputH) {
             chatFocused_ = !chatFocused_;
             return;
@@ -309,10 +324,7 @@ void GameScreen::handleEvent(const sf::Event& event)
 
 void GameScreen::update(float dtSec)
 {
-    if (statusTimer_ > 0.f) {
-        statusTimer_ -= dtSec;
-        if (statusTimer_ <= 0.f) statusMsg_.clear();
-    }
+    hud_.update(dtSec);
 
     app_.connection().poll();
 
@@ -332,16 +344,20 @@ void GameScreen::update(float dtSec)
                 hl_.legalMoveTargets.clear();
 
                 board_.makeMove(*parsed);
+                hud_.addMove(move->san);
                 inCheck_ = chess::inCheck(board_, myColor_);
                 hl_.checkSquare = inCheck_
                     ? findKingSquare(board_, myColor_)
                     : std::optional<std::pair<int,int>>{};
                 myTurn_ = true;
+                hud_.setInfo(opponentName_, myColor_, myTurn_, gameOver_);
             }
         }
         else if (auto* gameOver = std::get_if<chess::net::GameOverMsg>(&msg)) {
             gameOver_ = true;
             drawOfferPending_ = false;
+            hud_.setGameOver(true);
+            hud_.setInfo(opponentName_, myColor_, myTurn_, gameOver_);
             app_.switchScreen(std::make_unique<GameOverScreen>(
                 app_, gameOver->result, gameOver->reason));
             return;
@@ -349,8 +365,7 @@ void GameScreen::update(float dtSec)
         else if (auto* drawOffer = std::get_if<chess::net::ServerDrawOfferMsg>(&msg)) {
             (void)drawOffer;
             drawOfferPending_ = true;
-            statusMsg_ = "Opponent offers a draw";
-            statusTimer_ = 3.0f;
+            hud_.setStatus("Opponent offers a draw", 3.0f);
             chatLog_.push_back("Draw offer received");
             if (chatLog_.size() > MaxChatLog)
                 chatLog_.erase(chatLog_.begin());
@@ -361,9 +376,9 @@ void GameScreen::update(float dtSec)
                 chatLog_.erase(chatLog_.begin());
         }
         else if (auto* err = std::get_if<chess::net::ErrorMsg>(&msg)) {
-            statusMsg_ = err->message;
-            statusTimer_ = 2.0f;
+            hud_.setStatus(err->message, 2.0f);
             myTurn_ = true;
+            hud_.setInfo(opponentName_, myColor_, myTurn_, gameOver_);
         }
     }
 
@@ -377,25 +392,26 @@ void GameScreen::update(float dtSec)
 void GameScreen::drawButtons(sf::RenderWindow& window)
 {
     float px = boardView_.panelX();
+    float btnY = hud_.contentBottom();
     auto& font = app_.font();
 
     if (drawOfferPending_) {
-        sf::RectangleShape declineBtn = makeBtn(
-            px, 195.f, 90.f, BtnH, sf::Color(180, 60, 60), font, "Decline");
-        sf::RectangleShape acceptBtn = makeBtn(
-            px + 98.f, 195.f, 90.f, BtnH, sf::Color(60, 140, 60), font, "Accept");
-        window.draw(declineBtn);
-        window.draw(acceptBtn);
-
         sf::Text offerText(font, "Draw offered:", 14);
         offerText.setFillColor(sf::Color(255, 200, 60));
-        offerText.setPosition({px, 175.f});
+        offerText.setPosition({px, btnY - 20.f});
         window.draw(offerText);
+
+        sf::RectangleShape declineBtn = makeBtn(
+            px, btnY, 90.f, BtnH, sf::Color(180, 60, 60), font, "Decline");
+        sf::RectangleShape acceptBtn = makeBtn(
+            px + 98.f, btnY, 90.f, BtnH, sf::Color(60, 140, 60), font, "Accept");
+        window.draw(declineBtn);
+        window.draw(acceptBtn);
     } else if (!gameOver_) {
         sf::RectangleShape resignBtn = makeBtn(
-            px, 195.f, 140.f, BtnH, sf::Color(180, 60, 60), font, "Resign");
+            px, btnY, 140.f, BtnH, sf::Color(180, 60, 60), font, "Resign");
         sf::RectangleShape drawBtn = makeBtn(
-            px + 148.f, 195.f, 140.f, BtnH, sf::Color(80, 80, 100), font, "Offer Draw");
+            px + 148.f, btnY, 140.f, BtnH, sf::Color(80, 80, 100), font, "Offer Draw");
         window.draw(resignBtn);
         window.draw(drawBtn);
     }
@@ -406,19 +422,21 @@ void GameScreen::drawChat(sf::RenderWindow& window)
     float px = boardView_.panelX();
     auto& font = app_.font();
     float panelW = 296.f;
+    float btnY = hud_.contentBottom();
+    float chatSepY = btnY + BtnH + 8.f;
 
     sf::Vertex sep[] = {
-        {sf::Vector2f(px, 240.f), sf::Color(80, 80, 80)},
-        {sf::Vector2f(px + panelW, 240.f), sf::Color(80, 80, 80)}
+        {sf::Vector2f(px, chatSepY), sf::Color(80, 80, 80)},
+        {sf::Vector2f(px + panelW, chatSepY), sf::Color(80, 80, 80)}
     };
     window.draw(sep, 2, sf::PrimitiveType::Lines);
 
     sf::Text chatLabel(font, "Chat:", 14);
     chatLabel.setFillColor(sf::Color(160, 160, 160));
-    chatLabel.setPosition({px, 248.f});
+    chatLabel.setPosition({px, chatSepY + 6.f});
     window.draw(chatLabel);
 
-    float logTop = 270.f;
+    float logTop = chatSepY + 24.f;
     float inputY = static_cast<float>(App::WindowHeight) - 20.f - InputH;
     float logBottom = inputY - 8.f;
     float logH = logBottom - logTop;
@@ -536,39 +554,7 @@ void GameScreen::draw(sf::RenderWindow& window)
         }
     }
 
-    float px = boardView_.panelX();
-
-    sf::Text title(font, "Game in progress", 24);
-    title.setFillColor(sf::Color(200, 200, 200));
-    title.setPosition({px, 30.f});
-    window.draw(title);
-
-    sf::Text opponent(font, "vs " + opponentName_, 18);
-    opponent.setFillColor(sf::Color(160, 160, 160));
-    opponent.setPosition({px, 70.f});
-    window.draw(opponent);
-
-    const char* colorName = myColor_ == Color::White ? "White" : "Black";
-    sf::Text colorText(font, std::string("Playing as ") + colorName, 18);
-    colorText.setFillColor(myColor_ == Color::White
-        ? sf::Color(240, 240, 240) : sf::Color(100, 100, 100));
-    colorText.setPosition({px, 100.f});
-    window.draw(colorText);
-
-    const char* turnText = gameOver_ ? "Game over"
-        : (myTurn_ ? "Your turn" : "Opponent's turn");
-    sf::Text turn(font, turnText, 16);
-    turn.setFillColor(myTurn_ ? sf::Color(76, 175, 80) : sf::Color(200, 200, 200));
-    turn.setPosition({px, 130.f});
-    window.draw(turn);
-
-    if (!statusMsg_.empty()) {
-        sf::Text err(font, statusMsg_, 16);
-        err.setFillColor(sf::Color(244, 67, 54));
-        err.setPosition({px, 155.f});
-        window.draw(err);
-    }
-
+    hud_.draw(window, font);
     drawButtons(window);
     drawChat(window);
 }
