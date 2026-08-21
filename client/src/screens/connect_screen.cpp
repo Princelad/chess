@@ -75,7 +75,6 @@ void ConnectScreen::update(float dtSec)
     while (app_.connection().hasMessages()) {
         auto msg = app_.connection().nextMessage();
         if (auto* welcome = std::get_if<chess::net::WelcomeMsg>(&msg)) {
-            app_.connection().disconnect();
             app_.switchScreen(std::make_unique<GameScreen>(
                 app_, welcome->color, welcome->opponent));
             return;

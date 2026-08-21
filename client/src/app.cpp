@@ -27,9 +27,47 @@ void App::loadAssets()
         "/usr/share/fonts/TTF/DejaVuSans.ttf",
     };
     for (const char* path : paths) {
-        if (font_->openFromFile(path)) return;
+        if (font_->openFromFile(path)) break;
     }
-    std::cerr << "Warning: could not load Inter-Regular.ttf\n";
+    loadPieceTextures();
+}
+
+void App::loadPieceTextures()
+{
+    const char* dirs[] = {
+        "assets/pieces/",
+        "../assets/pieces/",
+        "../../assets/pieces/",
+    };
+
+    const char names[2][6] = {
+        { 'w','w','w','w','w','w' },
+        { 'b','b','b','b','b','b' },
+    };
+    const char types[6] = { 'p', 'n', 'b', 'r', 'q', 'k' };
+
+    bool allLoaded = true;
+    for (int c = 0; c < 2; ++c) {
+        for (int t = 0; t < 6; ++t) {
+            std::string filename(1, names[c][t]);
+            filename += types[t];
+            filename += ".png";
+
+            bool loaded = false;
+            for (const char* dir : dirs) {
+                if (pieceTextures_[PieceIndex(
+                        static_cast<Color>(c),
+                        static_cast<PieceType>(t))].loadFromFile(dir + filename)) {
+                    loaded = true;
+                    break;
+                }
+            }
+            if (!loaded) allLoaded = false;
+        }
+    }
+    piecesLoaded_ = allLoaded;
+    if (!allLoaded)
+        std::cerr << "Warning: some piece textures failed to load\n";
 }
 
 void App::switchScreen(std::unique_ptr<Screen> screen)

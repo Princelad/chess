@@ -1,6 +1,7 @@
 add_library(chessclient STATIC
     src/connection.cpp
     src/app.cpp
+    src/boardview.cpp
     src/screens/connect_screen.cpp
     src/screens/game_screen.cpp
     src/screens/game_over_screen.cpp)
