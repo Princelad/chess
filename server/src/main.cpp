@@ -221,7 +221,11 @@ int main(int argc, char* argv[])
                             }
                             break;
                         case ClientState::Queued:
-                            sendTo(client, chess::net::ErrorMsg{"Waiting for match"});
+                            if (std::get_if<chess::net::PingMsg>(&*msg)) {
+                                sendTo(client, chess::net::PongMsg{});
+                            } else {
+                                sendTo(client, chess::net::ErrorMsg{"Waiting for match"});
+                            }
                             break;
                         case ClientState::InMatch:
                             client.match->handleMessage(client, *msg);

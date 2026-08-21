@@ -24,6 +24,7 @@ enum class ServerMsgType : uint8_t {
     OpponentLeft,
     Move,
     DrawOffer,
+    DrawDecline,
     GameOver,
     Chat,
     Pong,
@@ -109,6 +110,12 @@ bool writeServer(sf::Packet& packet, ServerDrawOfferMsg)
     return static_cast<bool>(packet);
 }
 
+bool writeServer(sf::Packet& packet, ServerDrawDeclineMsg)
+{
+    packet << static_cast<uint8_t>(ServerMsgType::DrawDecline);
+    return static_cast<bool>(packet);
+}
+
 bool writeServer(sf::Packet& packet, const GameOverMsg& msg)
 {
     packet << static_cast<uint8_t>(ServerMsgType::GameOver)
@@ -146,7 +153,7 @@ bool validResult(int v)
 
 bool validReason(int v)
 {
-    return v >= 0 && v <= static_cast<int>(GameOverReason::Abort);
+    return v >= 0 && v <= static_cast<int>(GameOverReason::AgreedDraw);
 }
 
 const char* resultStr(GameResult r)
@@ -172,6 +179,7 @@ const char* reasonStr(GameOverReason r)
         case GameOverReason::Resignation:         return "Resignation";
         case GameOverReason::Disconnection:       return "Disconnection";
         case GameOverReason::Abort:               return "Abort";
+        case GameOverReason::AgreedDraw:           return "AgreedDraw";
         default:                                  return "Unknown";
     }
 }
@@ -299,6 +307,8 @@ std::optional<ServerMessage> deserializeServer(sf::Packet& packet)
         }
         case ServerMsgType::DrawOffer:
             return ServerDrawOfferMsg{};
+        case ServerMsgType::DrawDecline:
+            return ServerDrawDeclineMsg{};
         case ServerMsgType::GameOver: {
             GameOverMsg msg;
             int result = 0, reason = 0;
@@ -365,6 +375,8 @@ std::string debugString(const ServerMessage& msg)
             return "Move{san=\"" + escape(m.san) + "\"}";
         else if constexpr (std::is_same_v<T, ServerDrawOfferMsg>)
             return "DrawOffer{}";
+        else if constexpr (std::is_same_v<T, ServerDrawDeclineMsg>)
+            return "DrawDecline{}";
         else if constexpr (std::is_same_v<T, GameOverMsg>)
             return "GameOver{" + std::string(resultStr(m.result)) + ", " + std::string(reasonStr(m.reason)) + "}";
         else if constexpr (std::is_same_v<T, ServerChatMsg>)

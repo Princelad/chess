@@ -42,7 +42,6 @@ void Connection::connect(const std::string& host, unsigned short port)
     connectDone_ = false;
     connectSuccess_ = false;
     connectError_.clear();
-    connectStart_ = std::chrono::steady_clock::now();
 
     auto addrs = std::make_shared<std::vector<sf::IpAddress>>(std::move(addresses));
 

@@ -362,7 +362,7 @@ TEST(ProtocolGarbage, InvalidGameResultValue)
 {
     sf::Packet p;
     p << static_cast<uint8_t>(ProtocolVersion)
-      << static_cast<uint8_t>(5)
+      << static_cast<uint8_t>(6)
       << static_cast<int>(99)
       << static_cast<int>(0);
     EXPECT_FALSE(deserializeServer(p).has_value());
@@ -372,7 +372,7 @@ TEST(ProtocolGarbage, InvalidGameOverReasonValue)
 {
     sf::Packet p;
     p << static_cast<uint8_t>(ProtocolVersion)
-      << static_cast<uint8_t>(5)
+      << static_cast<uint8_t>(6)
       << static_cast<int>(0)
       << static_cast<int>(99);
     EXPECT_FALSE(deserializeServer(p).has_value());

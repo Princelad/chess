@@ -55,7 +55,6 @@ private:
     std::deque<chess::net::ServerMessage> inbox_;
     ConnectionState state_ = ConnectionState::Disconnected;
     std::string error_;
-    std::chrono::steady_clock::time_point connectStart_;
 
     std::thread connectThread_;
     std::atomic<bool> connectDone_{false};

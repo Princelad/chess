@@ -25,6 +25,7 @@ enum class GameOverReason : int {
     Resignation,
     Disconnection,
     Abort,
+    AgreedDraw,
 };
 
 // ── Client → Server ─────────────────────────────────────────────────────────
@@ -77,6 +78,7 @@ struct ServerMoveMsg {
 };
 
 struct ServerDrawOfferMsg {};
+struct ServerDrawDeclineMsg {};
 
 struct GameOverMsg {
     GameResult result;
@@ -100,6 +102,7 @@ using ServerMessage = std::variant<
     OpponentLeftMsg,
     ServerMoveMsg,
     ServerDrawOfferMsg,
+    ServerDrawDeclineMsg,
     GameOverMsg,
     ServerChatMsg,
     PongMsg,

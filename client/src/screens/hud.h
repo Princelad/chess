@@ -12,7 +12,7 @@ namespace chess::client {
 class Hud {
 public:
     Hud() = default;
-    Hud(float panelX, float panelWidth, float windowHeight);
+    Hud(float panelX, float panelWidth);
 
     void setInfo(const std::string& opponentName, Color myColor,
                  bool myTurn, bool gameOver);
@@ -29,7 +29,6 @@ public:
 private:
     float panelX_ = 0.f;
     float panelW_ = 0.f;
-    float windowHeight_ = 0.f;
 
     std::string opponentName_;
     Color myColor_ = Color::White;
