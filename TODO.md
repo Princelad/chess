@@ -404,16 +404,16 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
 
 ### Task 6.1 — App skeleton
 
-- [ ] **6.1.1 Main loop (`main.cpp`/`app.cpp`)**
-  - [ ] SFML `RenderWindow` (e.g. 800×800 + side panel), `Event` polling
-  - [ ] Fixed-timestep update loop; render/draw each frame
-  - [ ] Screen state machine: `ConnectScreen → GameScreen → GameOverScreen`
-  - [ ] FPS-independent movement (for later animations)
+- [x] **6.1.1 Main loop (`main.cpp`/`app.cpp`)**
+  - [x] SFML `RenderWindow` (e.g. 800×800 + side panel), `Event` polling
+  - [x] Fixed-timestep update loop; render/draw each frame
+  - [x] Screen state machine: `ConnectScreen → GameScreen → GameOverScreen`
+  - [x] FPS-independent movement (for later animations)
 
-- [ ] **6.1.2 Connect screen**
-  - [ ] Text fields for host, port, player name (SFML `Text` + simple keyboard input)
-  - [ ] "Connect" button; show status ("connecting…", "waiting for opponent…")
-  - [ ] Handle connection failure without blocking the UI
+- [x] **6.1.2 Connect screen**
+  - [x] Text fields for host, port, player name (SFML `Text` + simple keyboard input)
+  - [x] "Connect" button; show status ("connecting…", "waiting for opponent…")
+  - [x] Handle connection failure without blocking the UI
 
 ### Task 6.2 — Board rendering
 
