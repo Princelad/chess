@@ -11,6 +11,7 @@ constexpr float InfoLineH = 25.f;
 constexpr float SeparatorY = 100.f;
 constexpr float MoveHeaderY = 110.f;
 constexpr float MoveListTop = 130.f;
+constexpr float MoveListBottom = 400.f;
 constexpr float MoveLineH = 16.f;
 constexpr float MoveFontSize = 13;
 constexpr float StatusFontSize = 14;
@@ -59,7 +60,7 @@ void Hud::addMove(const std::string& san)
         movePairs_.back().second = san;
     }
 
-    float listH = contentBottom() - MoveListTop;
+    float listH = moveListBottom() - MoveListTop;
     int vis = visibleLines(listH);
     moveScroll_ = std::max(0, static_cast<int>(movePairs_.size()) - vis);
 }
@@ -77,7 +78,7 @@ void Hud::setGameOver(bool gameOver)
 
 void Hud::handleScroll(float delta)
 {
-    float listH = contentBottom() - MoveListTop;
+    float listH = moveListBottom() - MoveListTop;
     int vis = visibleLines(listH);
     int maxScroll = std::max(0, static_cast<int>(movePairs_.size()) - vis);
     moveScroll_ += static_cast<int>(delta);
@@ -94,7 +95,12 @@ void Hud::update(float dtSec)
 
 float Hud::contentBottom() const
 {
-    return windowHeight_ - 20.f;
+    return MoveListBottom + 20.f;
+}
+
+float Hud::moveListBottom() const
+{
+    return MoveListBottom;
 }
 
 void Hud::draw(sf::RenderWindow& window, const sf::Font& font) const
@@ -130,7 +136,7 @@ void Hud::draw(sf::RenderWindow& window, const sf::Font& font) const
     header.setPosition({panelX_, MoveHeaderY});
     window.draw(header);
 
-    float listH = contentBottom() - MoveListTop;
+    float listH = moveListBottom() - MoveListTop;
     if (listH <= 0.f) return;
 
     sf::RectangleShape listBg({panelW_, listH});

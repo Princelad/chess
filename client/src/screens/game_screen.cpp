@@ -59,7 +59,7 @@ GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName)
                  static_cast<float>(App::WindowHeight),
                  myColor)
     , hud_(boardView_.panelX(),
-           static_cast<float>(App::WindowWidth) - boardView_.panelX(),
+           static_cast<float>(App::WindowWidth) - boardView_.panelX() - 8.f,
            static_cast<float>(App::WindowHeight))
     , myTurn_(myColor == Color::White)
 {
@@ -429,7 +429,7 @@ void GameScreen::drawChat(sf::RenderWindow& window)
 {
     float px = boardView_.panelX();
     auto& font = app_.font();
-    float panelW = 296.f;
+    float panelW = static_cast<float>(App::WindowWidth) - px - 8.f;
     float btnY = hud_.contentBottom();
     float chatSepY = btnY + BtnH + 8.f;
 

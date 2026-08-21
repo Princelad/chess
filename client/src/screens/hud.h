@@ -24,6 +24,7 @@ public:
     void draw(sf::RenderWindow& window, const sf::Font& font) const;
 
     float contentBottom() const;
+    float moveListBottom() const;
 
 private:
     float panelX_ = 0.f;
