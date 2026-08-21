@@ -37,6 +37,12 @@ private:
     void drawButtons(sf::RenderWindow& window);
     void drawChat(sf::RenderWindow& window);
 
+    struct PromoCell {
+        sf::Vector2f pos;
+        float size;
+    };
+    PromoCell promoCell(int index) const;
+
     App& app_;
     Board board_;
     Color myColor_;

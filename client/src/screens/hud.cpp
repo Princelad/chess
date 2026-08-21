@@ -17,6 +17,14 @@ constexpr float StatusFontSize = 14;
 constexpr float InfoFontSize = 18;
 constexpr float HeaderFontSize = 12;
 
+std::string safeTruncate(const std::string& s, std::size_t maxBytes)
+{
+    if (s.size() <= maxBytes) return s;
+    std::size_t n = maxBytes;
+    while (n > 0 && (static_cast<unsigned char>(s[n]) & 0xC0) == 0x80) --n;
+    return s.substr(0, n > 0 ? n - 1 : 0) + "...";
+}
+
 int visibleLines(float listHeight)
 {
     return std::max(1, static_cast<int>(listHeight / MoveLineH));
@@ -113,11 +121,10 @@ void Hud::draw(sf::RenderWindow& window, const sf::Font& font) const
         window.draw(statusText);
     }
 
-    sf::Vertex sep[] = {
-        {sf::Vector2f(panelX_, SeparatorY), sf::Color(80, 80, 80)},
-        {sf::Vector2f(panelX_ + panelW_, SeparatorY), sf::Color(80, 80, 80)}
-    };
-    window.draw(sep, 2, sf::PrimitiveType::Lines);
+    sf::RectangleShape sep({panelW_, 1.f});
+    sep.setPosition({panelX_, SeparatorY});
+    sep.setFillColor(sf::Color(80, 80, 80));
+    window.draw(sep);
 
     sf::Text header(font, "Moves", HeaderFontSize);
     header.setFillColor(sf::Color(120, 120, 120));
@@ -149,8 +156,8 @@ void Hud::draw(sf::RenderWindow& window, const sf::Font& font) const
         moveText.setPosition({panelX_ + 6.f, y});
 
         auto lb = moveText.getGlobalBounds();
-        if (lb.size.x > panelW_ - 12.f) {
-            line = line.substr(0, static_cast<std::size_t>((panelW_ - 24.f) / 7.f)) + "...";
+        if (panelW_ > 24.f && lb.size.x > panelW_ - 12.f) {
+            line = safeTruncate(line, static_cast<std::size_t>((panelW_ - 24.f) / 7.f));
             moveText.setString(line);
         }
         window.draw(moveText);

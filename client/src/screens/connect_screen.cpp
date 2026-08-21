@@ -35,7 +35,7 @@ void ConnectScreen::handleEvent(const sf::Event& event)
     if (const auto* mb = event.getIf<sf::Event::MouseButtonPressed>()) {
         if (mb->button == sf::Mouse::Button::Left &&
             phase_ == ConnectPhase::Idle && !name_.empty()) {
-            float btnX = 580.f, btnY = 302.f, btnW = 200.f, btnH = 40.f;
+            float btnX = 580.f, btnY = 298.f, btnW = 200.f, btnH = 40.f;
             float mx = static_cast<float>(mb->position.x);
             float my = static_cast<float>(mb->position.y);
             if (mx >= btnX && mx <= btnX + btnW && my >= btnY && my <= btnY + btnH) {
@@ -189,7 +189,7 @@ void ConnectScreen::draw(sf::RenderWindow& window)
         sf::Text btnText(font, "Connect", 20);
         btnText.setFillColor(sf::Color(255, 255, 255));
         auto bounds = btnText.getGlobalBounds();
-        btnText.setPosition({fieldX + 100.f - bounds.size.x / 2.f, y + 16.f});
+        btnText.setPosition({fieldX + 100.f - bounds.size.x / 2.f - bounds.position.x, y + 16.f});
         window.draw(btnText);
     }
 

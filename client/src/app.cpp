@@ -9,7 +9,7 @@ namespace chess::client {
 App::App()
     : window_(sf::VideoMode({WindowWidth, WindowHeight}),
               "Chess",
-              sf::Style::Default)
+              sf::Style::Titlebar | sf::Style::Close)
 {
     window_.setFramerateLimit(120);
     loadAssets();
@@ -26,9 +26,12 @@ void App::loadAssets()
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
         "/usr/share/fonts/TTF/DejaVuSans.ttf",
     };
+    bool fontOk = false;
     for (const char* path : paths) {
-        if (font_->openFromFile(path)) break;
+        if (font_->openFromFile(path)) { fontOk = true; break; }
     }
+    if (!fontOk)
+        std::cerr << "Warning: no font loaded, text may be invisible\n";
     loadPieceTextures();
 }
 
@@ -65,6 +68,8 @@ void App::loadPieceTextures()
             if (!loaded) allLoaded = false;
         }
     }
+    for (auto& tex : pieceTextures_)
+        tex.setSmooth(true);
     piecesLoaded_ = allLoaded;
     if (!allLoaded)
         std::cerr << "Warning: some piece textures failed to load\n";

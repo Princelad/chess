@@ -31,22 +31,19 @@ GameOverScreen::GameOverScreen(App& app,
         case net::GameResult::WhiteWins:   resultStr = "White wins"; break;
         case net::GameResult::BlackWins:   resultStr = "Black wins"; break;
         case net::GameResult::Draw:        resultStr = "Draw"; break;
-        case net::GameResult::Resignation: resultStr = "White wins"; break;
+        case net::GameResult::Resignation: resultStr = "Resignation"; break;
         case net::GameResult::Abort:       resultStr = "Game aborted"; break;
     }
 
     switch (result) {
         case net::GameResult::Draw:
-        case net::GameResult::Abort:
             resultText_ = reasonStr;
-            if (result == net::GameResult::Draw)
-                reasonText_ = "";
-            else
-                reasonText_ = "";
+            break;
+        case net::GameResult::Abort:
+            resultText_ = resultStr;
             break;
         default:
             resultText_ = reasonStr + " — " + resultStr;
-            reasonText_ = "";
             break;
     }
 }
@@ -92,14 +89,14 @@ void GameOverScreen::draw(sf::RenderWindow& window)
     sf::Text resultLabel(font, resultText_, 30);
     resultLabel.setFillColor(sf::Color(255, 255, 255));
     auto rb = resultLabel.getGlobalBounds();
-    resultLabel.setPosition({(App::WindowWidth - rb.size.x) / 2.f, 200.f});
+    resultLabel.setPosition({(App::WindowWidth - rb.size.x) / 2.f - rb.position.x, 200.f});
     window.draw(resultLabel);
 
     if (!reasonText_.empty()) {
         sf::Text reasonLabel(font, "(" + reasonText_ + ")", 20);
         reasonLabel.setFillColor(sf::Color(160, 160, 160));
         auto rr = reasonLabel.getGlobalBounds();
-        reasonLabel.setPosition({(App::WindowWidth - rr.size.x) / 2.f, 250.f});
+        reasonLabel.setPosition({(App::WindowWidth - rr.size.x) / 2.f - rr.position.x, 250.f});
         window.draw(reasonLabel);
     }
 
@@ -116,15 +113,15 @@ void GameOverScreen::draw(sf::RenderWindow& window)
     btnText.setFillColor(sf::Color(240, 240, 240));
     auto bb = btnText.getGlobalBounds();
     btnText.setPosition({
-        btnX + (BtnW - bb.size.x) / 2.f,
-        BtnY + (BtnH - bb.size.y) / 2.f
+        btnX + (BtnW - bb.size.x) / 2.f - bb.position.x,
+        BtnY + (BtnH - bb.size.y) / 2.f - bb.position.y
     });
     window.draw(btnText);
 
     sf::Text hint(font, "or press Enter", 14);
     hint.setFillColor(sf::Color(100, 100, 100));
     auto hb = hint.getGlobalBounds();
-    hint.setPosition({(App::WindowWidth - hb.size.x) / 2.f, BtnY + BtnH + 16.f});
+    hint.setPosition({(App::WindowWidth - hb.size.x) / 2.f - hb.position.x, BtnY + BtnH + 16.f});
     window.draw(hint);
 }
 
