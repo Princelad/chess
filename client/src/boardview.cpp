@@ -30,7 +30,7 @@ sf::Vector2f BoardView::squareToPixel(int file, int rank) const
 std::pair<int, int> BoardView::toFileRank(int col, int row) const
 {
     int file = flipped_ ? (7 - col) : col;
-    int rank = flipped_ ? row : (7 - rank);
+    int rank = flipped_ ? row : (7 - row);
     return { file, rank };
 }
 
