@@ -18,7 +18,7 @@ enum class ConnectionState { Disconnected, Connecting, Connected };
 class Connection {
 public:
     static constexpr auto DefaultPingInterval = std::chrono::seconds{30};
-    static constexpr auto DefaultPongTimeout = std::chrono::seconds{10};
+    static constexpr auto DefaultPongTimeout = std::chrono::seconds{60};
     static constexpr std::size_t MaxOutboxSize = 128;
     static constexpr std::size_t MaxInboxSize = 256;
     static constexpr std::size_t MaxDrainPerPoll = 64;
