@@ -49,20 +49,19 @@ void Hud::setInfo(const std::string& opponentName, Color myColor,
 
 void Hud::addMove(const std::string& san)
 {
-    int moveNum = static_cast<int>(movePairs_.size()) + 1;
+    int moveCount = static_cast<int>(movePairs_.size());
+    bool isWhite = (moveCount == 0) || !movePairs_.back().second.empty();
 
-    if (san.find("...") != std::string::npos) {
-        if (!movePairs_.empty()) {
-            movePairs_.back().second = san;
-        } else {
-            movePairs_.emplace_back("", san);
-        }
-    } else {
-        std::string numStr = std::to_string(moveNum) + ".";
+    if (isWhite) {
+        std::string numStr = std::to_string(moveCount + 1) + ".";
         movePairs_.emplace_back(numStr, san);
+    } else {
+        movePairs_.back().second = san;
     }
 
-    moveScroll_ = std::max(0, static_cast<int>(movePairs_.size()) - visibleLines(contentBottom() - MoveListTop));
+    float listH = contentBottom() - MoveListTop;
+    int vis = visibleLines(listH);
+    moveScroll_ = std::max(0, static_cast<int>(movePairs_.size()) - vis);
 }
 
 void Hud::setStatus(const std::string& msg, float duration)

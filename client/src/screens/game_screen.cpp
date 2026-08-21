@@ -123,7 +123,6 @@ void GameScreen::trySendMove(int targetFile, int targetRank)
     }
 
     std::string san = chess::san::toSan(board_, *found);
-    hud_.addMove(san);
     app_.connection().send(chess::net::MoveMsg{san});
     myTurn_ = false;
     hud_.setInfo(opponentName_, myColor_, myTurn_, gameOver_);
@@ -142,7 +141,6 @@ void GameScreen::sendPromotionMove(chess::PieceType type)
     for (const auto& m : promo_->candidates) {
         if (m.promotion == type) {
             std::string san = chess::san::toSan(board_, m);
-            hud_.addMove(san);
             app_.connection().send(chess::net::MoveMsg{san});
             myTurn_ = false;
             hud_.setInfo(opponentName_, myColor_, myTurn_, gameOver_);
