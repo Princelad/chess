@@ -33,6 +33,7 @@ void GameOverScreen::handleEvent(const sf::Event& event)
     if (const auto* kp = event.getIf<sf::Event::KeyPressed>()) {
         if (kp->code == sf::Keyboard::Key::Enter ||
             kp->code == sf::Keyboard::Key::Escape) {
+            app_.connection().disconnect();
             app_.switchScreen(std::make_unique<ConnectScreen>(app_));
         }
     }

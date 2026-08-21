@@ -27,8 +27,69 @@ GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName)
     , boardView_(static_cast<float>(App::WindowWidth),
                  static_cast<float>(App::WindowHeight),
                  myColor)
+    , myTurn_(myColor == Color::White)
 {
     inCheck_ = chess::inCheck(board_, myColor_);
+}
+
+void GameScreen::selectPiece(int file, int rank)
+{
+    hl_.selectedSquare = { file, rank };
+    hl_.legalMoveTargets.clear();
+    Square from = squareOf(file, rank);
+    auto moves = chess::generateLegalMoves(board_);
+    for (const auto& m : moves) {
+        if (m.from == from) {
+            hl_.legalMoveTargets.push_back({
+                static_cast<int>(chess::fileOf(m.to)),
+                static_cast<int>(chess::rankOf(m.to))
+            });
+        }
+    }
+}
+
+void GameScreen::trySendMove(int targetFile, int targetRank)
+{
+    Square from = squareOf(hl_.selectedSquare->first, hl_.selectedSquare->second);
+    Square to = squareOf(targetFile, targetRank);
+
+    auto moves = chess::generateLegalMoves(board_);
+    const chess::Move* found = nullptr;
+    for (const auto& m : moves) {
+        if (m.from == from && m.to == to) {
+            if (m.isPromotion()) {
+                found = &m;
+                break;
+            }
+            found = &m;
+            break;
+        }
+    }
+
+    if (!found) {
+        statusMsg_ = "Illegal move";
+        statusTimer_ = 2.0f;
+        deselect();
+        return;
+    }
+
+    if (found->isPromotion()) {
+        statusMsg_ = "Promotion — use 6.3.2 picker";
+        statusTimer_ = 2.0f;
+        deselect();
+        return;
+    }
+
+    std::string san = chess::san::toSan(board_, *found);
+    app_.connection().send(chess::net::MoveMsg{san});
+    myTurn_ = false;
+    deselect();
+}
+
+void GameScreen::deselect()
+{
+    hl_.selectedSquare.reset();
+    hl_.legalMoveTargets.clear();
 }
 
 void GameScreen::handleEvent(const sf::Event& event)
@@ -39,11 +100,48 @@ void GameScreen::handleEvent(const sf::Event& event)
             app_.connection().disconnect();
             return;
         }
+        if (kp->code == sf::Keyboard::Key::Space) {
+            deselect();
+            return;
+        }
+    }
+
+    if (gameOver_ || !myTurn_) return;
+
+    if (const auto* mb = event.getIf<sf::Event::MouseButtonPressed>()) {
+        if (mb->button != sf::Mouse::Button::Left) return;
+
+        auto square = boardView_.pixelToSquare(
+            static_cast<sf::Vector2f>(mb->position));
+        if (!square) return;
+
+        auto [file, rank] = *square;
+        Piece piece = board_.pieceAt(squareOf(file, rank));
+
+        if (hl_.selectedSquare) {
+            if (file == hl_.selectedSquare->first &&
+                rank == hl_.selectedSquare->second) {
+                deselect();
+            } else if (!piece.isNone() && piece.color == myColor_) {
+                selectPiece(file, rank);
+            } else {
+                trySendMove(file, rank);
+            }
+        } else {
+            if (!piece.isNone() && piece.color == myColor_) {
+                selectPiece(file, rank);
+            }
+        }
     }
 }
 
-void GameScreen::update(float /*dtSec*/)
+void GameScreen::update(float dtSec)
 {
+    if (statusTimer_ > 0.f) {
+        statusTimer_ -= dtSec;
+        if (statusTimer_ <= 0.f) statusMsg_.clear();
+    }
+
     app_.connection().poll();
 
     while (app_.connection().hasMessages()) {
@@ -66,19 +164,33 @@ void GameScreen::update(float /*dtSec*/)
                 hl_.checkSquare = inCheck_
                     ? findKingSquare(board_, myColor_)
                     : std::optional<std::pair<int,int>>{};
+                myTurn_ = true;
             }
         }
         else if (auto* gameOver = std::get_if<chess::net::GameOverMsg>(&msg)) {
+            gameOver_ = true;
             app_.switchScreen(std::make_unique<GameOverScreen>(
                 app_, gameOver->result, gameOver->reason));
             return;
         }
+        else if (auto* drawOffer = std::get_if<chess::net::ServerDrawOfferMsg>(&msg)) {
+            (void)drawOffer;
+            statusMsg_ = "Opponent offers a draw";
+            statusTimer_ = 3.0f;
+        }
+        else if (auto* chat = std::get_if<chess::net::ServerChatMsg>(&msg)) {
+            statusMsg_ = chat->name + ": " + chat->text;
+            statusTimer_ = 3.0f;
+        }
         else if (auto* err = std::get_if<chess::net::ErrorMsg>(&msg)) {
-            (void)err;
+            statusMsg_ = err->message;
+            statusTimer_ = 2.0f;
+            myTurn_ = true;
         }
     }
 
     if (app_.connection().state() == ConnectionState::Disconnected) {
+        gameOver_ = true;
         app_.switchScreen(std::make_unique<GameOverScreen>(
             app_, net::GameResult::Abort, net::GameOverReason::Disconnection));
     }
@@ -111,6 +223,20 @@ void GameScreen::draw(sf::RenderWindow& window)
         ? sf::Color(240, 240, 240) : sf::Color(100, 100, 100));
     colorText.setPosition({px, 100.f});
     window.draw(colorText);
+
+    const char* turnText = gameOver_ ? "Game over"
+        : (myTurn_ ? "Your turn" : "Opponent's turn");
+    sf::Text turn(font, turnText, 16);
+    turn.setFillColor(myTurn_ ? sf::Color(76, 175, 80) : sf::Color(200, 200, 200));
+    turn.setPosition({px, 130.f});
+    window.draw(turn);
+
+    if (!statusMsg_.empty()) {
+        sf::Text err(font, statusMsg_, 16);
+        err.setFillColor(sf::Color(244, 67, 54));
+        err.setPosition({px, 155.f});
+        window.draw(err);
+    }
 }
 
 } // namespace chess::client

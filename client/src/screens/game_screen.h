@@ -17,6 +17,10 @@ public:
     void draw(sf::RenderWindow& window) override;
 
 private:
+    void selectPiece(int file, int rank);
+    void trySendMove(int targetFile, int targetRank);
+    void deselect();
+
     App& app_;
     Board board_;
     Color myColor_;
@@ -25,6 +29,10 @@ private:
 
     HighlightState hl_;
     bool inCheck_ = false;
+    bool myTurn_ = false;
+    bool gameOver_ = false;
+    std::string statusMsg_;
+    float statusTimer_ = 0.f;
 };
 
 } // namespace chess::client

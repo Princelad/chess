@@ -435,11 +435,11 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
 
 ### Task 6.3 — Input
 
-- [ ] **6.3.1 Click-click moves (`input.cpp`)**
-  - [ ] Click a friendly piece → select + show legal moves
-  - [ ] Click a legal target (or same piece to reselect) → send `MOVE` (SAN via `core::san::toSan`)
-  - [ ] Ignore input when it's not your turn or game over
-  - [ ] Show "illegal move" feedback (e.g. status message) if server rejects
+- [x] **6.3.1 Click-click moves (`input.cpp`)**
+  - [x] Click a friendly piece → select + show legal moves
+  - [x] Click a legal target (or same piece to reselect) → send `MOVE` (SAN via `core::san::toSan`)
+  - [x] Ignore input when it's not your turn or game over
+  - [x] Show "illegal move" feedback (e.g. status message) if server rejects
 
 - [ ] **6.3.2 Promotion picker**
   - [ ] On promotion move, pause and show 4 piece choices (n/b/r/q)
