@@ -417,21 +417,21 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
 
 ### Task 6.2 — Board rendering
 
-- [ ] **6.2.1 Board geometry (`boardview.cpp`)**
-  - [ ] Define square size + board origin; map `Square` ↔ pixel rect
-  - [ ] Draw 64 alternating light/dark squares
-  - [ ] Draw rank/file labels (a–h, 1–8) in the margin
-  - [ ] Flip board 180° when playing black (configurable/optional)
+- [x] **6.2.1 Board geometry (`boardview.cpp`)**
+  - [x] Define square size + board origin; map `Square` ↔ pixel rect
+  - [x] Draw 64 alternating light/dark squares
+  - [x] Draw rank/file labels (a–h, 1–8) in the margin
+  - [x] Flip board 180° when playing black (configurable/optional)
 
-- [ ] **6.2.2 Piece sprites**
-  - [ ] Load the 12 PNGs into `sf::Texture` (from `assets/pieces/`)
-  - [ ] Draw each piece centered in its square (board + piece separation so pieces layer over highlights)
-  - [ ] Fallback: if textures fail to load, draw letters (K/Q/R/B/N/P) with `sf::Text`
+- [x] **6.2.2 Piece sprites**
+  - [x] Load the 12 PNGs into `sf::Texture` (from `assets/pieces/`)
+  - [x] Draw each piece centered in its square (board + piece separation so pieces layer over highlights)
+  - [x] Fallback: if textures fail to load, draw letters (K/Q/R/B/N/P) with `sf::Text`
 
-- [ ] **6.2.3 Highlights and state**
-  - [ ] Highlight the selected square and its legal-move targets (dot for quiet, ring for capture)
-  - [ ] Highlight last move's from/to squares
-  - [ ] Red highlight on own king when in check
+- [x] **6.2.3 Highlights and state**
+  - [x] Highlight the selected square and its legal-move targets (dot for quiet, ring for capture)
+  - [x] Highlight last move's from/to squares
+  - [x] Red highlight on own king when in check
 
 ### Task 6.3 — Input
 

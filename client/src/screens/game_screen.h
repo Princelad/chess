@@ -1,6 +1,7 @@
 #pragma once
 
 #include "app.h"
+#include "boardview.h"
 #include <chess/board.h>
 #include <chess/types.h>
 
@@ -20,6 +21,10 @@ private:
     Board board_;
     Color myColor_;
     std::string opponentName_;
+    BoardView boardView_;
+
+    HighlightState hl_;
+    bool inCheck_ = false;
 };
 
 } // namespace chess::client
