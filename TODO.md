@@ -456,9 +456,9 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [x] Move history (SAN list, scrollable or last-N lines)
   - [x] Draw-offer / result / disconnection messages
 
-- [ ] **6.4.2 Game-over screen**
-  - [ ] Display result (e.g. "Checkmate — White wins"), reason, and a "Rematch" button
-  - [ ] Return to connect screen or exit cleanly
+- [x] **6.4.2 Game-over screen**
+  - [x] Display result (e.g. "Checkmate — White wins"), reason, and a "Rematch" button
+  - [x] Return to connect screen or exit cleanly
 
 ---
 
