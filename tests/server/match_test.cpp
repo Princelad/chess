@@ -15,21 +15,21 @@
 class MatchTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        listener_.listen(0);
+        ASSERT_EQ(listener_.listen(0), sf::Socket::Status::Done);
         port_ = listener_.getLocalPort();
 
         acceptThread_ = std::thread([this]() {
             whiteSock_ = std::make_unique<sf::TcpSocket>();
-            listener_.accept(*whiteSock_);
+            [[maybe_unused]] auto s1 = listener_.accept(*whiteSock_);
             blackSock_ = std::make_unique<sf::TcpSocket>();
-            listener_.accept(*blackSock_);
+            [[maybe_unused]] auto s2 = listener_.accept(*blackSock_);
             listener_.close();
         });
 
         clientWhite_ = std::make_unique<sf::TcpSocket>();
-        clientWhite_->connect(sf::IpAddress::LocalHostV4, port_);
+        ASSERT_EQ(clientWhite_->connect(sf::IpAddress::LocalHostV4, port_), sf::Socket::Status::Done);
         clientBlack_ = std::make_unique<sf::TcpSocket>();
-        clientBlack_->connect(sf::IpAddress::LocalHostV4, port_);
+        ASSERT_EQ(clientBlack_->connect(sf::IpAddress::LocalHostV4, port_), sf::Socket::Status::Done);
 
         acceptThread_.join();
 

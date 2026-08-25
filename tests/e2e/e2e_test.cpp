@@ -61,7 +61,7 @@ protected:
     }
 
     template <typename Pred>
-    bool pollUntil(sf::TcpSocket& a, sf::TcpSocket& b, Pred pred,
+    bool pollUntil(Pred pred,
                    std::chrono::milliseconds timeout = TestTimeout)
     {
         auto deadline = std::chrono::steady_clock::now() + timeout;
@@ -79,7 +79,7 @@ protected:
         sendMsg(black, chess::net::JoinMsg{bName});
 
         bool wWelcome = false, bWelcome = false;
-        ASSERT_TRUE(pollUntil(white, black, [&]() {
+        ASSERT_TRUE(pollUntil([&]() {
             if (!wWelcome) {
                 auto m = tryRecv(white);
                 if (m) {
@@ -154,10 +154,10 @@ TEST_F(E2eTest, FullCheckmateGame)
     joinBoth(white, black);
 
     // Helper: send a move from one side, verify both receive ServerMoveMsg with expected SAN.
-    auto playMove = [&](sf::TcpSocket& sender, sf::TcpSocket& other, const char* san) {
+    auto playMove = [&](sf::TcpSocket& sender, const char* san) {
         sendMsg(sender, chess::net::MoveMsg{san});
         bool wGot = false, bGot = false;
-        ASSERT_TRUE(pollUntil(white, black, [&]() {
+        ASSERT_TRUE(pollUntil([&]() {
             if (!wGot) {
                 auto m = tryRecv(white);
                 if (m && std::get_if<chess::net::ServerMoveMsg>(&*m)) wGot = true;
@@ -170,14 +170,14 @@ TEST_F(E2eTest, FullCheckmateGame)
         }));
     };
 
-    playMove(white, black, "f3");
-    playMove(black, white, "e5");
-    playMove(white, black, "g4");
+    playMove(white, "f3");
+    playMove(black, "e5");
+    playMove(white, "g4");
 
     // 2... Qh4# — expect ServerMoveMsg + GameOverMsg from both
     sendMsg(black, chess::net::MoveMsg{"Qh4#"});
     bool wOver = false, bOver = false;
-    ASSERT_TRUE(pollUntil(white, black, [&]() {
+    ASSERT_TRUE(pollUntil([&]() {
         if (!wOver) {
             auto m = tryRecv(white);
             if (m) {
@@ -214,7 +214,7 @@ TEST_F(E2eTest, DrawByAgreement)
     auto playMove = [&](const char* san, sf::TcpSocket& sender) {
         sendMsg(sender, chess::net::MoveMsg{san});
         bool done = false;
-        ASSERT_TRUE(pollUntil(white, black, [&]() {
+        ASSERT_TRUE(pollUntil([&]() {
             if (done) return true;
             auto mw = tryRecv(white);
             auto mb = tryRecv(black);
@@ -234,7 +234,7 @@ TEST_F(E2eTest, DrawByAgreement)
     // White offers draw
     sendMsg(white, chess::net::DrawOfferMsg{});
     bool blackGotOffer = false;
-    ASSERT_TRUE(pollUntil(white, black, [&]() {
+    ASSERT_TRUE(pollUntil([&]() {
         if (blackGotOffer) return true;
         auto m = tryRecv(black);
         if (m) {
@@ -247,7 +247,7 @@ TEST_F(E2eTest, DrawByAgreement)
     // Black accepts
     sendMsg(black, chess::net::DrawAcceptMsg{});
     bool wOver = false, bOver = false;
-    ASSERT_TRUE(pollUntil(white, black, [&]() {
+    ASSERT_TRUE(pollUntil([&]() {
         if (!wOver) {
             auto m = tryRecv(white);
             if (m && std::get_if<chess::net::GameOverMsg>(&*m)) {
@@ -282,7 +282,7 @@ TEST_F(E2eTest, Resign)
     sendMsg(white, chess::net::MoveMsg{"e4"});
     {
         bool done = false;
-        ASSERT_TRUE(pollUntil(white, black, [&]() {
+        ASSERT_TRUE(pollUntil([&]() {
             if (done) return true;
             auto mw = tryRecv(white);
             auto mb = tryRecv(black);
@@ -298,7 +298,7 @@ TEST_F(E2eTest, Resign)
     // White resigns
     sendMsg(white, chess::net::ResignMsg{});
     bool wOver = false, bOver = false;
-    ASSERT_TRUE(pollUntil(white, black, [&]() {
+    ASSERT_TRUE(pollUntil([&]() {
         if (!wOver) {
             auto m = tryRecv(white);
             if (m && std::get_if<chess::net::GameOverMsg>(&*m)) {
@@ -333,7 +333,7 @@ TEST_F(E2eTest, DisconnectMidGame)
     sendMsg(white, chess::net::MoveMsg{"e4"});
     {
         bool done = false;
-        ASSERT_TRUE(pollUntil(white, black, [&]() {
+        ASSERT_TRUE(pollUntil([&]() {
             if (done) return true;
             auto mw = tryRecv(white);
             auto mb = tryRecv(black);
@@ -351,7 +351,7 @@ TEST_F(E2eTest, DisconnectMidGame)
 
     // Black should receive GameOver
     bool bOver = false;
-    ASSERT_TRUE(pollUntil(black, black, [&]() {
+    ASSERT_TRUE(pollUntil([&]() {
         if (bOver) return true;
         auto m = tryRecv(black);
         if (m && std::get_if<chess::net::GameOverMsg>(&*m)) {
@@ -378,7 +378,7 @@ TEST_F(E2eTest, MoveAfterGameOver)
 
     // Drain game-over messages
     bool wOver = false, bOver = false;
-    ASSERT_TRUE(pollUntil(white, black, [&]() {
+    ASSERT_TRUE(pollUntil([&]() {
         if (!wOver) {
             auto m = tryRecv(white);
             if (m && std::get_if<chess::net::GameOverMsg>(&*m)) wOver = true;
@@ -394,7 +394,7 @@ TEST_F(E2eTest, MoveAfterGameOver)
     // Sending a move now gets "Join first" since we're no longer in a match.
     sendMsg(black, chess::net::MoveMsg{"e5"});
     bool gotResponse = false;
-    ASSERT_TRUE(pollUntil(black, black, [&]() {
+    ASSERT_TRUE(pollUntil([&]() {
         if (gotResponse) return true;
         auto m = tryRecv(black);
         if (m && std::get_if<chess::net::ErrorMsg>(&*m)) {
@@ -417,7 +417,7 @@ TEST_F(E2eTest, ChatRelay)
 
     sendMsg(white, chess::net::ChatMsg{"hello"});
     bool gotChat = false;
-    ASSERT_TRUE(pollUntil(white, black, [&]() {
+    ASSERT_TRUE(pollUntil([&]() {
         if (gotChat) return true;
         auto m = tryRecv(black);
         if (m && std::get_if<chess::net::ServerChatMsg>(&*m)) {
@@ -441,7 +441,7 @@ TEST_F(E2eTest, WrongTurn)
 
     sendMsg(black, chess::net::MoveMsg{"e5"});
     bool gotError = false;
-    ASSERT_TRUE(pollUntil(white, black, [&]() {
+    ASSERT_TRUE(pollUntil([&]() {
         if (gotError) return true;
         auto m = tryRecv(black);
         if (m && std::get_if<chess::net::ErrorMsg>(&*m)) {
@@ -473,7 +473,7 @@ TEST_F(E2eTest, SpamBadPacketsDisconnectsServer)
     sendMsg(sock, chess::net::JoinMsg{"Spammer"});
 
     bool gotWelcome = false;
-    pollUntil(sock, sock, [&]() {
+    pollUntil([&]() {
         if (gotWelcome) return true;
         auto m = tryRecv(sock);
         if (m && std::get_if<chess::net::WelcomeMsg>(&*m)) {
@@ -503,20 +503,17 @@ TEST_F(E2eTest, SpamValidMovesNoCrash)
     }
 
     // Drain all error responses.
-    int errorCount = 0;
     auto deadline = std::chrono::steady_clock::now() + 500ms;
     while (std::chrono::steady_clock::now() < deadline) {
-        auto mw = tryRecv(white);
-        auto mb = tryRecv(black);
-        if (mw && std::get_if<chess::net::ErrorMsg>(&*mw)) errorCount++;
-        if (mb && std::get_if<chess::net::ErrorMsg>(&*mb)) errorCount++;
+        tryRecv(white);
+        tryRecv(black);
         std::this_thread::sleep_for(1ms);
     }
 
     // Server should still be alive — play a real move.
     sendMsg(white, chess::net::MoveMsg{"e4"});
     bool gotMove = false;
-    ASSERT_TRUE(pollUntil(white, black, [&]() {
+    ASSERT_TRUE(pollUntil([&]() {
         if (gotMove) return true;
         auto m = tryRecv(white);
         if (m && std::get_if<chess::net::ServerMoveMsg>(&*m)) {
@@ -543,7 +540,7 @@ TEST_F(E2eTest, OversizedPacketDisconnects)
     sendMsg(sock, chess::net::JoinMsg{"Big"});
 
     bool gotWelcome = false;
-    pollUntil(sock, sock, [&]() {
+    pollUntil([&]() {
         if (gotWelcome) return true;
         auto m = tryRecv(sock);
         if (m && std::get_if<chess::net::WelcomeMsg>(&*m)) {
@@ -568,7 +565,7 @@ TEST_F(E2eTest, ReconnectAfterDisconnect)
 
         sendMsg(w1, chess::net::MoveMsg{"e4"});
         bool done = false;
-        ASSERT_TRUE(pollUntil(w1, b1, [&]() {
+        ASSERT_TRUE(pollUntil([&]() {
             if (done) return true;
             auto mw = tryRecv(w1);
             auto mb = tryRecv(b1);
@@ -585,7 +582,7 @@ TEST_F(E2eTest, ReconnectAfterDisconnect)
 
         // Black gets game-over.
         bool bOver = false;
-        ASSERT_TRUE(pollUntil(b1, b1, [&]() {
+        ASSERT_TRUE(pollUntil([&]() {
             if (bOver) return true;
             auto m = tryRecv(b1);
             if (m && std::get_if<chess::net::GameOverMsg>(&*m)) {
@@ -605,7 +602,7 @@ TEST_F(E2eTest, ReconnectAfterDisconnect)
 
         sendMsg(w2, chess::net::MoveMsg{"d4"});
         bool gotMove = false;
-        ASSERT_TRUE(pollUntil(w2, b2, [&]() {
+        ASSERT_TRUE(pollUntil([&]() {
             if (gotMove) return true;
             auto m = tryRecv(w2);
             if (m && std::get_if<chess::net::ServerMoveMsg>(&*m)) {

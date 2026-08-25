@@ -136,10 +136,6 @@ Screen where you enter the server address, port, and your name.
 - `assets/fonts/` — Inter font files
 - `tests/` — GoogleTest suite
 
-## Screenshots
-
-<!-- TODO: add screenshots of connect screen, game screen, and game-over screen -->
-
 ## License and attribution
 
 Piece sprites are the lichess "cburnett" set

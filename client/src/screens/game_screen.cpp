@@ -276,9 +276,6 @@ void GameScreen::handleEvent(const sf::Event& event)
         int my = mb->position.y;
 
         float px = boardView_.panelX();
-        float btnY = hud_.contentBottom();
-        float chatSepY = btnY + BtnH + 8.f;
-        float chatLogTop = chatSepY + 18.f;
         float inputY = static_cast<float>(App::WindowHeight) - 20.f - InputH;
 
         if (mx >= px && mx < px + static_cast<float>(App::WindowWidth) - px - 8.f

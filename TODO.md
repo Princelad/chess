@@ -497,10 +497,10 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [x] `make install` / CMake install target or a `run.sh` convenience script
   - [x] Release build flags (`-O2`, `-DNDEBUG`) documented in CMake presets
 
-- [ ] **7.4 Final code-quality pass**
-  - [ ] Run a linter/formatter (e.g. `clang-format`) if available
-  - [ ] Compiler warnings clean (`-Wall -Wextra -Wpedantic`)
-  - [ ] Review includes/const-correctness; remove dead code
+- [x] **7.4 Final code-quality pass**
+  - [x] Run a linter/formatter (e.g. `clang-format`) if available
+  - [x] Compiler warnings clean (`-Wall -Wextra -Wpedantic`)
+  - [x] Review includes/const-correctness; remove dead code
 
 ---
 

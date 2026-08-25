@@ -34,12 +34,6 @@ std::pair<int, int> BoardView::toFileRank(int col, int row) const
     return { file, rank };
 }
 
-sf::FloatRect BoardView::squareRect(int file, int rank) const
-{
-    auto pos = squareToPixel(file, rank);
-    return { pos, { squareSize_, squareSize_ } };
-}
-
 std::optional<std::pair<int, int>> BoardView::pixelToSquare(sf::Vector2f pixel) const
 {
     float col = (pixel.x - boardOrigin_.x) / squareSize_;

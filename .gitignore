@@ -2,6 +2,7 @@
 build/
 build-release/
 build-ci/
+build-warn/
 
 # Compiled object files and libraries
 *.o
@@ -31,3 +32,4 @@ install_manifest.txt
 compile_commands.json
 Makefile
 Testing/
+CMakeUserPresets.json
