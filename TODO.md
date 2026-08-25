@@ -481,11 +481,11 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
 
 **Exit version:** `v1.0.0` — first release
 
-- [ ] **7.1 End-to-end test**
-  - [ ] Run server + two clients (second client via `-` window on same machine or second terminal)
-  - [ ] Play a full game to checkmate; verify both screens and move history match
-  - [ ] Test draw paths (repetition, stalemate, offer+accept), resign, disconnect-mid-game
-  - [ ] Test on loopback and on another machine (if available)
+- [x] **7.1 End-to-end test**
+  - [x] Run server + two clients (second client via `-` window on same machine or second terminal)
+  - [x] Play a full game to checkmate; verify both screens and move history match
+  - [x] Test draw paths (repetition, stalemate, offer+accept), resign, disconnect-mid-game
+  - [x] Test on loopback and on another machine (if available)
 
 - [ ] **7.2 Robustness pass**
   - [ ] Rapid spam / malformed input handled without crashes (client and server)
