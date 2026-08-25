@@ -10,7 +10,10 @@ namespace chess::client {
 
 ConnectScreen::ConnectScreen(App& app)
     : app_(app)
-    , activeField_(2)
+    , host_(app.lastHost())
+    , port_(app.lastPort())
+    , name_(app.lastName())
+    , activeField_(app.lastName().empty() ? 2 : 2)
 {
     status_ = "Enter your name and press Enter to connect.";
 }
@@ -123,6 +126,7 @@ void ConnectScreen::tryConnect()
         return;
     }
 
+    app_.setLastConnection(host_, port_, name_);
     error_.clear();
     phase_ = ConnectPhase::Connecting;
     status_ = "Connecting...";

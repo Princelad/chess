@@ -159,7 +159,6 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
                             client.match->handleMessage(client, *msg);
                             break;
                         }
-                        client.badMessages = 0;
                     } else {
                         client.badMessages++;
                         LOG_WARN("Failed to deserialize message (bad " + std::to_string(client.badMessages) + "/" + std::to_string(MaxBadMessages) + ")");

@@ -32,6 +32,15 @@ public:
     sf::Font& font() { return *font_; }
     Connection& connection() { return connection_; }
 
+    void setLastConnection(const std::string& host, const std::string& port, const std::string& name) {
+        lastHost_ = host;
+        lastPort_ = port;
+        lastName_ = name;
+    }
+    const std::string& lastHost() const { return lastHost_; }
+    const std::string& lastPort() const { return lastPort_; }
+    const std::string& lastName() const { return lastName_; }
+
     static constexpr int PieceIndex(Color c, PieceType t) {
         return static_cast<int>(c) * 6 + static_cast<int>(t);
     }
@@ -53,6 +62,9 @@ private:
     std::optional<sf::Font> font_;
     std::array<sf::Texture, 12> pieceTextures_;
     bool piecesLoaded_ = false;
+    std::string lastHost_ = "localhost";
+    std::string lastPort_ = "5555";
+    std::string lastName_;
 };
 
 } // namespace chess::client

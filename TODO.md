@@ -487,10 +487,10 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [x] Test draw paths (repetition, stalemate, offer+accept), resign, disconnect-mid-game
   - [x] Test on loopback and on another machine (if available)
 
-- [ ] **7.2 Robustness pass**
-  - [ ] Rapid spam / malformed input handled without crashes (client and server)
-  - [ ] Server restart behavior; client reconnect path
-  - [ ] Window resize (scale board proportionally) or fix to constant size — decide and be consistent
+- [x] **7.2 Robustness pass**
+  - [x] Rapid spam / malformed input handled without crashes (client and server)
+  - [x] Server restart behavior; client reconnect path
+  - [x] Window resize (scale board proportionally) or fix to constant size — decide and be consistent
 
 - [ ] **7.3 Readme + build polish**
   - [ ] README: prerequisites, build steps, `server` and `client` usage, controls, screenshots

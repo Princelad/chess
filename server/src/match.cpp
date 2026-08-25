@@ -11,6 +11,7 @@
 #include "send.h"
 
 static constexpr std::size_t MaxChatLength = 500;
+static constexpr std::size_t MaxSanLength = 10;
 
 Match::Match(Client& white, Client& black)
     : board_(chess::Board::fromStartPos())
@@ -52,6 +53,11 @@ void Match::handleMove(Client& sender, const chess::net::MoveMsg& msg)
 {
     if (&sender != (board_.sideToMove() == chess::Color::White ? white_ : black_)) {
         sendTo(sender, chess::net::ErrorMsg{"Not your turn"});
+        return;
+    }
+
+    if (msg.san.size() > MaxSanLength) {
+        sendTo(sender, chess::net::ErrorMsg{"Illegal move"});
         return;
     }
 
