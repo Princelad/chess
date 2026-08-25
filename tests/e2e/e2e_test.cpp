@@ -3,6 +3,7 @@
 #include <atomic>
 #include <chrono>
 #include <thread>
+#include <vector>
 
 #include <SFML/Network/TcpSocket.hpp>
 
@@ -451,4 +452,167 @@ TEST_F(E2eTest, WrongTurn)
         }
         return false;
     }));
+}
+
+// ── Spam: server disconnects after bad packets ──────────────────────────────
+
+TEST_F(E2eTest, SpamBadPacketsDisconnectsServer)
+{
+    sf::TcpSocket sock = connectClient();
+
+    // Send 4 garbage packets (server disconnects after 3 bad messages).
+    for (int i = 0; i < 4; ++i) {
+        sf::Packet packet;
+        unsigned char garbage[] = {0xFF, 0xFE, 0xFD};
+        packet.append(garbage, sizeof(garbage));
+        [[maybe_unused]] auto s = sock.send(packet);
+    }
+
+    // Server should disconnect us. Verify by trying to send a valid JoinMsg
+    // and getting no Welcome back within a short window.
+    sendMsg(sock, chess::net::JoinMsg{"Spammer"});
+
+    bool gotWelcome = false;
+    pollUntil(sock, sock, [&]() {
+        if (gotWelcome) return true;
+        auto m = tryRecv(sock);
+        if (m && std::get_if<chess::net::WelcomeMsg>(&*m)) {
+            gotWelcome = true;
+            return true;
+        }
+        return false;
+    }, 300ms);
+
+    // Should NOT have received a welcome — server disconnected us.
+    EXPECT_FALSE(gotWelcome);
+}
+
+// ── Spam: rapid valid moves don't crash server ──────────────────────────────
+
+TEST_F(E2eTest, SpamValidMovesNoCrash)
+{
+    sf::TcpSocket white = connectClient();
+    sf::TcpSocket black = connectClient();
+    joinBoth(white, black);
+
+    // Flood with invalid moves (wrong turn, illegal) — server should reject
+    // each with an error but not crash.
+    for (int i = 0; i < 20; ++i) {
+        sendMsg(white, chess::net::MoveMsg{"e5"});
+        sendMsg(black, chess::net::MoveMsg{"e5"});
+    }
+
+    // Drain all error responses.
+    int errorCount = 0;
+    auto deadline = std::chrono::steady_clock::now() + 500ms;
+    while (std::chrono::steady_clock::now() < deadline) {
+        auto mw = tryRecv(white);
+        auto mb = tryRecv(black);
+        if (mw && std::get_if<chess::net::ErrorMsg>(&*mw)) errorCount++;
+        if (mb && std::get_if<chess::net::ErrorMsg>(&*mb)) errorCount++;
+        std::this_thread::sleep_for(1ms);
+    }
+
+    // Server should still be alive — play a real move.
+    sendMsg(white, chess::net::MoveMsg{"e4"});
+    bool gotMove = false;
+    ASSERT_TRUE(pollUntil(white, black, [&]() {
+        if (gotMove) return true;
+        auto m = tryRecv(white);
+        if (m && std::get_if<chess::net::ServerMoveMsg>(&*m)) {
+            gotMove = true;
+            return true;
+        }
+        return false;
+    }));
+}
+
+// ── Spam: server disconnects after oversized packet ──────────────────────────
+
+TEST_F(E2eTest, OversizedPacketDisconnects)
+{
+    sf::TcpSocket sock = connectClient();
+
+    // Send a packet larger than MaxPacketSize (4096).
+    sf::Packet packet;
+    std::vector<unsigned char> big(8192, 0xAA);
+    packet.append(big.data(), big.size());
+    [[maybe_unused]] auto s = sock.send(packet);
+
+    // Server should disconnect. Verify by trying to join.
+    sendMsg(sock, chess::net::JoinMsg{"Big"});
+
+    bool gotWelcome = false;
+    pollUntil(sock, sock, [&]() {
+        if (gotWelcome) return true;
+        auto m = tryRecv(sock);
+        if (m && std::get_if<chess::net::WelcomeMsg>(&*m)) {
+            gotWelcome = true;
+            return true;
+        }
+        return false;
+    }, 300ms);
+
+    EXPECT_FALSE(gotWelcome);
+}
+
+// ── Reconnect: new pair can play after previous game ended ──────────────────
+
+TEST_F(E2eTest, ReconnectAfterDisconnect)
+{
+    // First pair: play, then disconnect.
+    {
+        sf::TcpSocket w1 = connectClient();
+        sf::TcpSocket b1 = connectClient();
+        joinBoth(w1, b1);
+
+        sendMsg(w1, chess::net::MoveMsg{"e4"});
+        bool done = false;
+        ASSERT_TRUE(pollUntil(w1, b1, [&]() {
+            if (done) return true;
+            auto mw = tryRecv(w1);
+            auto mb = tryRecv(b1);
+            if (mw && std::get_if<chess::net::ServerMoveMsg>(&*mw) &&
+                mb && std::get_if<chess::net::ServerMoveMsg>(&*mb)) {
+                done = true;
+                return true;
+            }
+            return false;
+        }));
+
+        // White disconnects mid-game.
+        w1.disconnect();
+
+        // Black gets game-over.
+        bool bOver = false;
+        ASSERT_TRUE(pollUntil(b1, b1, [&]() {
+            if (bOver) return true;
+            auto m = tryRecv(b1);
+            if (m && std::get_if<chess::net::GameOverMsg>(&*m)) {
+                bOver = true;
+                return true;
+            }
+            return false;
+        }));
+        b1.disconnect();
+    }
+
+    // Second pair: fresh connect, play a move — server must be clean.
+    {
+        sf::TcpSocket w2 = connectClient();
+        sf::TcpSocket b2 = connectClient();
+        joinBoth(w2, b2, "Alice", "Bob");
+
+        sendMsg(w2, chess::net::MoveMsg{"d4"});
+        bool gotMove = false;
+        ASSERT_TRUE(pollUntil(w2, b2, [&]() {
+            if (gotMove) return true;
+            auto m = tryRecv(w2);
+            if (m && std::get_if<chess::net::ServerMoveMsg>(&*m)) {
+                gotMove = true;
+                return true;
+            }
+            return false;
+        }));
+    }
 }

@@ -22,6 +22,7 @@ public:
     static constexpr std::size_t MaxOutboxSize = 128;
     static constexpr std::size_t MaxInboxSize = 256;
     static constexpr std::size_t MaxDrainPerPoll = 64;
+    static constexpr int MaxBadMessages = 3;
 
     explicit Connection(std::chrono::steady_clock::duration pingInterval = DefaultPingInterval,
                         std::chrono::steady_clock::duration pongTimeout = DefaultPongTimeout);
@@ -55,6 +56,7 @@ private:
     std::deque<chess::net::ServerMessage> inbox_;
     ConnectionState state_ = ConnectionState::Disconnected;
     std::string error_;
+    int badMessages_ = 0;
 
     std::thread connectThread_;
     std::atomic<bool> connectDone_{false};

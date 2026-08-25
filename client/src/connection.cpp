@@ -192,12 +192,20 @@ void Connection::drainInbox()
             }
             auto msg = deserializeServer(packet);
             if (msg) {
+                badMessages_ = 0;
                 if (std::get_if<chess::net::PongMsg>(&*msg)) {
                     lastPongReceived_ = std::chrono::steady_clock::now();
                 }
                 inbox_.push_back(std::move(*msg));
                 if (inbox_.size() > MaxInboxSize) {
                     error_ = "Inbox overflow";
+                    state_ = ConnectionState::Disconnected;
+                    return;
+                }
+            } else {
+                badMessages_++;
+                if (badMessages_ >= MaxBadMessages) {
+                    error_ = "Too many malformed packets";
                     state_ = ConnectionState::Disconnected;
                     return;
                 }

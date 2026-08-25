@@ -21,8 +21,8 @@ private:
     App& app_;
     ConnectPhase phase_ = ConnectPhase::Idle;
 
-    std::string host_ = "localhost";
-    std::string port_ = "5555";
+    std::string host_;
+    std::string port_;
     std::string name_;
     std::string status_;
     std::string error_;
