@@ -29,7 +29,8 @@ if(BUILD_TESTING)
         net/protocol_test.cpp
         server/matchmaker_test.cpp
         server/match_test.cpp
-        client/connection_test.cpp)
+        client/connection_test.cpp
+        e2e/e2e_test.cpp)
 
     target_link_libraries(chess-tests PRIVATE chesscore chessnet chessclient chessserver GTest::gtest_main)
 

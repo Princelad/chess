@@ -1,6 +1,7 @@
 add_library(chessserver STATIC
     src/matchmaker.cpp
     src/match.cpp
+    src/server.cpp
     src/log.cpp)
 
 target_include_directories(chessserver PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
