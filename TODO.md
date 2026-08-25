@@ -36,7 +36,12 @@ phase, PATCH for bugfixes/hotfixes landed within a phase.
 | 5 — Client networking | `v0.6.0` | Client connects |
 | 6 — SFML GUI | `v0.7.0` | Playable GUI |
 | 7 — Integration & polish | `v1.0.0` | First release |
-| 8 — Stretch goals | `v1.x.0` | One MINOR bump per landed stretch item |
+| 8 — Engine integration (UCI) | `v1.1.0` | Play + analyze with an external engine |
+| 9 — Client UI/UX overhaul | `v1.2.0` | Menu shell, widget layer, move navigator |
+| 10 — Persistence & ratings | `v1.3.0` | Accounts, Glicko-2, game archive |
+| 11 — Multiplayer QoL | `v1.4.0` | Clocks, rematch, reconnect/resume, premove, themes |
+| 12 — Variants & community | `v1.5.0` | Chess960, puzzles, tournaments, spectators |
+| 13 — Release engineering | `v1.6.0` | CI, packaging, portability |
 
 ---
 
@@ -499,20 +504,216 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
 
 ---
 
-## Phase 8 — Stretch goals (optional, in rough order)
+## Phase 8 — Engine integration via UCI
 
-**Exit version:** `v1.x.0` — one MINOR bump per landed stretch item
+**Goal:** strong computer opponents and analysis powered by an external UCI engine
+(e.g. Stockfish) instead of a hand-written search.
 
-- [ ] **8.1 Chess clocks** — time controls (blitz/rapid), increment, timeout = loss
-- [ ] **8.2 Move animation** — piece slides; requires the timestep-ready loop from 6.1
-- [ ] **8.3 Chat polish** — timestamps, colors, mute
-- [ ] **8.4 Multiple games / spectators** — server hosts several matches; watchers see moves
-- [ ] **8.5 Rematch flow** — agreed rematch starts a new game without reconnecting
-- [ ] **8.6 PGN export** — save finished games; load PGN into the engine
-- [ ] **8.7 Sound effects** — move/capture/checkmate (requires `sf::SoundBuffer`)
-- [ ] **8.8 Board interaction** — drag-and-drop, right-click deselect
-- [ ] **8.9 Performance** — bitboard or precomputed tables; apply to movegen only after 2.x proves correctness
-- [ ] **8.10 AI opponent** — when no human opponent, play against a minimax/alpha-beta engine (the natural next chessprogramming.org chapter)
+**Exit version:** `v1.1.0` — engine-backed play and analysis work end-to-end
+
+▶ [UCI](https://www.chessprogramming.org/UCI)
+
+- [ ] **8.1 UCI process wrapper (`uci/`)**
+  - [ ] Spawn engine binary (`fork`/`exec` or `posix_spawn`) with stdin/stdout pipes
+  - [ ] Handshake: send `uci`, wait for `uciok`; `isready`/`readyok` sync before commands
+  - [ ] Background reader thread parsing engine output into a queue/callback
+  - [ ] Config: `setoption` (Skill Level, Threads, Hash), `ucinewgame`, `position fen ... moves ...`
+  - [ ] Request moves via `go depth N` / `go movetime MS`; parse `bestmove <coords>` → `core::Move`
+  - [ ] Timeout/crash handling; clean `quit` on shutdown
+
+- [ ] **8.2 Play vs computer (local)**
+  - [ ] Screen to pick side + strength preset (depth/movetime mapping)
+  - [ ] Reuse GameScreen/HUD against a local engine opponent (no server)
+  - [ ] Engine replies non-blocking (never freeze the render loop)
+  - [ ] Local takeback/undo trivially supported vs CPU
+  - [ ] Temporary entry point from the connect screen until the 9.1 menu shell lands
+
+- [ ] **8.3 Server-side bots**
+  - [ ] Bot pseudo-player joins the matchmaking queue; paired like a human
+  - [ ] Server hosts one UCI session per bot match, playing through the same MOVE path
+  - [ ] Concurrency cap + queueing for engine sessions
+
+- [ ] **8.4 PGN import/export (`core/`)**
+  - [ ] Parse PGN headers + SAN movetext into a game (move list, result)
+  - [ ] Emit canonical PGN from any played/saved game
+  - [ ] Round-trip tests; skip comments/variations gracefully
+
+- [ ] **8.5 Analysis board**
+  - [ ] Load a finished game (FEN/PGN — uses 8.4) into read-only replay
+  - [ ] Per-position eval bar; best-move arrow overlay
+  - [ ] Eval graph across the game's plies
+
+---
+
+## Phase 9 — Client UI/UX overhaul
+
+**Goal:** a real app shell and reusable hand-rolled widgets — no new GUI dependency.
+
+**Exit version:** `v1.2.0` — menu-driven client with scalable layout
+
+- [ ] **9.1 Menu shell & navigation**
+  - [ ] New root screen: Play online / vs Computer / Puzzles / Archive / Settings
+  - [ ] Unimplemented entries visible but disabled (greyed out)
+  - [ ] Replace linear screen flow with a back-stack (Esc = go back)
+
+- [ ] **9.2 Widget layer + responsive layout**
+  - [ ] Factor reusable widgets from Phase 6 screens: `Button` (hover/pressed/disabled), `TextField` (focus/caret), `Panel`, `Label`
+  - [ ] Layout helpers (margins, alignment, vertical/horizontal stacks)
+  - [ ] Settle 7.2's resize question: window resize rescales board + side panel proportionally
+  - [ ] View transform keeps pixel↔square mapping correct at any scale
+
+- [ ] **9.3 Move-list navigator + captured material**
+  - [ ] Clickable two-column SAN grid replaces the plain text list
+  - [ ] Navigator controls `|< < > >|` + ←/→/Home/End keys; jump to any ply
+  - [ ] Read-only replay of historical positions from move history
+  - [ ] Captured-piece row + material diff per player card
+
+- [ ] **9.4 Board interaction: drag-and-drop + annotations + promotion options**
+  - [ ] Drag-and-drop piece movement (activation threshold; dropping off-board cancels)
+  - [ ] Right-click drag draws arrows; plain right-click toggles a circle
+  - [ ] Left-click clears user annotations; right-click also deselects
+  - [ ] Auto-queen setting; promotion picker dialog vs inline choice
+
+- [ ] **9.5 Settings screen + config file**
+  - [ ] INI-style config persisted to `~/.config/chess/config.ini`
+  - [ ] Sound volume/toggle (consumed by 9.8); animation toggle/duration (feeds 9.7)
+  - [ ] Board colors + piece-set path (foundation for 11.6 themes)
+  - [ ] Auto-queen, show-coordinates toggle
+  - [ ] Load/save round-trip tested
+
+- [ ] **9.6 Keyboard play**
+  - [ ] Arrow-key square cursor; Enter/Space selects/moves; Esc cancels/deselects
+  - [ ] `F` flips board; `?` shows shortcut help overlay
+
+- [ ] **9.7 Move animation**
+  - [ ] Pieces slide from source to destination using the fixed-timestep loop from 6.1
+  - [ ] Duration/easing configurable via 9.5 settings
+
+- [ ] **9.8 Sound effects**
+  - [ ] Move/capture/check/checkmate clips via `sf::SoundBuffer`
+  - [ ] Volume/mute controlled by 9.5 settings
+
+---
+
+## Phase 10 — Persistence & ratings
+
+**Goal:** identity, ratings, and saved games survive server restarts.
+
+**Exit version:** `v1.3.0` — accounts, rated games, browsable archive
+
+▶ [Glicko-2 paper](http://www.glicko.net/glicko/glicko2.pdf)
+
+- [ ] **10.1 Storage layer**
+  - [ ] SQLite (system libsqlite3): players + games tables
+  - [ ] Optional password auth (salted hash); guest play stays allowed and unrated
+
+- [ ] **10.2 Rated games (Glicko-2)**
+  - [ ] Implement Glicko-2 per Glickman's paper; unit-test against the worked example
+  - [ ] Rating classes by time control once 11.1 clocks land (single class until then)
+  - [ ] Extend profile messages with rating; update atomically on GAME_OVER
+
+- [ ] **10.3 Game archive**
+  - [ ] Persist every completed game (players, TC, SAN moves, result, date)
+  - [ ] PGN generation from archive (reuses the 8.4 PGN writer)
+  - [ ] Client "my games" list screen; open → replay viewer (reuses 9.3 navigator)
+
+- [ ] **10.4 Leaderboard**
+  - [ ] Server top-N query by rating
+  - [ ] Client leaderboard screen
+
+---
+
+## Phase 11 — Multiplayer quality of life
+
+**Goal:** smoother, friendlier online play.
+
+**Exit version:** `v1.4.0`
+
+- [ ] **11.1 Chess clocks**
+  - [ ] Protocol: remaining-time synced with every MOVE broadcast
+  - [ ] Server-enforced timeout = loss; Fischer increment supported
+  - [ ] Time-control presets (bullet/blitz/rapid/classical) chosen before pairing
+  - [ ] Ticking clock UI beside each player card
+
+- [ ] **11.2 Reconnect & resume**
+  - [ ] Server keeps match alive ~30 s after disconnect; token-based rejoin
+  - [ ] Protocol: `RESUME {token}` → `STATE {fen, moves, clocks}` full resync
+  - [ ] Opponent sees "opponent reconnecting…" status
+
+- [ ] **11.3 Takeback**
+  - [ ] Protocol `TAKEBACK_REQUEST/ACCEPT/DECLINE`; server validates via two-ply `undoMove`
+  - [ ] Client request UI + accept/decline prompt
+
+- [ ] **11.4 Premoves**
+  - [ ] Queue next move while opponent thinks; ghost piece rendered
+  - [ ] Auto-send when legal on position update; right-click/Esc cancels (pairs with 9.4)
+
+- [ ] **11.5 Opening names (ECO)**
+  - [ ] Small bundled ECO table asset; prefix-match on move list
+  - [ ] Show opening name (+ ECO code) in HUD after each move
+
+- [ ] **11.6 Themes**
+  - [ ] Board color palettes + piece sets (`assets/pieces/<set>/`)
+  - [ ] Selected via the 9.5 settings/config file
+
+- [ ] **11.7 Rematch flow**
+  - [ ] Post-game offer/accept starts a new game without reconnecting
+  - [ ] Colors swapped on rematch
+
+- [ ] **11.8 Chat polish**
+  - [ ] Timestamps, name colors, per-player mute
+
+---
+
+## Phase 12 — Variants & community
+
+**Goal:** more ways to play beyond standard 1v1 online.
+
+**Exit version:** `v1.5.0`
+
+▶ [Chess960](https://www.chessprogramming.org/Chess960)
+
+- [ ] **12.1 Chess960**
+  - [ ] Core: 960 start-position generator + flexible castling rules
+  - [ ] Protocol: `VARIANT` field in JOIN/WELCOME; server-side option
+  - [ ] Perft spot-checks against known FRC positions
+
+- [ ] **12.2 Puzzle mode**
+  - [ ] Offline mate-in-N set loaded from a bundled PGN file
+  - [ ] Hints/solution reveal; streak counter (uses the 9.1 menu entry)
+
+- [ ] **12.3 Arena tournaments**
+  - [ ] Server periodically pairs all queued players; standings broadcast
+  - [ ] Client tournament lobby + standings table
+
+- [ ] **12.4 Spectators**
+  - [ ] Server relays moves to observers watching a live match
+  - [ ] Spectator list/count surfaced to players (optional)
+
+---
+
+## Phase 13 — Release engineering
+
+**Goal:** others can build, run, and deploy the project easily.
+
+**Exit version:** `v1.6.0` — CI green, installable, dockerized server
+
+- [ ] **13.1 CI**
+  - [ ] GitHub Actions: Ubuntu matrix (GCC/Clang), cmake configure/build + ctest
+  - [ ] Install SFML via apt; cache FetchContent deps between runs
+
+- [ ] **13.2 Packaging**
+  - [ ] Headless server Dockerfile + docker-compose example
+  - [ ] CMake install targets (binaries + assets); README install docs
+
+- [ ] **13.3 Portability pass**
+  - [ ] Audit fs paths, signal handling, compiler-specific code
+  - [ ] Windows/macOS build notes (full support if cheap)
+
+- [ ] **13.4 Performance pass (optional)**
+  - [ ] Profile before touching anything; only optimize what's measurably slow
+  - [ ] Candidate: bitboards or precomputed attack tables for movegen
+  - [ ] Perft suite must stay green after any change
 
 ---
 
@@ -539,3 +740,5 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
 | SAN | https://www.chessprogramming.org/Algebraic_Notation |
 | Perft | https://www.chessprogramming.org/Perft |
 | Make/unmake | https://www.chessprogramming.org/Move_Making |
+| UCI protocol | https://www.chessprogramming.org/UCI |
+| Chess960 / Fischer Random | https://www.chessprogramming.org/Chess960 |

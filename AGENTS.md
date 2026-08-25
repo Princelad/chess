@@ -79,4 +79,9 @@ SemVer-style, pre-1.0: MINOR bump per phase, PATCH for bugfixes within a phase. 
 | 5 — Client networking | `v0.6.0` | done |
 | 6 — SFML GUI | `v0.7.0` | done |
 | 7 — Integration & polish | `v1.0.0` | planned |
-| 8 — Stretch goals | `v1.x.0` | planned |
+| 8 — Engine integration (UCI) | `v1.1.0` | planned |
+| 9 — Client UI/UX overhaul | `v1.2.0` | planned |
+| 10 — Persistence & ratings | `v1.3.0` | planned |
+| 11 — Multiplayer QoL | `v1.4.0` | planned |
+| 12 — Variants & community | `v1.5.0` | planned |
+| 13 — Release engineering | `v1.6.0` | planned |
