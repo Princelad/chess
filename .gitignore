@@ -1,5 +1,7 @@
 # Build directories
 build/
+build-release/
+build-ci/
 
 # Compiled object files and libraries
 *.o
