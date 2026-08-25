@@ -40,7 +40,8 @@ GameOverScreen::GameOverScreen(App& app,
 
     switch (result) {
         case net::GameResult::Draw:
-            resultText_ = reasonStr;
+            resultText_ = resultStr;
+            reasonText_ = reasonStr;
             break;
         case net::GameResult::Abort:
             resultText_ = resultStr;
