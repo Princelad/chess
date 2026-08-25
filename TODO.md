@@ -492,15 +492,15 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [x] Server restart behavior; client reconnect path
   - [x] Window resize (scale board proportionally) or fix to constant size — decide and be consistent
 
-- [ ] **7.3 Readme + build polish**
-  - [ ] README: prerequisites, build steps, `server` and `client` usage, controls, screenshots
-  - [ ] `make install` / CMake install target or a `run.sh` convenience script
-  - [ ] Release build flags (`-O2`, `-DNDEBUG`) documented in CMake presets
+- [x] **7.3 Readme + build polish**
+  - [x] README: prerequisites, build steps, `server` and `client` usage, controls, screenshots
+  - [x] `make install` / CMake install target or a `run.sh` convenience script
+  - [x] Release build flags (`-O2`, `-DNDEBUG`) documented in CMake presets
 
-- [ ] **7.4 Final code-quality pass**
-  - [ ] Run a linter/formatter (e.g. `clang-format`) if available
-  - [ ] Compiler warnings clean (`-Wall -Wextra -Wpedantic`)
-  - [ ] Review includes/const-correctness; remove dead code
+- [x] **7.4 Final code-quality pass**
+  - [x] Run a linter/formatter (e.g. `clang-format`) if available
+  - [x] Compiler warnings clean (`-Wall -Wextra -Wpedantic`)
+  - [x] Review includes/const-correctness; remove dead code
 
 ---
 

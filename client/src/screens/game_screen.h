@@ -52,9 +52,9 @@ private:
     HighlightState hl_;
     std::optional<PromotionState> promo_;
     bool inCheck_ = false;
+    Hud hud_;
     bool myTurn_ = false;
     bool gameOver_ = false;
-    Hud hud_;
     bool drawOfferPending_ = false;
     std::vector<std::string> chatLog_;
     std::string chatInput_;

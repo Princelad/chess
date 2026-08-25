@@ -3,9 +3,6 @@
 
 #include <chess/net/messages.h>
 
-#include <algorithm>
-#include <cctype>
-
 namespace chess::client {
 
 ConnectScreen::ConnectScreen(App& app)
@@ -13,7 +10,7 @@ ConnectScreen::ConnectScreen(App& app)
     , host_(app.lastHost())
     , port_(app.lastPort())
     , name_(app.lastName())
-    , activeField_(app.lastName().empty() ? 2 : 2)
+    , activeField_(app.lastName().empty() ? 0 : 2)
 {
     status_ = "Enter your name and press Enter to connect.";
 }

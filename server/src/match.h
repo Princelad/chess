@@ -13,7 +13,7 @@ public:
     Match(Client& white, Client& black);
 
     void handleMessage(Client& sender, const chess::net::ClientMessage& msg);
-    void handleDisconnect(Client& client);
+    void handleDisconnect(const Client& client);
 
     bool isActive() const;
     Client* white() const;

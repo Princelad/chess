@@ -54,11 +54,6 @@ constexpr Rank pawnStartRank(Color color)
     return color == Color::White ? Rank::R2 : Rank::R7;
 }
 
-constexpr Rank pawnPromotionRank(Color color)
-{
-    return color == Color::White ? Rank::R8 : Rank::R1;
-}
-
 constexpr int pawnPush(Color color)
 {
     return color == Color::White ? 16 : -16;

@@ -127,7 +127,7 @@ void Match::handlePing(Client& sender)
     sendTo(sender, chess::net::PongMsg{});
 }
 
-void Match::handleDisconnect(Client& client)
+void Match::handleDisconnect(const Client& client)
 {
     if (!active_)
         return;

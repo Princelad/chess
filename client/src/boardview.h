@@ -32,11 +32,9 @@ public:
     void drawPieces(sf::RenderWindow& window, const sf::Font& font,
                     const Board& board, const App& app) const;
 
-    sf::FloatRect squareRect(int file, int rank) const;
     std::optional<std::pair<int, int>> pixelToSquare(sf::Vector2f pixel) const;
 
     float panelX() const { return panelX_; }
-    float boardSize() const { return boardSize_; }
     float squareSize() const { return squareSize_; }
     sf::Vector2f boardOrigin() const { return boardOrigin_; }
     bool isFlipped() const { return flipped_; }
