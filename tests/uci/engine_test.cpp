@@ -32,6 +32,8 @@ TEST(UciEngine, InitHandshake)
     uci::UciEngine engine(mockEnginePath());
     auto info = engine.init(3s);
     EXPECT_TRUE(engine.isRunning());
+    EXPECT_EQ(info.name, "MockEngine 1.0");
+    EXPECT_EQ(info.author, "Test");
     engine.quit();
 }
 

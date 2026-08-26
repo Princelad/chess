@@ -62,6 +62,8 @@ private:
     void readerLoop();
     void closeProcess();
 
+    enum class SyncSignal { None, UciOk, ReadyOk };
+
     std::string m_enginePath;
     int m_stdinFd = -1;
     int m_stdoutFd = -1;
@@ -71,9 +73,13 @@ private:
     std::atomic<bool> m_running{false};
 
     mutable std::mutex m_mutex;
-    std::condition_variable m_bestmoveCv;
+    std::condition_variable m_cv;
     std::string m_bestmove;
+    SyncSignal m_syncSignal = SyncSignal::None;
+    std::string m_engineName;
+    std::string m_engineAuthor;
 
+    std::mutex m_cbMutex;
     std::function<void(const SearchInfo&)> m_onInfo;
     std::function<void(const std::string&)> m_onLine;
 };

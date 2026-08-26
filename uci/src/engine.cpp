@@ -2,11 +2,9 @@
 #include <chess/uci_move.h>
 #include <chess/movegen.h>
 
-#include <array>
 #include <cstring>
 #include <sstream>
 
-#include <fcntl.h>
 #include <signal.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -63,26 +61,31 @@ EngineInfo UciEngine::init(std::chrono::milliseconds timeout)
     send("uci");
 
     EngineInfo info;
-    auto deadline = std::chrono::steady_clock::now() + timeout;
-    std::string line;
-    while (std::chrono::steady_clock::now() < deadline) {
-        {
-            std::lock_guard<std::mutex> lock(m_mutex);
-            if (!m_bestmove.empty() && m_bestmove == "uciok") {
-                m_bestmove.clear();
-                break;
-            }
+    {
+        std::unique_lock<std::mutex> lock(m_mutex);
+        bool ok = m_cv.wait_for(lock, timeout, [this] {
+            return m_syncSignal == SyncSignal::UciOk;
+        });
+        if (!ok) {
+            quit();
+            return {};
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        info.name = m_engineName;
+        info.author = m_engineAuthor;
+        m_syncSignal = SyncSignal::None;
     }
 
     send("isready");
     {
         std::unique_lock<std::mutex> lock(m_mutex);
-        m_bestmoveCv.wait_for(lock, timeout, [this] {
-            return m_bestmove == "readyok";
+        bool ok = m_cv.wait_for(lock, timeout, [this] {
+            return m_syncSignal == SyncSignal::ReadyOk;
         });
-        m_bestmove.clear();
+        m_syncSignal = SyncSignal::None;
+        if (!ok) {
+            quit();
+            return {};
+        }
     }
 
     return info;
@@ -102,10 +105,10 @@ void UciEngine::newGame()
     send("ucinewgame");
     send("isready");
     std::unique_lock<std::mutex> lock(m_mutex);
-    m_bestmoveCv.wait_for(lock, std::chrono::seconds(5), [this] {
-        return m_bestmove == "readyok";
+    m_cv.wait_for(lock, std::chrono::seconds(5), [this] {
+        return m_syncSignal == SyncSignal::ReadyOk;
     });
-    m_bestmove.clear();
+    m_syncSignal = SyncSignal::None;
 }
 
 void UciEngine::position(const std::string& fen,
@@ -149,9 +152,16 @@ void UciEngine::stop()
 void UciEngine::quit()
 {
     send("quit");
+
+    if (m_stdoutFd >= 0) {
+        ::close(m_stdoutFd);
+        m_stdoutFd = -1;
+    }
+
     if (m_reader.joinable()) {
         m_reader.join();
     }
+
     closeProcess();
 }
 
@@ -159,7 +169,7 @@ std::optional<Move> UciEngine::waitBestMove(const Board& board,
                                             std::chrono::milliseconds timeout)
 {
     std::unique_lock<std::mutex> lock(m_mutex);
-    bool found = m_bestmoveCv.wait_for(lock, timeout, [this] {
+    bool found = m_cv.wait_for(lock, timeout, [this] {
         return !m_bestmove.empty();
     });
 
@@ -179,11 +189,13 @@ std::optional<Move> UciEngine::waitBestMove(const Board& board,
 
 void UciEngine::onInfo(std::function<void(const SearchInfo&)> cb)
 {
+    std::lock_guard<std::mutex> lock(m_cbMutex);
     m_onInfo = std::move(cb);
 }
 
 void UciEngine::onLine(std::function<void(const std::string&)> cb)
 {
+    std::lock_guard<std::mutex> lock(m_cbMutex);
     m_onLine = std::move(cb);
 }
 
@@ -207,15 +219,18 @@ void UciEngine::readerLoop()
         ssize_t n = ::read(m_stdoutFd, &c, 1);
         if (n <= 0) {
             m_running = false;
-            m_bestmoveCv.notify_all();
+            m_cv.notify_all();
             return;
         }
 
         if (c == '\n') {
             if (line.empty()) continue;
 
-            if (m_onLine) {
-                m_onLine(line);
+            {
+                std::lock_guard<std::mutex> cbLock(m_cbMutex);
+                if (m_onLine) {
+                    m_onLine(line);
+                }
             }
 
             if (line.compare(0, 9, "bestmove ") == 0) {
@@ -228,8 +243,8 @@ void UciEngine::readerLoop()
                     std::lock_guard<std::mutex> lock(m_mutex);
                     m_bestmove = uciMove;
                 }
-                m_bestmoveCv.notify_all();
-            } else if (line.compare(0, 5, "info ") == 0 && m_onInfo) {
+                m_cv.notify_all();
+            } else if (line.compare(0, 5, "info ") == 0) {
                 SearchInfo si;
                 std::istringstream iss(line);
                 std::string token;
@@ -254,15 +269,25 @@ void UciEngine::readerLoop()
                         while (iss >> mv) si.pv.push_back(mv);
                     }
                 }
-                m_onInfo(si);
+                std::lock_guard<std::mutex> cbLock(m_cbMutex);
+                if (m_onInfo) {
+                    m_onInfo(si);
+                }
+            } else if (line.compare(0, 3, "id ") == 0) {
+                std::lock_guard<std::mutex> lock(m_mutex);
+                if (line.compare(0, 8, "id name ") == 0) {
+                    m_engineName = line.substr(8);
+                } else if (line.compare(0, 10, "id author ") == 0) {
+                    m_engineAuthor = line.substr(10);
+                }
             } else if (line == "uciok") {
                 std::lock_guard<std::mutex> lock(m_mutex);
-                m_bestmove = "uciok";
-                m_bestmoveCv.notify_all();
+                m_syncSignal = SyncSignal::UciOk;
+                m_cv.notify_all();
             } else if (line == "readyok") {
                 std::lock_guard<std::mutex> lock(m_mutex);
-                m_bestmove = "readyok";
-                m_bestmoveCv.notify_all();
+                m_syncSignal = SyncSignal::ReadyOk;
+                m_cv.notify_all();
             }
 
             line.clear();
