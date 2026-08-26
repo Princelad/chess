@@ -34,6 +34,7 @@ else()
 endif()
 
 add_subdirectory(core)
+add_subdirectory(uci)
 add_subdirectory(net)
 add_subdirectory(server)
 add_subdirectory(client)

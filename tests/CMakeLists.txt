@@ -31,10 +31,12 @@ if(BUILD_TESTING)
         server/matchmaker_test.cpp
         server/match_test.cpp
         client/connection_test.cpp
-        e2e/e2e_test.cpp)
+        e2e/e2e_test.cpp
+        uci/engine_test.cpp)
 
-    target_link_libraries(chess-tests PRIVATE chesscore chessnet chessclient chessserver GTest::gtest_main)
+    target_link_libraries(chess-tests PRIVATE chesscore chessnet chessclient chessserver chessuci GTest::gtest_main)
 
     include(GoogleTest)
-    gtest_discover_tests(chess-tests)
+    gtest_discover_tests(chess-tests PROPERTIES
+        ENVIRONMENT "MOCK_ENGINE_PATH=${CMAKE_CURRENT_SOURCE_DIR}/uci/mock_engine.py")
 endif()
