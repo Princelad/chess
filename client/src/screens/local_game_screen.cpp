@@ -39,12 +39,23 @@ void drawBtn(sf::RenderWindow& window, float x, float y, float w, float h,
     window.draw(txt);
 }
 
-net::GameOverReason toReason(GameState state)
+net::GameOverReason detectDrawReason(const Board& board)
+{
+    if (board.halfmoveClock() >= 100)
+        return net::GameOverReason::FiftyMove;
+    if (chess::threefoldRepetition(board))
+        return net::GameOverReason::Repetition;
+    if (chess::insufficientMaterial(board))
+        return net::GameOverReason::InsufficientMaterial;
+    return net::GameOverReason::Repetition;
+}
+
+net::GameOverReason toReason(GameState state, const Board& board)
 {
     switch (state) {
         case GameState::Checkmate:  return net::GameOverReason::Checkmate;
         case GameState::Stalemate:  return net::GameOverReason::Stalemate;
-        case GameState::Draw:       return net::GameOverReason::Repetition;
+        case GameState::Draw:       return detectDrawReason(board);
         default:                    return net::GameOverReason::Abort;
     }
 }
@@ -70,7 +81,6 @@ LocalGameScreen::LocalGameScreen(App& app, Color myColor,
     : app_(app)
     , board_(Board::fromStartPos())
     , myColor_(myColor)
-    , engineColor_(opposite(myColor))
     , boardView_(static_cast<float>(App::WindowWidth),
                  static_cast<float>(App::WindowHeight),
                  myColor)
@@ -83,15 +93,22 @@ LocalGameScreen::LocalGameScreen(App& app, Color myColor,
     hud_.setInfo("Computer", myColor_, myTurn_, gameOver_);
 
     engine_ = std::make_unique<uci::UciEngine>(std::move(enginePath));
-    engine_->init();
+    auto info = engine_->init();
+    if (info.name.empty() && !engine_->isRunning()) {
+        engineFailed_ = true;
+        hud_.setStatus("Engine not found. Set CHESS_ENGINE_PATH.", 999.f);
+        return;
+    }
+
     engine_->setOption("Threads", "1");
     engine_->setOption("Hash", "64");
     engine_->newGame();
     engine_->position("startpos");
 
-    if (engineColor_ == Color::White) {
+    if (myColor_ == Color::Black) {
         myTurn_ = false;
         engineThinking_ = true;
+        hud_.setStatus("Computer thinking...", 999.f);
         engine_->go(engineDepth_);
     }
 }
@@ -159,10 +176,27 @@ void LocalGameScreen::tryMove(int targetFile, int targetRank)
                        static_cast<int>(chess::rankOf(found->to)) };
     deselect();
     hud_.addMove(san);
-    moveHistory_.push_back(chess::toUci(*found));
+
+    inCheck_ = chess::inCheck(board_, opposite(myColor_));
+    hl_.checkSquare = inCheck_
+        ? findKingSquare(board_, opposite(myColor_))
+        : std::optional<std::pair<int,int>>{};
+
+    auto state = chess::evaluateGameState(board_);
+    if (state != GameState::Ongoing) {
+        gameOver_ = true;
+        myTurn_ = false;
+        hud_.setGameOver(true);
+        hud_.setInfo("Computer", myColor_, myTurn_, gameOver_);
+        app_.switchScreen(std::make_unique<GameOverScreen>(
+            app_, toResult(state, board_.sideToMove()),
+            toReason(state, board_)));
+        return;
+    }
 
     myTurn_ = false;
     engineThinking_ = true;
+    hud_.setStatus("Computer thinking...", 999.f);
     engine_->position(board_.toFen());
     engine_->go(engineDepth_);
     hud_.setInfo("Computer", myColor_, myTurn_, gameOver_);
@@ -186,12 +220,29 @@ void LocalGameScreen::applyPromotionMove(chess::PieceType type)
             hl_.lastMoveTo = { static_cast<int>(chess::fileOf(m.to)),
                                static_cast<int>(chess::rankOf(m.to)) };
             hud_.addMove(san);
-            moveHistory_.push_back(chess::toUci(m));
             promo_.reset();
             deselect();
 
+            inCheck_ = chess::inCheck(board_, opposite(myColor_));
+            hl_.checkSquare = inCheck_
+                ? findKingSquare(board_, opposite(myColor_))
+                : std::optional<std::pair<int,int>>{};
+
+            auto state = chess::evaluateGameState(board_);
+            if (state != GameState::Ongoing) {
+                gameOver_ = true;
+                myTurn_ = false;
+                hud_.setGameOver(true);
+                hud_.setInfo("Computer", myColor_, myTurn_, gameOver_);
+                app_.switchScreen(std::make_unique<GameOverScreen>(
+                    app_, toResult(state, board_.sideToMove()),
+                    toReason(state, board_)));
+                return;
+            }
+
             myTurn_ = false;
             engineThinking_ = true;
+            hud_.setStatus("Computer thinking...", 999.f);
             engine_->position(board_.toFen());
             engine_->go(engineDepth_);
             hud_.setInfo("Computer", myColor_, myTurn_, gameOver_);
@@ -208,10 +259,10 @@ void LocalGameScreen::cancelPromotion()
     deselect();
 }
 
-void LocalGameScreen::applyEngineMove()
+bool LocalGameScreen::applyEngineMove()
 {
     auto move = engine_->tryGetBestMove(board_);
-    if (!move) return;
+    if (!move) return false;
 
     std::string san = chess::san::toSan(board_, *move);
     board_.makeMove(*move);
@@ -222,7 +273,6 @@ void LocalGameScreen::applyEngineMove()
     hl_.selectedSquare.reset();
     hl_.legalMoveTargets.clear();
     hud_.addMove(san);
-    moveHistory_.push_back(chess::toUci(*move));
 
     inCheck_ = chess::inCheck(board_, myColor_);
     hl_.checkSquare = inCheck_
@@ -230,8 +280,10 @@ void LocalGameScreen::applyEngineMove()
         : std::optional<std::pair<int,int>>{};
 
     engineThinking_ = false;
+    hud_.setStatus("", 0.f);
     myTurn_ = true;
     hud_.setInfo("Computer", myColor_, myTurn_, gameOver_);
+    return true;
 }
 
 void LocalGameScreen::checkGameOver()
@@ -242,11 +294,11 @@ void LocalGameScreen::checkGameOver()
     gameOver_ = true;
     myTurn_ = false;
     hud_.setGameOver(true);
+    hud_.setInfo("Computer", myColor_, myTurn_, gameOver_);
 
-    auto result = toResult(state, board_.sideToMove());
-    auto reason = toReason(state);
-
-    app_.switchScreen(std::make_unique<GameOverScreen>(app_, result, reason));
+    app_.switchScreen(std::make_unique<GameOverScreen>(
+        app_, toResult(state, board_.sideToMove()),
+        toReason(state, board_)));
 }
 
 void LocalGameScreen::returnToConnect()
@@ -302,7 +354,7 @@ void LocalGameScreen::handleEvent(const sf::Event& event)
             }
         }
 
-        if (gameOver_ || !myTurn_ || engineThinking_) return;
+        if (gameOver_ || !myTurn_ || engineThinking_ || engineFailed_) return;
 
         if (promo_) {
             auto pos = static_cast<sf::Vector2f>(mb->position);
@@ -346,11 +398,12 @@ void LocalGameScreen::update(float /*dtSec*/)
 {
     hud_.update(0.f);
 
-    if (gameOver_) return;
+    if (gameOver_ || engineFailed_) return;
 
     if (engineThinking_) {
-        applyEngineMove();
-        if (!gameOver_) checkGameOver();
+        if (applyEngineMove()) {
+            checkGameOver();
+        }
     }
 }
 

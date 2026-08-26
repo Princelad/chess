@@ -30,7 +30,7 @@ private:
     void deselect();
     void applyPromotionMove(chess::PieceType type);
     void cancelPromotion();
-    void applyEngineMove();
+    bool applyEngineMove();
     void checkGameOver();
     void returnToConnect();
 
@@ -43,7 +43,6 @@ private:
     App& app_;
     Board board_;
     Color myColor_;
-    Color engineColor_;
     BoardView boardView_;
     HighlightState hl_;
     std::optional<PromotionState> promo_;
@@ -52,10 +51,10 @@ private:
     bool myTurn_ = false;
     bool gameOver_ = false;
     bool engineThinking_ = false;
+    bool engineFailed_ = false;
 
     std::unique_ptr<uci::UciEngine> engine_;
     int engineDepth_;
-    std::vector<std::string> moveHistory_;
 
     struct PromoCell {
         sf::Vector2f pos;
