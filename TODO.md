@@ -521,12 +521,12 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [x] Request moves via `go depth N` / `go movetime MS`; parse `bestmove <coords>` → `core::Move`
   - [x] Timeout/crash handling; clean `quit` on shutdown
 
-- [ ] **8.2 Play vs computer (local)**
-  - [ ] Screen to pick side + strength preset (depth/movetime mapping)
-  - [ ] Reuse GameScreen/HUD against a local engine opponent (no server)
-  - [ ] Engine replies non-blocking (never freeze the render loop)
-  - [ ] Local takeback/undo trivially supported vs CPU
-  - [ ] Temporary entry point from the connect screen until the 9.1 menu shell lands
+- [x] **8.2 Play vs computer (local)**
+  - [x] Screen to pick side + strength preset (depth/movetime mapping)
+  - [x] Reuse GameScreen/HUD against a local engine opponent (no server)
+  - [x] Engine replies non-blocking (never freeze the render loop)
+  - [ ] Local takeback/undo trivially supported vs CPU (deferred to 9.x)
+  - [x] Temporary entry point from the connect screen until the 9.1 menu shell lands
 
 - [ ] **8.3 Server-side bots**
   - [ ] Bot pseudo-player joins the matchmaking queue; paired like a human
