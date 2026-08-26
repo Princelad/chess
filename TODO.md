@@ -513,13 +513,13 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
 
 ▶ [UCI](https://www.chessprogramming.org/UCI)
 
-- [ ] **8.1 UCI process wrapper (`uci/`)**
-  - [ ] Spawn engine binary (`fork`/`exec` or `posix_spawn`) with stdin/stdout pipes
-  - [ ] Handshake: send `uci`, wait for `uciok`; `isready`/`readyok` sync before commands
-  - [ ] Background reader thread parsing engine output into a queue/callback
-  - [ ] Config: `setoption` (Skill Level, Threads, Hash), `ucinewgame`, `position fen ... moves ...`
-  - [ ] Request moves via `go depth N` / `go movetime MS`; parse `bestmove <coords>` → `core::Move`
-  - [ ] Timeout/crash handling; clean `quit` on shutdown
+- [x] **8.1 UCI process wrapper (`uci/`)**
+  - [x] Spawn engine binary (`fork`/`exec` or `posix_spawn`) with stdin/stdout pipes
+  - [x] Handshake: send `uci`, wait for `uciok`; `isready`/`readyok` sync before commands
+  - [x] Background reader thread parsing engine output into a queue/callback
+  - [x] Config: `setoption` (Skill Level, Threads, Hash), `ucinewgame`, `position fen ... moves ...`
+  - [x] Request moves via `go depth N` / `go movetime MS`; parse `bestmove <coords>` → `core::Move`
+  - [x] Timeout/crash handling; clean `quit` on shutdown
 
 - [ ] **8.2 Play vs computer (local)**
   - [ ] Screen to pick side + strength preset (depth/movetime mapping)
