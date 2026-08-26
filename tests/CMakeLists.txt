@@ -26,6 +26,7 @@ if(BUILD_TESTING)
         core/san_test.cpp
         core/perft_test.cpp
         core/endgame_test.cpp
+        core/uci_move_test.cpp
         net/protocol_test.cpp
         server/matchmaker_test.cpp
         server/match_test.cpp
