@@ -188,6 +188,37 @@ TEST(UciEngine, Timeout)
     engine.quit();
 }
 
+TEST(UciEngine, TryGetBestMoveEmpty)
+{
+    if (!isEngineAvailable()) return;
+
+    uci::UciEngine engine(mockEnginePath());
+    engine.init(3s);
+
+    Board b = Board::fromStartPos();
+    auto move = engine.tryGetBestMove(b);
+    EXPECT_FALSE(move.has_value());
+    engine.quit();
+}
+
+TEST(UciEngine, TryGetBestMoveAfterGo)
+{
+    if (!isEngineAvailable()) return;
+
+    uci::UciEngine engine(mockEnginePath());
+    engine.init(3s);
+    engine.position("startpos");
+    engine.go(1);
+
+    Board b = Board::fromStartPos();
+    auto move = engine.waitBestMove(b, 3s);
+    ASSERT_TRUE(move.has_value());
+
+    auto move2 = engine.tryGetBestMove(b);
+    EXPECT_FALSE(move2.has_value());
+    engine.quit();
+}
+
 TEST(UciEngine, QuitIdempotent)
 {
     if (!isEngineAvailable()) return;

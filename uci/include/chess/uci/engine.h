@@ -51,6 +51,7 @@ public:
 
     std::optional<Move> waitBestMove(const Board& board,
                                      std::chrono::milliseconds timeout = std::chrono::seconds(30));
+    std::optional<Move> tryGetBestMove(const Board& board);
 
     void onInfo(std::function<void(const SearchInfo&)> cb);
     void onLine(std::function<void(const std::string&)> cb);

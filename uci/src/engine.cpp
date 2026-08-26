@@ -187,6 +187,16 @@ std::optional<Move> UciEngine::waitBestMove(const Board& board,
     return fromUci(board, uciStr);
 }
 
+std::optional<Move> UciEngine::tryGetBestMove(const Board& board)
+{
+    std::lock_guard<std::mutex> lock(m_mutex);
+    if (m_bestmove.empty()) return std::nullopt;
+    std::string uciStr = m_bestmove;
+    m_bestmove.clear();
+    if (uciStr == "(none)") return std::nullopt;
+    return fromUci(board, uciStr);
+}
+
 void UciEngine::onInfo(std::function<void(const SearchInfo&)> cb)
 {
     std::lock_guard<std::mutex> lock(m_cbMutex);
