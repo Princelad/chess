@@ -4,6 +4,7 @@
 
 #include <cstring>
 #include <sstream>
+#include <thread>
 
 #include <signal.h>
 #include <sys/wait.h>
@@ -27,6 +28,9 @@ UciEngine::~UciEngine()
 
 EngineInfo UciEngine::init(std::chrono::milliseconds timeout)
 {
+    if (m_running.load() || m_pid > 0) {
+        quit();
+    }
     int stdinPipe[2];
     int stdoutPipe[2];
     if (pipe(stdinPipe) != 0 || pipe(stdoutPipe) != 0) {
@@ -236,6 +240,7 @@ void UciEngine::readerLoop()
 
         if (c == '\n') {
             if (line.empty()) continue;
+            if (line.back() == '\r') line.pop_back();
 
             {
                 std::lock_guard<std::mutex> cbLock(m_cbMutex);
@@ -317,7 +322,7 @@ void UciEngine::closeProcess()
         pid_t result = waitpid(m_pid, &status, WNOHANG);
         if (result == 0) {
             kill(m_pid, SIGTERM);
-            usleep(100000);
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
             result = waitpid(m_pid, &status, WNOHANG);
             if (result == 0) {
                 kill(m_pid, SIGKILL);

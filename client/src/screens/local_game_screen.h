@@ -3,6 +3,7 @@
 #include "app.h"
 #include "boardview.h"
 #include "hud.h"
+#include "promo_state.h"
 #include <chess/board.h>
 #include <chess/move.h>
 #include <chess/types.h>
@@ -34,12 +35,6 @@ private:
     void checkGameOver();
     void returnToConnect();
 
-    struct PromotionState {
-        int fromFile, fromRank;
-        int toFile, toRank;
-        std::vector<chess::Move> candidates;
-    };
-
     App& app_;
     Board board_;
     Color myColor_;
@@ -60,10 +55,6 @@ private:
     std::vector<chess::Move> moves_;
     std::vector<std::string> sanMoves_;
 
-    struct PromoCell {
-        sf::Vector2f pos;
-        float size;
-    };
     PromoCell promoCell(int index) const;
 };
 

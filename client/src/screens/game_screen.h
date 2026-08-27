@@ -3,6 +3,7 @@
 #include "app.h"
 #include "boardview.h"
 #include "hud.h"
+#include "promo_state.h"
 #include <chess/board.h>
 #include <chess/types.h>
 
@@ -12,12 +13,6 @@
 #include <vector>
 
 namespace chess::client {
-
-struct PromotionState {
-    int fromFile, fromRank;
-    int toFile, toRank;
-    std::vector<chess::Move> candidates;
-};
 
 class GameScreen : public Screen {
 public:
@@ -37,10 +32,6 @@ private:
     void drawButtons(sf::RenderWindow& window);
     void drawChat(sf::RenderWindow& window);
 
-    struct PromoCell {
-        sf::Vector2f pos;
-        float size;
-    };
     PromoCell promoCell(int index) const;
 
     App& app_;

@@ -173,37 +173,40 @@ std::optional<PgnGame> parsePgn(std::string_view pgn)
     }
 
     std::string movetext(remaining);
-
-    auto resultPos = movetext.rfind("1/2-1/2");
-    if (resultPos == std::string_view::npos) {
-        resultPos = movetext.rfind("1-0");
-        if (resultPos == std::string_view::npos) {
-            resultPos = movetext.rfind("0-1");
-            if (resultPos == std::string_view::npos)
-                resultPos = movetext.rfind('*');
-        }
-    }
-
-    if (resultPos != std::string_view::npos) {
-        if (movetext[resultPos] == '1' && resultPos + 3 <= movetext.size()
-            && movetext.substr(resultPos, 3) == "1/2") {
-            game.result = "1/2-1/2";
-            movetext.erase(resultPos, 7);
-        } else if (movetext[resultPos] == '1' && resultPos + 3 <= movetext.size()
-                   && movetext.substr(resultPos, 3) == "1-0") {
-            game.result = "1-0";
-            movetext.erase(resultPos, 3);
-        } else if (movetext[resultPos] == '0' && resultPos + 3 <= movetext.size()
-                   && movetext.substr(resultPos, 3) == "0-1") {
-            game.result = "0-1";
-            movetext.erase(resultPos, 3);
-        } else if (movetext[resultPos] == '*') {
-            game.result = "*";
-            movetext.erase(resultPos, 1);
-        }
-    }
-
     std::string cleaned = cleanMovetext(movetext);
+
+    auto resultPos = cleaned.rfind("1/2-1/2");
+    if (resultPos == std::string::npos) {
+        resultPos = cleaned.rfind("1-0");
+        if (resultPos == std::string::npos) {
+            resultPos = cleaned.rfind("0-1");
+            if (resultPos == std::string::npos) {
+                auto starPos = cleaned.rfind('*');
+                if (starPos != std::string::npos)
+                    resultPos = starPos;
+            }
+        }
+    }
+
+    if (resultPos != std::string::npos) {
+        if (cleaned[resultPos] == '1' && resultPos + 3 <= cleaned.size()
+            && cleaned.substr(resultPos, 3) == "1/2") {
+            game.result = "1/2-1/2";
+            cleaned.erase(resultPos, 7);
+        } else if (cleaned[resultPos] == '1' && resultPos + 3 <= cleaned.size()
+                   && cleaned.substr(resultPos, 3) == "1-0") {
+            game.result = "1-0";
+            cleaned.erase(resultPos, 3);
+        } else if (cleaned[resultPos] == '0' && resultPos + 3 <= cleaned.size()
+                   && cleaned.substr(resultPos, 3) == "0-1") {
+            game.result = "0-1";
+            cleaned.erase(resultPos, 3);
+        } else if (cleaned[resultPos] == '*') {
+            game.result = "*";
+            cleaned.erase(resultPos, 1);
+        }
+    }
+
     auto sanTokens = tokenize(cleaned);
 
     for (const auto& [k, v] : game.headers) {
@@ -213,9 +216,14 @@ std::optional<PgnGame> parsePgn(std::string_view pgn)
         }
     }
 
-    Board board = game.startPosition.empty()
-        ? Board::fromStartPos()
-        : *Board::fromFen(game.startPosition);
+    Board board;
+    if (game.startPosition.empty()) {
+        board = Board::fromStartPos();
+    } else {
+        auto b = Board::fromFen(game.startPosition);
+        if (!b) return std::nullopt;
+        board = *b;
+    }
 
     for (const auto& san : sanTokens) {
         auto move = san::fromSan(board, san);
@@ -229,14 +237,14 @@ std::optional<PgnGame> parsePgn(std::string_view pgn)
     return game;
 }
 
-std::string toPgn(const std::vector<std::pair<std::string, std::string>>& headers,
+std::string toPgn(std::vector<std::pair<std::string, std::string>> headers,
                   const std::vector<std::string>& SANmoves,
                   std::string_view result,
                   std::string_view startPosition)
 {
     std::string output;
 
-    std::vector<std::pair<std::string, std::string>> hdrs = headers;
+    auto hdrs = std::move(headers);
 
     if (!startPosition.empty() && startPosition != "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1") {
         bool hasFen = false;
@@ -340,9 +348,14 @@ std::string toPgn(const std::vector<std::pair<std::string, std::string>>& header
 std::optional<Board> replayMoves(const std::vector<Move>& moves,
                                  std::string_view startPosition)
 {
-    Board board = startPosition.empty()
-        ? Board::fromStartPos()
-        : *Board::fromFen(startPosition);
+    Board board;
+    if (startPosition.empty()) {
+        board = Board::fromStartPos();
+    } else {
+        auto b = Board::fromFen(startPosition);
+        if (!b) return std::nullopt;
+        board = *b;
+    }
 
     for (const auto& move : moves) {
         auto legal = generateLegalMoves(board);

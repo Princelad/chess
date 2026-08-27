@@ -19,7 +19,7 @@ struct PgnGame {
 
 std::optional<PgnGame> parsePgn(std::string_view pgn);
 
-std::string toPgn(const std::vector<std::pair<std::string, std::string>>& headers,
+std::string toPgn(std::vector<std::pair<std::string, std::string>> headers,
                   const std::vector<std::string>& SANmoves,
                   std::string_view result,
                   std::string_view startPosition = "");

@@ -1,43 +1,16 @@
 #include "local_game_screen.h"
 #include "connect_screen.h"
 #include "game_over_screen.h"
+#include "ui_helpers.h"
 
-#include <chess/fen.h>
 #include <chess/movegen.h>
+#include <chess/net/messages.h>
 #include <chess/san.h>
 
 namespace chess::client {
 
 namespace {
-std::pair<int, int> findKingSquare(const Board& board, Color color)
-{
-    Piece king = Piece::of(color, PieceType::King);
-    for (int file = 0; file < 8; ++file)
-        for (int rank = 0; rank < 8; ++rank)
-            if (board.pieceAt(squareOf(file, rank)) == king)
-                return { file, rank };
-    return { 4, color == Color::White ? 0 : 7 };
-}
-
 constexpr float BtnH = 30.f;
-
-void drawBtn(sf::RenderWindow& window, float x, float y, float w, float h,
-             sf::Color fill, const sf::Font& font, const std::string& label)
-{
-    sf::RectangleShape rect({w, h});
-    rect.setPosition({x, y});
-    rect.setFillColor(fill);
-    rect.setOutlineColor(sf::Color(100, 100, 100));
-    rect.setOutlineThickness(1.f);
-    window.draw(rect);
-
-    sf::Text txt(font, label, 14);
-    txt.setFillColor(sf::Color(240, 240, 240));
-    auto lb = txt.getGlobalBounds();
-    txt.setPosition({x + (w - lb.size.x) / 2.f - lb.position.x,
-                     y + (h - lb.size.y) / 2.f - lb.position.y});
-    window.draw(txt);
-}
 
 net::GameOverReason detectDrawReason(const Board& board)
 {
@@ -47,7 +20,7 @@ net::GameOverReason detectDrawReason(const Board& board)
         return net::GameOverReason::Repetition;
     if (chess::insufficientMaterial(board))
         return net::GameOverReason::InsufficientMaterial;
-    return net::GameOverReason::Repetition;
+    return net::GameOverReason::Abort;
 }
 
 net::GameOverReason toReason(GameState state, const Board& board)
@@ -317,7 +290,7 @@ void LocalGameScreen::returnToConnect()
     app_.switchScreen(std::make_unique<ConnectScreen>(app_));
 }
 
-LocalGameScreen::PromoCell LocalGameScreen::promoCell(int index) const
+PromoCell LocalGameScreen::promoCell(int index) const
 {
     float sq = boardView_.squareSize();
     sf::Vector2f origin = boardView_.boardOrigin();

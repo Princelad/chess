@@ -240,6 +240,8 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
             } else {
                 if (match->white() && !match->white()->isBot) { match->white()->state = ClientState::Connected; match->white()->match = nullptr; }
                 if (match->black() && !match->black()->isBot) { match->black()->state = ClientState::Connected; match->black()->match = nullptr; }
+                if (match->white() && match->white()->isBot) { match->white()->state = ClientState::Connected; match->white()->match = nullptr; }
+                if (match->black() && match->black()->isBot) { match->black()->state = ClientState::Connected; match->black()->match = nullptr; }
                 match->stopBot();
             }
         }

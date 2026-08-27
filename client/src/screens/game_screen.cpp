@@ -1,5 +1,6 @@
 #include "game_screen.h"
 #include "game_over_screen.h"
+#include "ui_helpers.h"
 
 #include <chess/movegen.h>
 #include <chess/san.h>
@@ -8,46 +9,10 @@
 namespace chess::client {
 
 namespace {
-std::pair<int, int> findKingSquare(const Board& board, Color color)
-{
-    Piece king = Piece::of(color, PieceType::King);
-    for (int file = 0; file < 8; ++file)
-        for (int rank = 0; rank < 8; ++rank)
-            if (board.pieceAt(squareOf(file, rank)) == king)
-                return { file, rank };
-    return { 4, color == Color::White ? 0 : 7 };
-}
-
-std::string safeTruncate(const std::string& s, std::size_t maxBytes)
-{
-    if (s.size() <= maxBytes) return s;
-    std::size_t n = maxBytes;
-    while (n > 0 && (static_cast<unsigned char>(s[n]) & 0xC0) == 0x80) --n;
-    return s.substr(0, n > 0 ? n - 1 : 0) + "...";
-}
-
 constexpr float BtnH = 30.f;
 constexpr float InputH = 28.f;
 constexpr std::size_t MaxChatLog = 50;
 constexpr std::size_t MaxChatInput = 200;
-
-void drawBtn(sf::RenderWindow& window, float x, float y, float w, float h,
-             sf::Color fill, const sf::Font& font, const std::string& label)
-{
-    sf::RectangleShape rect({w, h});
-    rect.setPosition({x, y});
-    rect.setFillColor(fill);
-    rect.setOutlineColor(sf::Color(100, 100, 100));
-    rect.setOutlineThickness(1.f);
-    window.draw(rect);
-
-    sf::Text txt(font, label, 14);
-    txt.setFillColor(sf::Color(240, 240, 240));
-    auto lb = txt.getGlobalBounds();
-    txt.setPosition({x + (w - lb.size.x) / 2.f - lb.position.x,
-                     y + (h - lb.size.y) / 2.f - lb.position.y});
-    window.draw(txt);
-}
 }
 
 GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName)
@@ -163,7 +128,7 @@ void GameScreen::cancelPromotion()
     deselect();
 }
 
-GameScreen::PromoCell GameScreen::promoCell(int index) const
+PromoCell GameScreen::promoCell(int index) const
 {
     float sq = boardView_.squareSize();
     sf::Vector2f origin = boardView_.boardOrigin();

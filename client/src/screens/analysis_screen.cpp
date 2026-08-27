@@ -1,11 +1,13 @@
 #include "analysis_screen.h"
 #include "connect_screen.h"
+#include "ui_helpers.h"
 
 #include <chess/movegen.h>
 #include <chess/san.h>
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 
 namespace chess::client {
 
@@ -20,16 +22,6 @@ constexpr float NavBtnW = 60.f;
 constexpr float NavBtnH = 30.f;
 constexpr float EvalTextY = 450.f;
 
-std::pair<int, int> findKingSquare(const Board& board, Color color)
-{
-    Piece king = Piece::of(color, PieceType::King);
-    for (int file = 0; file < 8; ++file)
-        for (int rank = 0; rank < 8; ++rank)
-            if (board.pieceAt(squareOf(file, rank)) == king)
-                return { file, rank };
-    return { 4, color == Color::White ? 0 : 7 };
-}
-
 float evalToBarFraction(int cp)
 {
     float score = static_cast<float>(cp) / 100.f;
@@ -41,30 +33,13 @@ std::string formatEval(const PlyEval& e)
 {
     if (e.isMate) {
         if (e.mateIn == 0) return "M0";
+        if (e.mateIn > 0) return "M+" + std::to_string(e.mateIn);
         return "M" + std::to_string(e.mateIn);
     }
     float pawns = static_cast<float>(e.score_cp) / 100.f;
     char buf[32];
     std::snprintf(buf, sizeof(buf), "%.2f", pawns);
     return buf;
-}
-
-void drawBtn(sf::RenderWindow& window, float x, float y, float w, float h,
-             sf::Color fill, const sf::Font& font, const std::string& label)
-{
-    sf::RectangleShape rect({w, h});
-    rect.setPosition({x, y});
-    rect.setFillColor(fill);
-    rect.setOutlineColor(sf::Color(100, 100, 100));
-    rect.setOutlineThickness(1.f);
-    window.draw(rect);
-
-    sf::Text txt(font, label, 14);
-    txt.setFillColor(sf::Color(240, 240, 240));
-    auto lb = txt.getGlobalBounds();
-    txt.setPosition({x + (w - lb.size.x) / 2.f - lb.position.x,
-                     y + (h - lb.size.y) / 2.f - lb.position.y});
-    window.draw(txt);
 }
 }
 
@@ -96,7 +71,9 @@ AnalysisScreen::AnalysisScreen(App& app,
 
     goToPly(0);
 
-    engine_ = std::make_unique<uci::UciEngine>("stockfish");
+    const char* envPath = std::getenv("CHESS_ENGINE_PATH");
+    std::string enginePath = envPath ? envPath : "stockfish";
+    engine_ = std::make_unique<uci::UciEngine>(enginePath);
     auto info = engine_->init();
     if (!info.name.empty() || engine_->isRunning()) {
         engine_->setOption("Threads", "1");
@@ -239,9 +216,17 @@ void AnalysisScreen::handleEvent(const sf::Event& event)
 
 void AnalysisScreen::update(float /*dtSec*/)
 {
-    if (engineReady_ && engine_ && analysisPly_ == currentPly_) {
+    if (!engineReady_ || !engine_) return;
+
+    if (!engine_->isRunning()) {
+        engineReady_ = false;
+        return;
+    }
+
+    if (analysisPly_ == currentPly_) {
         auto move = engine_->tryGetBestMove(board_);
         if (move) {
+            engine_->stop();
             analysisPly_ = -1;
         }
     }
@@ -298,8 +283,13 @@ void AnalysisScreen::drawEvalBar(sf::RenderWindow& window) const
     if (currentPly_ < 0 || currentPly_ >= static_cast<int>(evals_.size()))
         return;
 
-    std::lock_guard<std::mutex> lock(evalMutex_);
-    float frac = evalToBarFraction(evals_[currentPly_].score_cp);
+    int scoreCp;
+    {
+        std::lock_guard<std::mutex> lock(evalMutex_);
+        scoreCp = evals_[currentPly_].score_cp;
+    }
+
+    float frac = evalToBarFraction(scoreCp);
     float whiteH = frac * boardH;
 
     sf::RectangleShape whiteBar({EvalBarWidth, whiteH});
