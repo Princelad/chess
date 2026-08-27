@@ -18,22 +18,6 @@ bool isResultToken(const std::string& token)
     return token == "1-0" || token == "0-1" || token == "1/2-1/2" || token == "*";
 }
 
-std::string stripResult(std::string_view movetext)
-{
-    std::string result = std::string(movetext);
-
-    const std::vector<std::string_view> results = {"1/2-1/2", "1-0", "0-1", "*"};
-    for (auto r : results) {
-        auto pos = result.rfind(std::string(r));
-        if (pos != std::string::npos) {
-            result.erase(pos, r.size());
-            break;
-        }
-    }
-
-    return result;
-}
-
 std::string cleanMovetext(std::string_view movetext)
 {
     std::string result;
@@ -266,15 +250,25 @@ std::string toPgn(const std::vector<std::pair<std::string, std::string>>& header
         for (auto& [k, v] : hdrs) {
             if (k == "SetUp") { v = "1"; hasSetup = true; break; }
         }
-        if (!hasSetup)
-            hdrs.emplace(hdrs.begin() + (hasFen ? 1 : 0), "SetUp", "1");
+        if (!hasSetup) {
+            auto it = hdrs.begin();
+            for (; it != hdrs.end(); ++it) {
+                if (it->first == "FEN") { ++it; break; }
+            }
+            hdrs.emplace(it, "SetUp", "1");
+        }
     }
 
     output += emitHeaders(hdrs);
     output += "\n";
 
-    std::ostringstream moveText;
     int moveNum = 1;
+    if (!startPosition.empty()) {
+        auto startBoard = Board::fromFen(startPosition);
+        if (startBoard) moveNum = startBoard->fullmoveNumber();
+    }
+
+    std::ostringstream moveText;
 
     for (std::size_t i = 0; i < SANmoves.size(); ++i) {
         if (i % 2 == 0) {
@@ -352,17 +346,17 @@ std::optional<Board> replayMoves(const std::vector<Move>& moves,
 
     for (const auto& move : moves) {
         auto legal = generateLegalMoves(board);
-        bool found = false;
+        const Move* found = nullptr;
         for (const auto& m : legal) {
             if (m.from == move.from && m.to == move.to
                 && m.promotion == move.promotion) {
-                found = true;
+                found = &m;
                 break;
             }
         }
         if (!found)
             return std::nullopt;
-        board.makeMove(move);
+        board.makeMove(*found);
     }
 
     return board;
