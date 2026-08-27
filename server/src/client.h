@@ -17,4 +17,5 @@ struct Client {
     ClientState state = ClientState::Connected;
     Match* match = nullptr;
     int badMessages = 0;
+    bool isBot = false;
 };

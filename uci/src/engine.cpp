@@ -14,6 +14,7 @@ namespace chess::uci {
 UciEngine::UciEngine(std::string enginePath)
     : m_enginePath(std::move(enginePath))
 {
+    signal(SIGPIPE, SIG_IGN);
 }
 
 UciEngine::~UciEngine()

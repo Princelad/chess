@@ -30,6 +30,7 @@ if(BUILD_TESTING)
         net/protocol_test.cpp
         server/matchmaker_test.cpp
         server/match_test.cpp
+        server/bot_match_test.cpp
         client/connection_test.cpp
         e2e/e2e_test.cpp
         uci/engine_test.cpp)

@@ -528,10 +528,10 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [ ] Local takeback/undo trivially supported vs CPU (deferred to 9.x)
   - [x] Temporary entry point from the connect screen until the 9.1 menu shell lands
 
-- [ ] **8.3 Server-side bots**
-  - [ ] Bot pseudo-player joins the matchmaking queue; paired like a human
-  - [ ] Server hosts one UCI session per bot match, playing through the same MOVE path
-  - [ ] Concurrency cap + queueing for engine sessions
+- [x] **8.3 Server-side bots**
+  - [x] Bot pseudo-player joins the matchmaking queue; paired like a human
+  - [x] Server hosts one UCI session per bot match, playing through the same MOVE path
+  - [x] Concurrency cap + queueing for engine sessions
 
 - [ ] **8.4 PGN import/export (`core/`)**
   - [ ] Parse PGN headers + SAN movetext into a game (move list, result)

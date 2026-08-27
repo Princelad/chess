@@ -1,10 +1,13 @@
 #pragma once
 
+#include <memory>
+#include <string>
 #include <utility>
 
 #include <chess/board.h>
 #include <chess/movegen.h>
 #include <chess/net/messages.h>
+#include <chess/uci/engine.h>
 
 struct Client;
 
@@ -20,8 +23,14 @@ public:
     Client* black() const;
     Client* opponent(const Client& client) const;
 
+    void startBot(chess::Color color, int depth, std::string enginePath);
+    void pollBotMove();
+    bool isBotTurn() const;
+    Client* botClient() const;
+
 private:
     void handleMove(Client& sender, const chess::net::MoveMsg& msg);
+    bool handleMoveSAN(Client& sender, const std::string& san);
     void handleDrawOffer(Client& sender);
     void handleDrawAccept(Client& sender);
     void handleDrawDecline(Client& sender);
@@ -37,4 +46,9 @@ private:
     Client* black_;
     bool active_ = true;
     bool drawOfferPending_ = false;
+
+    std::unique_ptr<chess::uci::UciEngine> botEngine_;
+    chess::Color botColor_ = chess::Color::White;
+    int botDepth_ = 1;
+    bool botThinking_ = false;
 };
