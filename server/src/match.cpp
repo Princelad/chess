@@ -5,6 +5,7 @@
 
 #include <chess/movegen.h>
 #include <chess/san.h>
+#include <chess/uci/engine.h>
 
 #include "client.h"
 #include "log.h"
@@ -61,16 +62,21 @@ void Match::handleMove(Client& sender, const chess::net::MoveMsg& msg)
         return;
     }
 
-    auto move = chess::san::fromSan(board_, msg.san);
+    handleMoveSAN(sender, msg.san);
+}
+
+bool Match::handleMoveSAN(Client& sender, const std::string& san)
+{
+    auto move = chess::san::fromSan(board_, san);
     if (!move.has_value() || !chess::isLegalMove(board_, *move)) {
         sendTo(sender, chess::net::ErrorMsg{"Illegal move"});
-        return;
+        return false;
     }
 
-    std::string san = chess::san::toSan(board_, *move);
+    std::string canonical = chess::san::toSan(board_, *move);
     board_.makeMove(*move);
 
-    chess::net::ServerMoveMsg serverMove{san};
+    chess::net::ServerMoveMsg serverMove{canonical};
     sendTo(*white_, serverMove);
     sendTo(*black_, serverMove);
 
@@ -80,7 +86,16 @@ void Match::handleMove(Client& sender, const chess::net::MoveMsg& msg)
     if (state != chess::GameState::Ongoing) {
         auto [result, reason] = classifyState(state);
         endGame(result, reason);
+        return true;
     }
+
+    if (botEngine_ && board_.sideToMove() == botColor_ && active_) {
+        botThinking_ = true;
+        botEngine_->position(board_.toFen());
+        botEngine_->go(botDepth_);
+    }
+
+    return true;
 }
 
 void Match::handleDrawOffer(Client& sender)
@@ -191,4 +206,63 @@ Match::classifyState(chess::GameState state) const
         default:
             return {chess::net::GameResult::Abort, chess::net::GameOverReason::Abort};
     }
+}
+
+void Match::startBot(chess::Color color, int depth, std::string enginePath)
+{
+    botColor_ = color;
+    botDepth_ = depth;
+    botEngine_ = std::make_unique<chess::uci::UciEngine>(std::move(enginePath));
+    auto info = botEngine_->init(std::chrono::seconds(2));
+    if (info.name.empty() && !botEngine_->isRunning()) {
+        LOG_ERROR("Bot engine failed to start");
+        botEngine_.reset();
+        return;
+    }
+
+    botEngine_->setOption("Threads", "1");
+    botEngine_->setOption("Hash", "64");
+    botEngine_->newGame();
+    botEngine_->position("startpos");
+
+    if (board_.sideToMove() == botColor_) {
+        botThinking_ = true;
+        botEngine_->go(botDepth_);
+    }
+}
+
+void Match::stopBot()
+{
+    if (botEngine_) {
+        botEngine_->quit();
+        botEngine_.reset();
+    }
+    botThinking_ = false;
+}
+
+void Match::pollBotMove()
+{
+    if (!botEngine_ || !botThinking_ || !active_)
+        return;
+
+    auto move = botEngine_->tryGetBestMove(board_);
+    if (!move)
+        return;
+
+    std::string san = chess::san::toSan(board_, *move);
+    botThinking_ = false;
+
+    Client* sender = (botColor_ == chess::Color::White) ? white_ : black_;
+    handleMoveSAN(*sender, san);
+}
+
+bool Match::isBotTurn() const
+{
+    return botEngine_ && botThinking_ && active_;
+}
+
+Client* Match::botClient() const
+{
+    if (!botEngine_) return nullptr;
+    return (botColor_ == chess::Color::White) ? white_ : black_;
 }

@@ -513,35 +513,35 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
 
 ▶ [UCI](https://www.chessprogramming.org/UCI)
 
-- [ ] **8.1 UCI process wrapper (`uci/`)**
-  - [ ] Spawn engine binary (`fork`/`exec` or `posix_spawn`) with stdin/stdout pipes
-  - [ ] Handshake: send `uci`, wait for `uciok`; `isready`/`readyok` sync before commands
-  - [ ] Background reader thread parsing engine output into a queue/callback
-  - [ ] Config: `setoption` (Skill Level, Threads, Hash), `ucinewgame`, `position fen ... moves ...`
-  - [ ] Request moves via `go depth N` / `go movetime MS`; parse `bestmove <coords>` → `core::Move`
-  - [ ] Timeout/crash handling; clean `quit` on shutdown
+- [x] **8.1 UCI process wrapper (`uci/`)**
+  - [x] Spawn engine binary (`fork`/`exec` or `posix_spawn`) with stdin/stdout pipes
+  - [x] Handshake: send `uci`, wait for `uciok`; `isready`/`readyok` sync before commands
+  - [x] Background reader thread parsing engine output into a queue/callback
+  - [x] Config: `setoption` (Skill Level, Threads, Hash), `ucinewgame`, `position fen ... moves ...`
+  - [x] Request moves via `go depth N` / `go movetime MS`; parse `bestmove <coords>` → `core::Move`
+  - [x] Timeout/crash handling; clean `quit` on shutdown
 
-- [ ] **8.2 Play vs computer (local)**
-  - [ ] Screen to pick side + strength preset (depth/movetime mapping)
-  - [ ] Reuse GameScreen/HUD against a local engine opponent (no server)
-  - [ ] Engine replies non-blocking (never freeze the render loop)
-  - [ ] Local takeback/undo trivially supported vs CPU
-  - [ ] Temporary entry point from the connect screen until the 9.1 menu shell lands
+- [x] **8.2 Play vs computer (local)**
+  - [x] Screen to pick side + strength preset (depth/movetime mapping)
+  - [x] Reuse GameScreen/HUD against a local engine opponent (no server)
+  - [x] Engine replies non-blocking (never freeze the render loop)
+  - [ ] Local takeback/undo trivially supported vs CPU (deferred to 9.x)
+  - [x] Temporary entry point from the connect screen until the 9.1 menu shell lands
 
-- [ ] **8.3 Server-side bots**
-  - [ ] Bot pseudo-player joins the matchmaking queue; paired like a human
-  - [ ] Server hosts one UCI session per bot match, playing through the same MOVE path
-  - [ ] Concurrency cap + queueing for engine sessions
+- [x] **8.3 Server-side bots**
+  - [x] Bot pseudo-player joins the matchmaking queue; paired like a human
+  - [x] Server hosts one UCI session per bot match, playing through the same MOVE path
+  - [x] Concurrency cap + queueing for engine sessions
 
-- [ ] **8.4 PGN import/export (`core/`)**
-  - [ ] Parse PGN headers + SAN movetext into a game (move list, result)
-  - [ ] Emit canonical PGN from any played/saved game
-  - [ ] Round-trip tests; skip comments/variations gracefully
+- [x] **8.4 PGN import/export (`core/`)**
+  - [x] Parse PGN headers + SAN movetext into a game (move list, result)
+  - [x] Emit canonical PGN from any played/saved game
+  - [x] Round-trip tests; skip comments/variations gracefully
 
-- [ ] **8.5 Analysis board**
-  - [ ] Load a finished game (FEN/PGN — uses 8.4) into read-only replay
-  - [ ] Per-position eval bar; best-move arrow overlay
-  - [ ] Eval graph across the game's plies
+- [x] **8.5 Analysis board**
+  - [x] Load a finished game (FEN/PGN — uses 8.4) into read-only replay
+  - [x] Per-position eval bar; best-move arrow overlay
+  - [x] Eval graph across the game's plies
 
 ---
 

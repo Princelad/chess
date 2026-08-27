@@ -31,13 +31,17 @@ static ClientVec::iterator disconnectClient(
     sf::SocketSelector& selector, Matchmaker& matchmaker)
 {
     Client& client = **it;
-    auto addr = client.socket->getRemoteAddress();
-    LOG_INFO("Client disconnected: " + (addr.has_value() ? addr->toString() : "unknown"));
+    if (!client.isBot) {
+        auto addr = client.socket->getRemoteAddress();
+        LOG_INFO("Client disconnected: " + (addr.has_value() ? addr->toString() : "unknown"));
+        selector.remove(*client.socket);
+    } else {
+        LOG_INFO("Bot disconnected: " + client.name);
+    }
     if (client.state == ClientState::Queued)
         matchmaker.remove(client);
     else if (client.state == ClientState::InMatch)
         client.match->handleDisconnect(client);
-    selector.remove(*client.socket);
     return clients.erase(it);
 }
 
@@ -68,9 +72,18 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
     ClientVec clients;
     MatchVec matches;
     Matchmaker matchmaker;
+    std::size_t botNameCounter = 0;
 
     while (!shutdownFlag.load(std::memory_order_relaxed)) {
-        if (!selector.wait(1s))
+        bool hasThinkingBot = false;
+        for (const auto& m : matches) {
+            if (m->isActive() && m->isBotTurn()) {
+                hasThinkingBot = true;
+                break;
+            }
+        }
+        auto waitTime = hasThinkingBot ? std::chrono::milliseconds(50) : std::chrono::seconds(1);
+        if (!selector.wait(waitTime))
             continue;
 
         if (selector.isReady(listener)) {
@@ -99,6 +112,10 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
 
         for (auto it = clients.begin(); it != clients.end(); ) {
             Client& client = **it;
+            if (client.isBot) {
+                ++it;
+                continue;
+            }
             if (selector.isReady(*client.socket)) {
                 sf::Packet packet;
                 auto recvStatus = client.socket->receive(packet);
@@ -143,6 +160,33 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
                                     sendTo(*pair->first, chess::net::WelcomeMsg{chess::Color::White, pair->second->name});
                                     sendTo(*pair->second, chess::net::WelcomeMsg{chess::Color::Black, pair->first->name});
                                     matches.push_back(std::move(match));
+                                } else if (config.botsEnabled) {
+                                    auto botCount = std::count_if(clients.begin(), clients.end(),
+                                        [](const auto& c) { return c->isBot; });
+                                    if (static_cast<std::size_t>(botCount) < config.maxBots) {
+                                        auto bot = std::make_unique<Client>();
+                                        bot->isBot = true;
+                                        bot->name = "Bot-" + std::to_string(++botNameCounter);
+                                        bot->state = ClientState::Queued;
+                                        bot->lastActivity = std::chrono::steady_clock::now();
+                                        Client* botPtr = bot.get();
+                                        clients.push_back(std::move(bot));
+
+                                        auto botPair = matchmaker.enqueue(*botPtr);
+                                        if (botPair.has_value()) {
+                                            botPair->first->state = ClientState::InMatch;
+                                            botPair->second->state = ClientState::InMatch;
+                                            auto match = std::make_unique<Match>(*botPair->first, *botPair->second);
+                                            botPair->first->match = match.get();
+                                            botPair->second->match = match.get();
+                                            sendTo(*botPair->first, chess::net::WelcomeMsg{chess::Color::White, botPair->second->name});
+                                            sendTo(*botPair->second, chess::net::WelcomeMsg{chess::Color::Black, botPair->first->name});
+
+                                            chess::Color botColor = botPair->first->isBot ? chess::Color::White : chess::Color::Black;
+                                            match->startBot(botColor, config.botDepth, config.botEnginePath);
+                                            matches.push_back(std::move(match));
+                                        }
+                                    }
                                 }
                             } else {
                                 sendTo(client, chess::net::ErrorMsg{"Join first"});
@@ -191,11 +235,27 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
         }
 
         for (auto& match : matches) {
-            if (!match->isActive()) {
-                if (match->white()) { match->white()->state = ClientState::Connected; match->white()->match = nullptr; }
-                if (match->black()) { match->black()->state = ClientState::Connected; match->black()->match = nullptr; }
+            if (match->isActive()) {
+                match->pollBotMove();
+            } else {
+                if (match->white() && !match->white()->isBot) { match->white()->state = ClientState::Connected; match->white()->match = nullptr; }
+                if (match->black() && !match->black()->isBot) { match->black()->state = ClientState::Connected; match->black()->match = nullptr; }
+                if (match->white() && match->white()->isBot) { match->white()->state = ClientState::Connected; match->white()->match = nullptr; }
+                if (match->black() && match->black()->isBot) { match->black()->state = ClientState::Connected; match->black()->match = nullptr; }
+                match->stopBot();
             }
         }
+
+        auto botIt = clients.begin();
+        while (botIt != clients.end()) {
+            Client& c = **botIt;
+            if (c.isBot && c.state != ClientState::InMatch) {
+                botIt = clients.erase(botIt);
+            } else {
+                ++botIt;
+            }
+        }
+
         matches.erase(
             std::remove_if(matches.begin(), matches.end(),
                 [](const auto& m) { return !m->isActive(); }),
@@ -204,7 +264,8 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
 
     LOG_INFO("Shutting down with " + std::to_string(clients.size()) + " client(s) connected");
     for (auto& client : clients)
-        client->socket->disconnect();
+        if (!client->isBot && client->socket)
+            client->socket->disconnect();
     clients.clear();
     matches.clear();
     listener.close();

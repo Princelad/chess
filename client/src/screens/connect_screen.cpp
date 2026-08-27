@@ -1,7 +1,10 @@
 #include "connect_screen.h"
 #include "game_screen.h"
+#include "local_game_screen.h"
 
 #include <chess/net/messages.h>
+
+#include <cstdlib>
 
 namespace chess::client {
 
@@ -34,12 +37,24 @@ void ConnectScreen::handleEvent(const sf::Event& event)
 
     if (const auto* mb = event.getIf<sf::Event::MouseButtonPressed>()) {
         if (mb->button == sf::Mouse::Button::Left &&
-            phase_ == ConnectPhase::Idle && !name_.empty()) {
-            float btnX = 580.f, btnY = 298.f, btnW = 200.f, btnH = 40.f;
+            phase_ == ConnectPhase::Idle) {
             float mx = static_cast<float>(mb->position.x);
             float my = static_cast<float>(mb->position.y);
-            if (mx >= btnX && mx <= btnX + btnW && my >= btnY && my <= btnY + btnH) {
+
+            float btnX = 580.f, btnY = 298.f, btnW = 200.f, btnH = 40.f;
+            if (!name_.empty() && mx >= btnX && mx <= btnX + btnW &&
+                my >= btnY && my <= btnY + btnH) {
                 tryConnect();
+                return;
+            }
+
+            float cpuBtnY = btnY + btnH + 16.f;
+            if (mx >= btnX && mx <= btnX + btnW &&
+                my >= cpuBtnY && my <= cpuBtnY + btnH) {
+                const char* env = std::getenv("CHESS_ENGINE_PATH");
+                std::string enginePath = env ? env : "stockfish";
+                app_.switchScreen(std::make_unique<LocalGameScreen>(
+                    app_, Color::White, std::move(enginePath), 5));
                 return;
             }
         }
@@ -192,6 +207,19 @@ void ConnectScreen::draw(sf::RenderWindow& window)
         auto bounds = btnText.getGlobalBounds();
         btnText.setPosition({fieldX + 100.f - bounds.size.x / 2.f - bounds.position.x, y + 16.f});
         window.draw(btnText);
+
+        sf::RectangleShape cpuBtn({200.f, 40.f});
+        cpuBtn.setPosition({fieldX, y + 66.f});
+        cpuBtn.setFillColor(sf::Color(70, 70, 90));
+        cpuBtn.setOutlineColor(sf::Color(100, 100, 100));
+        cpuBtn.setOutlineThickness(1.f);
+        window.draw(cpuBtn);
+
+        sf::Text cpuBtnText(font, "Play vs Computer", 18);
+        cpuBtnText.setFillColor(sf::Color(220, 220, 220));
+        auto cb = cpuBtnText.getGlobalBounds();
+        cpuBtnText.setPosition({fieldX + 100.f - cb.size.x / 2.f - cb.position.x, y + 72.f});
+        window.draw(cpuBtnText);
     }
 
     float statusY = y + 80.f;

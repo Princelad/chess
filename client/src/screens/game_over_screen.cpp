@@ -1,4 +1,5 @@
 #include "game_over_screen.h"
+#include "analysis_screen.h"
 #include "connect_screen.h"
 
 namespace chess::client {
@@ -6,13 +7,20 @@ namespace chess::client {
 namespace {
 constexpr float BtnW = 200.f;
 constexpr float BtnH = 44.f;
-constexpr float BtnY = 340.f;
+constexpr float BtnY = 300.f;
+constexpr float AnalyzeBtnY = 360.f;
 }
 
 GameOverScreen::GameOverScreen(App& app,
                                net::GameResult result,
-                               net::GameOverReason reason)
+                               net::GameOverReason reason,
+                               Board initialBoard,
+                               std::vector<chess::Move> moves,
+                               std::vector<std::string> sanMoves)
     : app_(app)
+    , initialBoard_(std::move(initialBoard))
+    , moves_(std::move(moves))
+    , sanMoves_(std::move(sanMoves))
 {
     std::string reasonStr;
     switch (reason) {
@@ -68,6 +76,10 @@ void GameOverScreen::handleEvent(const sf::Event& event)
         float btnX = (App::WindowWidth - BtnW) / 2.f;
         rematchHovered_ = (mx >= btnX && mx < btnX + BtnW &&
                            my >= BtnY && my < BtnY + BtnH);
+        if (!moves_.empty()) {
+            analyzeHovered_ = (mx >= btnX && mx < btnX + BtnW &&
+                               my >= AnalyzeBtnY && my < AnalyzeBtnY + BtnH);
+        }
     }
 
     if (const auto* mb = event.getIf<sf::Event::MouseButtonPressed>()) {
@@ -75,10 +87,19 @@ void GameOverScreen::handleEvent(const sf::Event& event)
             float mx = static_cast<float>(mb->position.x);
             float my = static_cast<float>(mb->position.y);
             float btnX = (App::WindowWidth - BtnW) / 2.f;
+
             if (mx >= btnX && mx < btnX + BtnW &&
                 my >= BtnY && my < BtnY + BtnH) {
                 app_.connection().disconnect();
                 app_.switchScreen(std::make_unique<ConnectScreen>(app_));
+            }
+
+            if (!moves_.empty() &&
+                mx >= btnX && mx < btnX + BtnW &&
+                my >= AnalyzeBtnY && my < AnalyzeBtnY + BtnH) {
+                app_.connection().disconnect();
+                app_.switchScreen(std::make_unique<AnalysisScreen>(
+                    app_, initialBoard_, moves_, sanMoves_, resultText_));
             }
         }
     }
@@ -105,6 +126,7 @@ void GameOverScreen::draw(sf::RenderWindow& window)
     }
 
     float btnX = (App::WindowWidth - BtnW) / 2.f;
+
     sf::RectangleShape btn({BtnW, BtnH});
     btn.setPosition({btnX, BtnY});
     btn.setFillColor(rematchHovered_
@@ -122,10 +144,30 @@ void GameOverScreen::draw(sf::RenderWindow& window)
     });
     window.draw(btnText);
 
+    if (!moves_.empty()) {
+        sf::RectangleShape analyzeBtn({BtnW, BtnH});
+        analyzeBtn.setPosition({btnX, AnalyzeBtnY});
+        analyzeBtn.setFillColor(analyzeHovered_
+            ? sf::Color(80, 100, 140) : sf::Color(60, 80, 120));
+        analyzeBtn.setOutlineColor(sf::Color(100, 100, 100));
+        analyzeBtn.setOutlineThickness(1.f);
+        window.draw(analyzeBtn);
+
+        sf::Text analyzeText(font, "Analyze", 18);
+        analyzeText.setFillColor(sf::Color(240, 240, 240));
+        auto ab = analyzeText.getGlobalBounds();
+        analyzeText.setPosition({
+            btnX + (BtnW - ab.size.x) / 2.f - ab.position.x,
+            AnalyzeBtnY + (BtnH - ab.size.y) / 2.f - ab.position.y
+        });
+        window.draw(analyzeText);
+    }
+
     sf::Text hint(font, "or press Enter", 14);
     hint.setFillColor(sf::Color(100, 100, 100));
     auto hb = hint.getGlobalBounds();
-    hint.setPosition({(App::WindowWidth - hb.size.x) / 2.f - hb.position.x, BtnY + BtnH + 16.f});
+    float hintY = !moves_.empty() ? AnalyzeBtnY + BtnH + 16.f : BtnY + BtnH + 16.f;
+    hint.setPosition({(App::WindowWidth - hb.size.x) / 2.f - hb.position.x, hintY});
     window.draw(hint);
 }
 

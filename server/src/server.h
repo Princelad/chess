@@ -10,6 +10,10 @@ struct ServerConfig {
     std::string host = "0.0.0.0";
     long long timeout = 0;
     std::size_t maxClients = 64;
+    bool botsEnabled = false;
+    int botDepth = 1;
+    std::string botEnginePath = "stockfish";
+    std::size_t maxBots = 4;
 };
 
 // Runs the server event loop on the calling thread. Blocks until stopped.

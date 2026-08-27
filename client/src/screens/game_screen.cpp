@@ -1,5 +1,6 @@
 #include "game_screen.h"
 #include "game_over_screen.h"
+#include "ui_helpers.h"
 
 #include <chess/movegen.h>
 #include <chess/san.h>
@@ -8,46 +9,10 @@
 namespace chess::client {
 
 namespace {
-std::pair<int, int> findKingSquare(const Board& board, Color color)
-{
-    Piece king = Piece::of(color, PieceType::King);
-    for (int file = 0; file < 8; ++file)
-        for (int rank = 0; rank < 8; ++rank)
-            if (board.pieceAt(squareOf(file, rank)) == king)
-                return { file, rank };
-    return { 4, color == Color::White ? 0 : 7 };
-}
-
-std::string safeTruncate(const std::string& s, std::size_t maxBytes)
-{
-    if (s.size() <= maxBytes) return s;
-    std::size_t n = maxBytes;
-    while (n > 0 && (static_cast<unsigned char>(s[n]) & 0xC0) == 0x80) --n;
-    return s.substr(0, n > 0 ? n - 1 : 0) + "...";
-}
-
 constexpr float BtnH = 30.f;
 constexpr float InputH = 28.f;
 constexpr std::size_t MaxChatLog = 50;
 constexpr std::size_t MaxChatInput = 200;
-
-void drawBtn(sf::RenderWindow& window, float x, float y, float w, float h,
-             sf::Color fill, const sf::Font& font, const std::string& label)
-{
-    sf::RectangleShape rect({w, h});
-    rect.setPosition({x, y});
-    rect.setFillColor(fill);
-    rect.setOutlineColor(sf::Color(100, 100, 100));
-    rect.setOutlineThickness(1.f);
-    window.draw(rect);
-
-    sf::Text txt(font, label, 14);
-    txt.setFillColor(sf::Color(240, 240, 240));
-    auto lb = txt.getGlobalBounds();
-    txt.setPosition({x + (w - lb.size.x) / 2.f - lb.position.x,
-                     y + (h - lb.size.y) / 2.f - lb.position.y});
-    window.draw(txt);
-}
 }
 
 GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName)
@@ -61,6 +26,7 @@ GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName)
     , hud_(boardView_.panelX(),
            static_cast<float>(App::WindowWidth) - boardView_.panelX() - 8.f)
     , myTurn_(myColor == Color::White)
+    , initialBoard_(Board::fromStartPos())
 {
     inCheck_ = chess::inCheck(board_, myColor_);
     hud_.setInfo(opponentName_, myColor_, myTurn_, gameOver_);
@@ -122,6 +88,8 @@ void GameScreen::trySendMove(int targetFile, int targetRank)
     }
 
     std::string san = chess::san::toSan(board_, *found);
+    moves_.push_back(*found);
+    sanMoves_.push_back(san);
     app_.connection().send(chess::net::MoveMsg{san});
     myTurn_ = false;
     hud_.setInfo(opponentName_, myColor_, myTurn_, gameOver_);
@@ -140,6 +108,8 @@ void GameScreen::sendPromotionMove(chess::PieceType type)
     for (const auto& m : promo_->candidates) {
         if (m.promotion == type) {
             std::string san = chess::san::toSan(board_, m);
+            moves_.push_back(m);
+            sanMoves_.push_back(san);
             app_.connection().send(chess::net::MoveMsg{san});
             myTurn_ = false;
             hud_.setInfo(opponentName_, myColor_, myTurn_, gameOver_);
@@ -158,7 +128,7 @@ void GameScreen::cancelPromotion()
     deselect();
 }
 
-GameScreen::PromoCell GameScreen::promoCell(int index) const
+PromoCell GameScreen::promoCell(int index) const
 {
     float sq = boardView_.squareSize();
     sf::Vector2f origin = boardView_.boardOrigin();
@@ -356,6 +326,8 @@ void GameScreen::update(float dtSec)
                 hl_.legalMoveTargets.clear();
 
                 board_.makeMove(*parsed);
+                moves_.push_back(*parsed);
+                sanMoves_.push_back(move->san);
                 hud_.addMove(move->san);
                 inCheck_ = chess::inCheck(board_, myColor_);
                 hl_.checkSquare = inCheck_
@@ -371,7 +343,8 @@ void GameScreen::update(float dtSec)
             hud_.setGameOver(true);
             hud_.setInfo(opponentName_, myColor_, myTurn_, gameOver_);
             app_.switchScreen(std::make_unique<GameOverScreen>(
-                app_, gameOver->result, gameOver->reason));
+                app_, gameOver->result, gameOver->reason,
+                initialBoard_, moves_, sanMoves_));
             return;
         }
         else if (auto* drawOffer = std::get_if<chess::net::ServerDrawOfferMsg>(&msg)) {
@@ -406,7 +379,8 @@ void GameScreen::update(float dtSec)
     if (app_.connection().state() == ConnectionState::Disconnected) {
         gameOver_ = true;
         app_.switchScreen(std::make_unique<GameOverScreen>(
-            app_, net::GameResult::Abort, net::GameOverReason::Disconnection));
+            app_, net::GameResult::Abort, net::GameOverReason::Disconnection,
+            initialBoard_, moves_, sanMoves_));
     }
 }
 
