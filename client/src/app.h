@@ -4,6 +4,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include <chess/board.h>
 #include <chess/types.h>
@@ -28,6 +29,8 @@ public:
     App();
     void run();
     void switchScreen(std::unique_ptr<Screen> screen);
+    void pushScreen(std::unique_ptr<Screen> screen);
+    void goBack();
 
     sf::Font& font() { return *font_; }
     Connection& connection() { return connection_; }
@@ -59,6 +62,7 @@ private:
     sf::RenderWindow window_;
     Connection connection_;
     std::unique_ptr<Screen> screen_;
+    std::vector<std::unique_ptr<Screen>> stack_;
     std::optional<sf::Font> font_;
     std::array<sf::Texture, 12> pieceTextures_;
     bool piecesLoaded_ = false;

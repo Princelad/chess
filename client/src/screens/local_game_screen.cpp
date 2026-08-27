@@ -1,6 +1,6 @@
 #include "local_game_screen.h"
-#include "connect_screen.h"
 #include "game_over_screen.h"
+#include "menu_screen.h"
 #include "ui_helpers.h"
 
 #include <chess/movegen.h>
@@ -287,7 +287,7 @@ void LocalGameScreen::checkGameOver()
 void LocalGameScreen::returnToConnect()
 {
     if (engine_) engine_->quit();
-    app_.switchScreen(std::make_unique<ConnectScreen>(app_));
+    app_.switchScreen(std::make_unique<MenuScreen>(app_));
 }
 
 PromoCell LocalGameScreen::promoCell(int index) const

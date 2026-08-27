@@ -1,6 +1,6 @@
 #include "app.h"
 
-#include "screens/connect_screen.h"
+#include "screens/menu_screen.h"
 
 #include <iostream>
 
@@ -13,7 +13,7 @@ App::App()
 {
     window_.setFramerateLimit(120);
     loadAssets();
-    screen_ = std::make_unique<ConnectScreen>(*this);
+    screen_ = std::make_unique<MenuScreen>(*this);
 }
 
 void App::loadAssets()
@@ -77,7 +77,21 @@ void App::loadPieceTextures()
 
 void App::switchScreen(std::unique_ptr<Screen> screen)
 {
+    stack_.clear();
     screen_ = std::move(screen);
+}
+
+void App::pushScreen(std::unique_ptr<Screen> screen)
+{
+    stack_.push_back(std::move(screen_));
+    screen_ = std::move(screen);
+}
+
+void App::goBack()
+{
+    if (stack_.empty()) return;
+    screen_ = std::move(stack_.back());
+    stack_.pop_back();
 }
 
 void App::run()

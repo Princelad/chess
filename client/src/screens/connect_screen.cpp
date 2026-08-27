@@ -1,10 +1,7 @@
 #include "connect_screen.h"
 #include "game_screen.h"
-#include "local_game_screen.h"
 
 #include <chess/net/messages.h>
-
-#include <cstdlib>
 
 namespace chess::client {
 
@@ -23,6 +20,11 @@ void ConnectScreen::handleEvent(const sf::Event& event)
     if (phase_ == ConnectPhase::WaitingForOpponent) return;
 
     if (const auto* kp = event.getIf<sf::Event::KeyPressed>()) {
+        if (kp->code == sf::Keyboard::Key::Escape) {
+            if (phase_ != ConnectPhase::Idle) app_.connection().disconnect();
+            app_.goBack();
+            return;
+        }
         if (kp->code == sf::Keyboard::Key::Tab) {
             activeField_ = kp->shift
                 ? (activeField_ + 2) % 3
@@ -45,16 +47,6 @@ void ConnectScreen::handleEvent(const sf::Event& event)
             if (!name_.empty() && mx >= btnX && mx <= btnX + btnW &&
                 my >= btnY && my <= btnY + btnH) {
                 tryConnect();
-                return;
-            }
-
-            float cpuBtnY = btnY + btnH + 16.f;
-            if (mx >= btnX && mx <= btnX + btnW &&
-                my >= cpuBtnY && my <= cpuBtnY + btnH) {
-                const char* env = std::getenv("CHESS_ENGINE_PATH");
-                std::string enginePath = env ? env : "stockfish";
-                app_.switchScreen(std::make_unique<LocalGameScreen>(
-                    app_, Color::White, std::move(enginePath), 5));
                 return;
             }
         }
@@ -153,7 +145,7 @@ void ConnectScreen::draw(sf::RenderWindow& window)
     std::string* fields[] = {&host_, &port_, &name_};
 
     float x = 500.f;
-    float y = 120.f;
+    float y = 140.f;
     float labelX = x;
     float fieldX = x + 80.f;
     float fieldW = 280.f;
@@ -207,22 +199,9 @@ void ConnectScreen::draw(sf::RenderWindow& window)
         auto bounds = btnText.getGlobalBounds();
         btnText.setPosition({fieldX + 100.f - bounds.size.x / 2.f - bounds.position.x, y + 16.f});
         window.draw(btnText);
-
-        sf::RectangleShape cpuBtn({200.f, 40.f});
-        cpuBtn.setPosition({fieldX, y + 66.f});
-        cpuBtn.setFillColor(sf::Color(70, 70, 90));
-        cpuBtn.setOutlineColor(sf::Color(100, 100, 100));
-        cpuBtn.setOutlineThickness(1.f);
-        window.draw(cpuBtn);
-
-        sf::Text cpuBtnText(font, "Play vs Computer", 18);
-        cpuBtnText.setFillColor(sf::Color(220, 220, 220));
-        auto cb = cpuBtnText.getGlobalBounds();
-        cpuBtnText.setPosition({fieldX + 100.f - cb.size.x / 2.f - cb.position.x, y + 72.f});
-        window.draw(cpuBtnText);
     }
 
-    float statusY = y + 80.f;
+    float statusY = y + 24.f;
     if (!error_.empty()) {
         sf::Text errText(font, error_, 18);
         errText.setFillColor(sf::Color(244, 67, 54));
@@ -242,7 +221,7 @@ void ConnectScreen::draw(sf::RenderWindow& window)
     title.setPosition({50.f, 50.f});
     window.draw(title);
 
-    sf::Text hint(font, "Tab to switch fields, Enter to connect", 14);
+    sf::Text hint(font, "Tab to switch fields, Enter to connect, Esc to go back", 14);
     hint.setFillColor(sf::Color(120, 120, 120));
     hint.setPosition({50.f, 590.f});
     window.draw(hint);

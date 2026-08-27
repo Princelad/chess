@@ -551,10 +551,10 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
 
 **Exit version:** `v1.2.0` — menu-driven client with scalable layout
 
-- [ ] **9.1 Menu shell & navigation**
-  - [ ] New root screen: Play online / vs Computer / Puzzles / Archive / Settings
-  - [ ] Unimplemented entries visible but disabled (greyed out)
-  - [ ] Replace linear screen flow with a back-stack (Esc = go back)
+- [x] **9.1 Menu shell & navigation**
+  - [x] New root screen: Play online / vs Computer / Puzzles / Archive / Settings
+  - [x] Unimplemented entries visible but disabled (greyed out)
+  - [x] Replace linear screen flow with a back-stack (Esc = go back)
 
 - [ ] **9.2 Widget layer + responsive layout**
   - [ ] Factor reusable widgets from Phase 6 screens: `Button` (hover/pressed/disabled), `TextField` (focus/caret), `Panel`, `Label`

@@ -165,7 +165,7 @@ void AnalysisScreen::handleEvent(const sf::Event& event)
                 goToPly(static_cast<int>(moves_.size()));
                 break;
             case sf::Keyboard::Key::Escape:
-                app_.switchScreen(std::make_unique<ConnectScreen>(app_));
+                app_.goBack();
                 break;
             default:
                 break;

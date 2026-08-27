@@ -1,6 +1,6 @@
 #include "game_over_screen.h"
 #include "analysis_screen.h"
-#include "connect_screen.h"
+#include "menu_screen.h"
 
 namespace chess::client {
 
@@ -66,7 +66,7 @@ void GameOverScreen::handleEvent(const sf::Event& event)
         if (kp->code == sf::Keyboard::Key::Enter ||
             kp->code == sf::Keyboard::Key::Escape) {
             app_.connection().disconnect();
-            app_.switchScreen(std::make_unique<ConnectScreen>(app_));
+            app_.switchScreen(std::make_unique<MenuScreen>(app_));
         }
     }
 
@@ -91,14 +91,14 @@ void GameOverScreen::handleEvent(const sf::Event& event)
             if (mx >= btnX && mx < btnX + BtnW &&
                 my >= BtnY && my < BtnY + BtnH) {
                 app_.connection().disconnect();
-                app_.switchScreen(std::make_unique<ConnectScreen>(app_));
+                app_.switchScreen(std::make_unique<MenuScreen>(app_));
             }
 
             if (!moves_.empty() &&
                 mx >= btnX && mx < btnX + BtnW &&
                 my >= AnalyzeBtnY && my < AnalyzeBtnY + BtnH) {
                 app_.connection().disconnect();
-                app_.switchScreen(std::make_unique<AnalysisScreen>(
+                app_.pushScreen(std::make_unique<AnalysisScreen>(
                     app_, initialBoard_, moves_, sanMoves_, resultText_));
             }
         }
