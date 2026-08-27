@@ -23,6 +23,7 @@ private:
     float entryX() const;
     float entryY(int index) const;
     bool isDisabled(int index) const;
+    void activateEntry(int index);
 };
 
 } // namespace chess::client

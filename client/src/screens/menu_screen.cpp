@@ -31,20 +31,42 @@ bool MenuScreen::isDisabled(int index) const
     return index >= 2;
 }
 
+void MenuScreen::activateEntry(int index)
+{
+    if (index < 0 || index >= EntryCount || isDisabled(index)) return;
+
+    if (index == 0) {
+        app_.pushScreen(std::make_unique<ConnectScreen>(app_));
+    } else if (index == 1) {
+        const char* env = std::getenv("CHESS_ENGINE_PATH");
+        std::string enginePath = env ? env : "stockfish";
+        app_.pushScreen(std::make_unique<LocalGameScreen>(
+            app_, Color::White, std::move(enginePath), 5));
+    }
+}
+
 void MenuScreen::handleEvent(const sf::Event& event)
 {
     if (const auto* kp = event.getIf<sf::Event::KeyPressed>()) {
         if (kp->code == sf::Keyboard::Key::Escape) return;
 
-        if (kp->code == sf::Keyboard::Key::Enter && hovered_ >= 0 && !isDisabled(hovered_)) {
-            if (hovered_ == 0) {
-                app_.pushScreen(std::make_unique<ConnectScreen>(app_));
-            } else if (hovered_ == 1) {
-                const char* env = std::getenv("CHESS_ENGINE_PATH");
-                std::string enginePath = env ? env : "stockfish";
-                app_.pushScreen(std::make_unique<LocalGameScreen>(
-                    app_, Color::White, std::move(enginePath), 5));
+        if (kp->code == sf::Keyboard::Key::Up) {
+            for (int i = hovered_ - 1; i >= 0; --i) {
+                if (!isDisabled(i)) { hovered_ = i; return; }
             }
+            return;
+        }
+        if (kp->code == sf::Keyboard::Key::Down) {
+            for (int i = hovered_ + 1; i < EntryCount; ++i) {
+                if (!isDisabled(i)) { hovered_ = i; return; }
+            }
+            return;
+        }
+
+        if (kp->code == sf::Keyboard::Key::Enter) {
+            if (hovered_ < 0) hovered_ = 0;
+            activateEntry(hovered_);
+            return;
         }
     }
 
@@ -63,15 +85,8 @@ void MenuScreen::handleEvent(const sf::Event& event)
     }
 
     if (const auto* mb = event.getIf<sf::Event::MouseButtonPressed>()) {
-        if (mb->button == sf::Mouse::Button::Left && hovered_ >= 0 && !isDisabled(hovered_)) {
-            if (hovered_ == 0) {
-                app_.pushScreen(std::make_unique<ConnectScreen>(app_));
-            } else if (hovered_ == 1) {
-                const char* env = std::getenv("CHESS_ENGINE_PATH");
-                std::string enginePath = env ? env : "stockfish";
-                app_.pushScreen(std::make_unique<LocalGameScreen>(
-                    app_, Color::White, std::move(enginePath), 5));
-            }
+        if (mb->button == sf::Mouse::Button::Left) {
+            activateEntry(hovered_);
         }
     }
 }
@@ -129,7 +144,7 @@ void MenuScreen::draw(sf::RenderWindow& window)
         window.draw(label);
     }
 
-    sf::Text hint(font, "Use mouse or arrow keys", 14);
+    sf::Text hint(font, "Mouse or arrow keys + Enter", 14);
     hint.setFillColor(sf::Color(100, 100, 100));
     auto hb = hint.getGlobalBounds();
     hint.setPosition({

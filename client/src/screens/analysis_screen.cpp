@@ -1,5 +1,4 @@
 #include "analysis_screen.h"
-#include "connect_screen.h"
 #include "ui_helpers.h"
 
 #include <chess/movegen.h>

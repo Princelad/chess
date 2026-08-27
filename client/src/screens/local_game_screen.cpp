@@ -284,9 +284,8 @@ void LocalGameScreen::checkGameOver()
         initialBoard_, moves_, sanMoves_));
 }
 
-void LocalGameScreen::returnToConnect()
+void LocalGameScreen::returnToMenu()
 {
-    if (engine_) engine_->quit();
     app_.switchScreen(std::make_unique<MenuScreen>(app_));
 }
 
@@ -332,7 +331,7 @@ void LocalGameScreen::handleEvent(const sf::Event& event)
                 return mx >= x && mx < x + w && my >= y && my < y + h;
             };
             if (inRect(px, btnY, 140.f, BtnH)) {
-                returnToConnect();
+                returnToMenu();
                 return;
             }
         }

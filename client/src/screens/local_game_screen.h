@@ -33,7 +33,7 @@ private:
     void cancelPromotion();
     bool applyEngineMove();
     void checkGameOver();
-    void returnToConnect();
+    void returnToMenu();
 
     App& app_;
     Board board_;

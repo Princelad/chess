@@ -63,10 +63,27 @@ GameOverScreen::GameOverScreen(App& app,
 void GameOverScreen::handleEvent(const sf::Event& event)
 {
     if (const auto* kp = event.getIf<sf::Event::KeyPressed>()) {
-        if (kp->code == sf::Keyboard::Key::Enter ||
-            kp->code == sf::Keyboard::Key::Escape) {
+        if (kp->code == sf::Keyboard::Key::Escape) {
             app_.connection().disconnect();
             app_.switchScreen(std::make_unique<MenuScreen>(app_));
+            return;
+        }
+
+        if (kp->code == sf::Keyboard::Key::Tab) {
+            if (!moves_.empty()) focus_ = 1 - focus_;
+            return;
+        }
+
+        if (kp->code == sf::Keyboard::Key::Enter) {
+            if (focus_ == 0) {
+                app_.connection().disconnect();
+                app_.switchScreen(std::make_unique<MenuScreen>(app_));
+            } else if (!moves_.empty()) {
+                app_.connection().disconnect();
+                app_.pushScreen(std::make_unique<AnalysisScreen>(
+                    app_, initialBoard_, moves_, sanMoves_, resultText_));
+            }
+            return;
         }
     }
 
@@ -80,6 +97,8 @@ void GameOverScreen::handleEvent(const sf::Event& event)
             analyzeHovered_ = (mx >= btnX && mx < btnX + BtnW &&
                                my >= AnalyzeBtnY && my < AnalyzeBtnY + BtnH);
         }
+        if (rematchHovered_) focus_ = 0;
+        else if (analyzeHovered_) focus_ = 1;
     }
 
     if (const auto* mb = event.getIf<sf::Event::MouseButtonPressed>()) {
@@ -129,10 +148,13 @@ void GameOverScreen::draw(sf::RenderWindow& window)
 
     sf::RectangleShape btn({BtnW, BtnH});
     btn.setPosition({btnX, BtnY});
-    btn.setFillColor(rematchHovered_
+    bool rematchActive = rematchHovered_ || focus_ == 0;
+    btn.setFillColor(rematchActive
         ? sf::Color(80, 160, 80) : sf::Color(60, 130, 60));
-    btn.setOutlineColor(sf::Color(100, 100, 100));
-    btn.setOutlineThickness(1.f);
+    btn.setOutlineColor(rematchHovered_ ? sf::Color(200, 200, 200)
+                        : focus_ == 0 ? sf::Color(160, 160, 160)
+                        : sf::Color(100, 100, 100));
+    btn.setOutlineThickness(rematchHovered_ ? 2.f : 1.f);
     window.draw(btn);
 
     sf::Text btnText(font, "Rematch", 18);
@@ -147,10 +169,13 @@ void GameOverScreen::draw(sf::RenderWindow& window)
     if (!moves_.empty()) {
         sf::RectangleShape analyzeBtn({BtnW, BtnH});
         analyzeBtn.setPosition({btnX, AnalyzeBtnY});
-        analyzeBtn.setFillColor(analyzeHovered_
+        bool analyzeActive = analyzeHovered_ || focus_ == 1;
+        analyzeBtn.setFillColor(analyzeActive
             ? sf::Color(80, 100, 140) : sf::Color(60, 80, 120));
-        analyzeBtn.setOutlineColor(sf::Color(100, 100, 100));
-        analyzeBtn.setOutlineThickness(1.f);
+        analyzeBtn.setOutlineColor(analyzeHovered_ ? sf::Color(200, 200, 200)
+                                   : focus_ == 1 ? sf::Color(160, 160, 160)
+                                   : sf::Color(100, 100, 100));
+        analyzeBtn.setOutlineThickness(analyzeHovered_ ? 2.f : 1.f);
         window.draw(analyzeBtn);
 
         sf::Text analyzeText(font, "Analyze", 18);
@@ -163,7 +188,7 @@ void GameOverScreen::draw(sf::RenderWindow& window)
         window.draw(analyzeText);
     }
 
-    sf::Text hint(font, "or press Enter", 14);
+    sf::Text hint(font, "Tab to switch, Enter to select", 14);
     hint.setFillColor(sf::Color(100, 100, 100));
     auto hb = hint.getGlobalBounds();
     float hintY = !moves_.empty() ? AnalyzeBtnY + BtnH + 16.f : BtnY + BtnH + 16.f;

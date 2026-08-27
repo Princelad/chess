@@ -28,6 +28,7 @@ private:
     std::string reasonText_;
     bool rematchHovered_ = false;
     bool analyzeHovered_ = false;
+    int focus_ = 0;
     Board initialBoard_;
     std::vector<chess::Move> moves_;
     std::vector<std::string> sanMoves_;
