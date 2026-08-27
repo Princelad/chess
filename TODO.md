@@ -533,10 +533,10 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [x] Server hosts one UCI session per bot match, playing through the same MOVE path
   - [x] Concurrency cap + queueing for engine sessions
 
-- [ ] **8.4 PGN import/export (`core/`)**
-  - [ ] Parse PGN headers + SAN movetext into a game (move list, result)
-  - [ ] Emit canonical PGN from any played/saved game
-  - [ ] Round-trip tests; skip comments/variations gracefully
+- [x] **8.4 PGN import/export (`core/`)**
+  - [x] Parse PGN headers + SAN movetext into a game (move list, result)
+  - [x] Emit canonical PGN from any played/saved game
+  - [x] Round-trip tests; skip comments/variations gracefully
 
 - [ ] **8.5 Analysis board**
   - [ ] Load a finished game (FEN/PGN — uses 8.4) into read-only replay
