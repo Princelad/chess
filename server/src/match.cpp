@@ -231,6 +231,15 @@ void Match::startBot(chess::Color color, int depth, std::string enginePath)
     }
 }
 
+void Match::stopBot()
+{
+    if (botEngine_) {
+        botEngine_->quit();
+        botEngine_.reset();
+    }
+    botThinking_ = false;
+}
+
 void Match::pollBotMove()
 {
     if (!botEngine_ || !botThinking_ || !active_)

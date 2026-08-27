@@ -24,6 +24,7 @@ public:
     Client* opponent(const Client& client) const;
 
     void startBot(chess::Color color, int depth, std::string enginePath);
+    void stopBot();
     void pollBotMove();
     bool isBotTurn() const;
     Client* botClient() const;

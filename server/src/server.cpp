@@ -72,9 +72,18 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
     ClientVec clients;
     MatchVec matches;
     Matchmaker matchmaker;
+    std::size_t botNameCounter = 0;
 
     while (!shutdownFlag.load(std::memory_order_relaxed)) {
-        if (!selector.wait(1s))
+        bool hasThinkingBot = false;
+        for (const auto& m : matches) {
+            if (m->isActive() && m->isBotTurn()) {
+                hasThinkingBot = true;
+                break;
+            }
+        }
+        auto waitTime = hasThinkingBot ? std::chrono::milliseconds(50) : std::chrono::seconds(1);
+        if (!selector.wait(waitTime))
             continue;
 
         if (selector.isReady(listener)) {
@@ -157,7 +166,7 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
                                     if (static_cast<std::size_t>(botCount) < config.maxBots) {
                                         auto bot = std::make_unique<Client>();
                                         bot->isBot = true;
-                                        bot->name = "Bot-" + std::to_string(clients.size());
+                                        bot->name = "Bot-" + std::to_string(++botNameCounter);
                                         bot->state = ClientState::Queued;
                                         bot->lastActivity = std::chrono::steady_clock::now();
                                         Client* botPtr = bot.get();
@@ -173,7 +182,6 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
                                             sendTo(*botPair->first, chess::net::WelcomeMsg{chess::Color::White, botPair->second->name});
                                             sendTo(*botPair->second, chess::net::WelcomeMsg{chess::Color::Black, botPair->first->name});
 
-                                            Client* humanClient = botPair->first->isBot ? botPair->second : botPair->first;
                                             chess::Color botColor = botPair->first->isBot ? chess::Color::White : chess::Color::Black;
                                             match->startBot(botColor, config.botDepth, config.botEnginePath);
                                             matches.push_back(std::move(match));
@@ -232,6 +240,7 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
             } else {
                 if (match->white() && !match->white()->isBot) { match->white()->state = ClientState::Connected; match->white()->match = nullptr; }
                 if (match->black() && !match->black()->isBot) { match->black()->state = ClientState::Connected; match->black()->match = nullptr; }
+                match->stopBot();
             }
         }
 
