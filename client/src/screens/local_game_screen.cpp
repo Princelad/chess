@@ -88,6 +88,7 @@ LocalGameScreen::LocalGameScreen(App& app, Color myColor,
            static_cast<float>(App::WindowWidth) - boardView_.panelX() - 8.f)
     , myTurn_(myColor == Color::White)
     , engineDepth_(depth)
+    , initialBoard_(Board::fromStartPos())
 {
     inCheck_ = chess::inCheck(board_, myColor_);
     hud_.setInfo("Computer", myColor_, myTurn_, gameOver_);
@@ -169,6 +170,8 @@ void LocalGameScreen::tryMove(int targetFile, int targetRank)
     }
 
     std::string san = chess::san::toSan(board_, *found);
+    moves_.push_back(*found);
+    sanMoves_.push_back(san);
     board_.makeMove(*found);
     hl_.lastMoveFrom = { static_cast<int>(chess::fileOf(found->from)),
                          static_cast<int>(chess::rankOf(found->from)) };
@@ -190,7 +193,8 @@ void LocalGameScreen::tryMove(int targetFile, int targetRank)
         hud_.setInfo("Computer", myColor_, myTurn_, gameOver_);
         app_.switchScreen(std::make_unique<GameOverScreen>(
             app_, toResult(state, board_.sideToMove()),
-            toReason(state, board_)));
+            toReason(state, board_),
+            initialBoard_, moves_, sanMoves_));
         return;
     }
 
@@ -214,6 +218,8 @@ void LocalGameScreen::applyPromotionMove(chess::PieceType type)
     for (const auto& m : promo_->candidates) {
         if (m.promotion == type) {
             std::string san = chess::san::toSan(board_, m);
+            moves_.push_back(m);
+            sanMoves_.push_back(san);
             board_.makeMove(m);
             hl_.lastMoveFrom = { static_cast<int>(chess::fileOf(m.from)),
                                  static_cast<int>(chess::rankOf(m.from)) };
@@ -236,7 +242,8 @@ void LocalGameScreen::applyPromotionMove(chess::PieceType type)
                 hud_.setInfo("Computer", myColor_, myTurn_, gameOver_);
                 app_.switchScreen(std::make_unique<GameOverScreen>(
                     app_, toResult(state, board_.sideToMove()),
-                    toReason(state, board_)));
+                    toReason(state, board_),
+                    initialBoard_, moves_, sanMoves_));
                 return;
             }
 
@@ -265,6 +272,8 @@ bool LocalGameScreen::applyEngineMove()
     if (!move) return false;
 
     std::string san = chess::san::toSan(board_, *move);
+    moves_.push_back(*move);
+    sanMoves_.push_back(san);
     board_.makeMove(*move);
     hl_.lastMoveFrom = { static_cast<int>(chess::fileOf(move->from)),
                          static_cast<int>(chess::rankOf(move->from)) };
@@ -298,7 +307,8 @@ void LocalGameScreen::checkGameOver()
 
     app_.switchScreen(std::make_unique<GameOverScreen>(
         app_, toResult(state, board_.sideToMove()),
-        toReason(state, board_)));
+        toReason(state, board_),
+        initialBoard_, moves_, sanMoves_));
 }
 
 void LocalGameScreen::returnToConnect()

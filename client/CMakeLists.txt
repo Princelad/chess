@@ -6,6 +6,7 @@ add_library(chessclient STATIC
     src/screens/game_screen.cpp
     src/screens/game_over_screen.cpp
     src/screens/local_game_screen.cpp
+    src/screens/analysis_screen.cpp
     src/screens/hud.cpp)
 target_include_directories(chessclient PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(chessclient PUBLIC chessnet chesscore chessuci

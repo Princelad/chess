@@ -59,6 +59,10 @@ private:
     std::vector<std::string> chatLog_;
     std::string chatInput_;
     bool chatFocused_ = false;
+
+    Board initialBoard_;
+    std::vector<chess::Move> moves_;
+    std::vector<std::string> sanMoves_;
 };
 
 } // namespace chess::client

@@ -56,6 +56,10 @@ private:
     std::unique_ptr<uci::UciEngine> engine_;
     int engineDepth_;
 
+    Board initialBoard_;
+    std::vector<chess::Move> moves_;
+    std::vector<std::string> sanMoves_;
+
     struct PromoCell {
         sf::Vector2f pos;
         float size;

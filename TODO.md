@@ -538,10 +538,10 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [x] Emit canonical PGN from any played/saved game
   - [x] Round-trip tests; skip comments/variations gracefully
 
-- [ ] **8.5 Analysis board**
-  - [ ] Load a finished game (FEN/PGN — uses 8.4) into read-only replay
-  - [ ] Per-position eval bar; best-move arrow overlay
-  - [ ] Eval graph across the game's plies
+- [x] **8.5 Analysis board**
+  - [x] Load a finished game (FEN/PGN — uses 8.4) into read-only replay
+  - [x] Per-position eval bar; best-move arrow overlay
+  - [x] Eval graph across the game's plies
 
 ---
 
