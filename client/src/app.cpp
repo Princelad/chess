@@ -2,6 +2,7 @@
 
 #include "screens/menu_screen.h"
 
+#include <algorithm>
 #include <iostream>
 
 namespace chess::client {
@@ -9,11 +10,38 @@ namespace chess::client {
 App::App()
     : window_(sf::VideoMode({WindowWidth, WindowHeight}),
               "Chess",
-              sf::Style::Titlebar | sf::Style::Close)
+              sf::Style::Titlebar | sf::Style::Close | sf::Style::Resize)
+    , viewport_(WindowWidth, WindowHeight)
 {
     window_.setFramerateLimit(120);
     loadAssets();
+    buildView(viewport_.x, viewport_.y);
     screen_ = std::make_unique<MenuScreen>(*this);
+}
+
+sf::Vector2f App::toLocal(sf::Vector2i pixel) const
+{
+    return window_.mapPixelToCoords(pixel, view_);
+}
+
+void App::buildView(unsigned int width, unsigned int height)
+{
+    const float logicalW = static_cast<float>(WindowWidth);
+    const float logicalH = static_cast<float>(WindowHeight);
+
+    float scale = std::min(static_cast<float>(width) / logicalW,
+                           static_cast<float>(height) / logicalH);
+    if (scale <= 0.f) scale = 1.f;
+
+    view_ = sf::View({logicalW / 2.f, logicalH / 2.f}, {logicalW, logicalH});
+    const float left = (static_cast<float>(width) - logicalW * scale)
+                       / (2.f * static_cast<float>(width));
+    const float top = (static_cast<float>(height) - logicalH * scale)
+                      / (2.f * static_cast<float>(height));
+    view_.setViewport(sf::FloatRect(
+        sf::Vector2f(left, top),
+        sf::Vector2f(logicalW * scale / static_cast<float>(width),
+                     logicalH * scale / static_cast<float>(height))));
 }
 
 void App::loadAssets()
@@ -110,6 +138,10 @@ void App::run()
                 window_.close();
                 return;
             }
+            if (const auto* resized = event->getIf<sf::Event::Resized>()) {
+                viewport_ = resized->size;
+                buildView(viewport_.x, viewport_.y);
+            }
             if (screen_) screen_->handleEvent(*event);
         }
 
@@ -119,6 +151,7 @@ void App::run()
         }
 
         window_.clear(sf::Color(48, 46, 43));
+        window_.setView(view_);
         if (screen_) screen_->draw(window_);
         window_.display();
     }

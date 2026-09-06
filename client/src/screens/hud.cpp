@@ -1,4 +1,5 @@
 #include "hud.h"
+#include "ui_helpers.h"
 
 #include <algorithm>
 
@@ -17,14 +18,6 @@ constexpr float StatusFontSize = 14;
 constexpr float InfoFontSize = 18;
 constexpr float HeaderFontSize = 12;
 
-std::string safeTruncate(const std::string& s, std::size_t maxBytes)
-{
-    if (s.size() <= maxBytes) return s;
-    std::size_t n = maxBytes;
-    while (n > 0 && (static_cast<unsigned char>(s[n]) & 0xC0) == 0x80) --n;
-    return s.substr(0, n > 0 ? n - 1 : 0) + "...";
-}
-
 int visibleLines(float listHeight)
 {
     return std::max(1, static_cast<int>(listHeight / MoveLineH));
@@ -35,6 +28,24 @@ Hud::Hud(float panelX, float panelWidth)
     : panelX_(panelX)
     , panelW_(panelWidth)
 {
+    opponentLabel_.setFontSize(InfoFontSize);
+    opponentLabel_.setColor(sf::Color(180, 180, 180));
+
+    infoLabel_.setFontSize(StatusFontSize);
+    infoLabel_.setColor(sf::Color(160, 160, 160));
+
+    statusLabel_.setFontSize(StatusFontSize);
+    statusLabel_.setColor(sf::Color(255, 200, 60));
+
+    headerLabel_.setText("Moves");
+    headerLabel_.setFontSize(HeaderFontSize);
+    headerLabel_.setColor(sf::Color(120, 120, 120));
+
+    listBg_.setRect(sf::FloatRect(
+        sf::Vector2f(panelX_, MoveListTop),
+        sf::Vector2f(panelW_, moveListBottom() - MoveListTop)));
+    listBg_.setFill(sf::Color(25, 25, 25));
+    listBg_.setOutline(sf::Color(80, 80, 80));
 }
 
 void Hud::setInfo(const std::string& opponentName, Color myColor,
@@ -101,27 +112,24 @@ float Hud::moveListBottom() const
     return MoveListBottom;
 }
 
-void Hud::draw(sf::RenderWindow& window, const sf::Font& font) const
+void Hud::draw(sf::RenderWindow& window, const sf::Font& font)
 {
-    sf::Text opponentText(font, "vs " + opponentName_, InfoFontSize);
-    opponentText.setFillColor(sf::Color(180, 180, 180));
-    opponentText.setPosition({panelX_, InfoY});
-    window.draw(opponentText);
+    opponentLabel_.setText("vs " + opponentName_);
+    opponentLabel_.setPosition({panelX_, InfoY});
+    opponentLabel_.draw(window, font);
 
     const char* colorName = myColor_ == Color::White ? "White" : "Black";
     const char* turnStr = gameOver_ ? "Game over"
         : (myTurn_ ? "Your turn" : "Waiting...");
-    std::string infoLine = std::string(colorName) + "  •  " + turnStr;
-    sf::Text infoText(font, infoLine, StatusFontSize);
-    infoText.setFillColor(myTurn_ ? sf::Color(76, 175, 80) : sf::Color(160, 160, 160));
-    infoText.setPosition({panelX_, InfoY + InfoLineH});
-    window.draw(infoText);
+    infoLabel_.setText(std::string(colorName) + "  •  " + turnStr);
+    infoLabel_.setColor(myTurn_ ? sf::Color(76, 175, 80) : sf::Color(160, 160, 160));
+    infoLabel_.setPosition({panelX_, InfoY + InfoLineH});
+    infoLabel_.draw(window, font);
 
     if (!statusMsg_.empty()) {
-        sf::Text statusText(font, statusMsg_, StatusFontSize);
-        statusText.setFillColor(sf::Color(255, 200, 60));
-        statusText.setPosition({panelX_, InfoY + InfoLineH * 2.f});
-        window.draw(statusText);
+        statusLabel_.setText(statusMsg_);
+        statusLabel_.setPosition({panelX_, InfoY + InfoLineH * 2.f});
+        statusLabel_.draw(window, font);
     }
 
     sf::RectangleShape sep({panelW_, 1.f});
@@ -129,18 +137,13 @@ void Hud::draw(sf::RenderWindow& window, const sf::Font& font) const
     sep.setFillColor(sf::Color(80, 80, 80));
     window.draw(sep);
 
-    sf::Text header(font, "Moves", HeaderFontSize);
-    header.setFillColor(sf::Color(120, 120, 120));
-    header.setPosition({panelX_, MoveHeaderY});
-    window.draw(header);
+    headerLabel_.setPosition({panelX_, MoveHeaderY});
+    headerLabel_.draw(window, font);
 
     float listH = moveListBottom() - MoveListTop;
     if (listH <= 0.f) return;
 
-    sf::RectangleShape listBg({panelW_, listH});
-    listBg.setPosition({panelX_, MoveListTop});
-    listBg.setFillColor(sf::Color(25, 25, 25));
-    window.draw(listBg);
+    listBg_.draw(window);
 
     int vis = visibleLines(listH);
     int totalPairs = static_cast<int>(movePairs_.size());
@@ -158,7 +161,7 @@ void Hud::draw(sf::RenderWindow& window, const sf::Font& font) const
         moveText.setFillColor(sf::Color(200, 200, 200));
         moveText.setPosition({panelX_ + 6.f, y});
 
-        auto lb = moveText.getGlobalBounds();
+        auto lb = moveText.getLocalBounds();
         if (panelW_ > 24.f && lb.size.x > panelW_ - 12.f) {
             line = safeTruncate(line, static_cast<std::size_t>((panelW_ - 24.f) / 7.f));
             moveText.setString(line);
@@ -168,10 +171,9 @@ void Hud::draw(sf::RenderWindow& window, const sf::Font& font) const
     }
 
     if (totalPairs == 0) {
-        sf::Text empty(font, "No moves yet", MoveFontSize);
-        empty.setFillColor(sf::Color(100, 100, 100));
+        Label empty("No moves yet", MoveFontSize, sf::Color(100, 100, 100));
         empty.setPosition({panelX_ + 6.f, MoveListTop + 4.f});
-        window.draw(empty);
+        empty.draw(window, font);
     }
 }
 

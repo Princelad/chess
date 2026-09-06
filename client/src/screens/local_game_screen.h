@@ -4,6 +4,7 @@
 #include "boardview.h"
 #include "hud.h"
 #include "promo_state.h"
+#include "widgets/button.h"
 #include <chess/board.h>
 #include <chess/move.h>
 #include <chess/types.h>
@@ -56,6 +57,7 @@ private:
     std::vector<std::string> sanMoves_;
 
     PromoCell promoCell(int index) const;
+    Button backBtn_;
 };
 
 } // namespace chess::client

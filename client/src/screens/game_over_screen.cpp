@@ -1,6 +1,7 @@
 #include "game_over_screen.h"
 #include "analysis_screen.h"
 #include "menu_screen.h"
+#include "widgets/layout.h"
 
 namespace chess::client {
 
@@ -58,70 +59,123 @@ GameOverScreen::GameOverScreen(App& app,
             resultText_ = reasonStr + " — " + resultStr;
             break;
     }
+
+    resultLabel_.setText(resultText_);
+    resultLabel_.setFontSize(30);
+    resultLabel_.setColor(sf::Color(255, 255, 255));
+
+    reasonLabel_.setText("(" + reasonText_ + ")");
+    reasonLabel_.setFontSize(20);
+    reasonLabel_.setColor(sf::Color(160, 160, 160));
+
+    hint_.setText("Tab to switch, Enter to select");
+    hint_.setFontSize(14);
+    hint_.setColor(sf::Color(100, 100, 100));
+
+    rematchBtn_.setLabel("Rematch");
+    rematchBtn_.setColors(sf::Color(60, 130, 60), sf::Color(80, 160, 80),
+                          sf::Color(50, 110, 50), sf::Color(40, 90, 40),
+                          sf::Color(120, 150, 120), sf::Color(240, 240, 240),
+                          sf::Color(100, 100, 100), sf::Color(200, 200, 200),
+                          sf::Color(160, 160, 160));
+    rematchBtn_.setOnClick([this] { activateRematch(); });
+
+    analyzeBtn_.setLabel("Analyze");
+    analyzeBtn_.setColors(sf::Color(60, 80, 120), sf::Color(80, 100, 140),
+                          sf::Color(50, 70, 100), sf::Color(40, 55, 80),
+                          sf::Color(120, 130, 150), sf::Color(240, 240, 240),
+                          sf::Color(100, 100, 100), sf::Color(200, 200, 200),
+                          sf::Color(160, 160, 160));
+    analyzeBtn_.setOnClick([this] { activateAnalyze(); });
+
+    layoutWidgets();
+
+    rematchBtn_.setFocused(true);
+}
+
+void GameOverScreen::layoutWidgets()
+{
+    const sf::FloatRect area(
+        sf::Vector2f(0.f, 0.f),
+        sf::Vector2f(App::WindowWidth, App::WindowHeight));
+    const sf::Vector2f btnSize(BtnW, BtnH);
+
+    auto rb = resultLabel_.bounds(app_.font());
+    resultLabel_.setPosition({
+        (App::WindowWidth - rb.size.x) / 2.f - rb.position.x, 200.f
+    });
+
+    auto rr = reasonLabel_.bounds(app_.font());
+    reasonLabel_.setPosition({
+        (App::WindowWidth - rr.size.x) / 2.f - rr.position.x, 250.f
+    });
+
+    rematchBtn_.setRect(layout::centerIn(
+        sf::FloatRect(sf::Vector2f(0.f, BtnY),
+                      sf::Vector2f(App::WindowWidth, BtnH)), btnSize));
+
+    if (!moves_.empty()) {
+        analyzeBtn_.setRect(layout::centerIn(
+            sf::FloatRect(sf::Vector2f(0.f, AnalyzeBtnY),
+                          sf::Vector2f(App::WindowWidth, BtnH)), btnSize));
+    } else {
+        analyzeBtn_.setEnabled(false);
+    }
+
+    const float hintY = !moves_.empty() ? AnalyzeBtnY + BtnH + 16.f
+                                        : BtnY + BtnH + 16.f;
+    auto hb = hint_.bounds(app_.font());
+    hint_.setPosition({
+        (App::WindowWidth - hb.size.x) / 2.f - hb.position.x, hintY
+    });
+}
+
+void GameOverScreen::activateRematch()
+{
+    app_.connection().disconnect();
+    app_.switchScreen(std::make_unique<MenuScreen>(app_));
+}
+
+void GameOverScreen::activateAnalyze()
+{
+    if (moves_.empty()) return;
+    app_.connection().disconnect();
+    app_.pushScreen(std::make_unique<AnalysisScreen>(
+        app_, initialBoard_, moves_, sanMoves_, resultText_));
+}
+
+void GameOverScreen::cycleFocus()
+{
+    if (moves_.empty()) return;
+    focus_ = 1 - focus_;
+    rematchBtn_.setFocused(focus_ == 0);
+    analyzeBtn_.setFocused(focus_ == 1);
 }
 
 void GameOverScreen::handleEvent(const sf::Event& event)
 {
     if (const auto* kp = event.getIf<sf::Event::KeyPressed>()) {
         if (kp->code == sf::Keyboard::Key::Escape) {
-            app_.connection().disconnect();
-            app_.switchScreen(std::make_unique<MenuScreen>(app_));
+            activateRematch();
             return;
         }
-
         if (kp->code == sf::Keyboard::Key::Tab) {
-            if (!moves_.empty()) focus_ = 1 - focus_;
-            return;
-        }
-
-        if (kp->code == sf::Keyboard::Key::Enter) {
-            if (focus_ == 0) {
-                app_.connection().disconnect();
-                app_.switchScreen(std::make_unique<MenuScreen>(app_));
-            } else if (!moves_.empty()) {
-                app_.connection().disconnect();
-                app_.pushScreen(std::make_unique<AnalysisScreen>(
-                    app_, initialBoard_, moves_, sanMoves_, resultText_));
-            }
+            cycleFocus();
             return;
         }
     }
 
-    if (const auto* mm = event.getIf<sf::Event::MouseMoved>()) {
-        float mx = static_cast<float>(mm->position.x);
-        float my = static_cast<float>(mm->position.y);
-        float btnX = (App::WindowWidth - BtnW) / 2.f;
-        rematchHovered_ = (mx >= btnX && mx < btnX + BtnW &&
-                           my >= BtnY && my < BtnY + BtnH);
-        if (!moves_.empty()) {
-            analyzeHovered_ = (mx >= btnX && mx < btnX + BtnW &&
-                               my >= AnalyzeBtnY && my < AnalyzeBtnY + BtnH);
-        }
-        if (rematchHovered_) focus_ = 0;
-        else if (analyzeHovered_) focus_ = 1;
-    }
+    sf::Vector2f local(0.f, 0.f);
+    if (const auto* mm = event.getIf<sf::Event::MouseMoved>())
+        local = app_.toLocal(mm->position);
+    else if (const auto* mb = event.getIf<sf::Event::MouseButtonPressed>())
+        local = app_.toLocal(mb->position);
+    else if (const auto* rb = event.getIf<sf::Event::MouseButtonReleased>())
+        local = app_.toLocal(rb->position);
 
-    if (const auto* mb = event.getIf<sf::Event::MouseButtonPressed>()) {
-        if (mb->button == sf::Mouse::Button::Left) {
-            float mx = static_cast<float>(mb->position.x);
-            float my = static_cast<float>(mb->position.y);
-            float btnX = (App::WindowWidth - BtnW) / 2.f;
-
-            if (mx >= btnX && mx < btnX + BtnW &&
-                my >= BtnY && my < BtnY + BtnH) {
-                app_.connection().disconnect();
-                app_.switchScreen(std::make_unique<MenuScreen>(app_));
-            }
-
-            if (!moves_.empty() &&
-                mx >= btnX && mx < btnX + BtnW &&
-                my >= AnalyzeBtnY && my < AnalyzeBtnY + BtnH) {
-                app_.connection().disconnect();
-                app_.pushScreen(std::make_unique<AnalysisScreen>(
-                    app_, initialBoard_, moves_, sanMoves_, resultText_));
-            }
-        }
-    }
+    if (rematchBtn_.handleEvent(event, local)) return;
+    if (moves_.empty()) return;
+    if (analyzeBtn_.handleEvent(event, local)) return;
 }
 
 void GameOverScreen::update(float /*dtSec*/) {}
@@ -130,70 +184,16 @@ void GameOverScreen::draw(sf::RenderWindow& window)
 {
     auto& font = app_.font();
 
-    sf::Text resultLabel(font, resultText_, 30);
-    resultLabel.setFillColor(sf::Color(255, 255, 255));
-    auto rb = resultLabel.getGlobalBounds();
-    resultLabel.setPosition({(App::WindowWidth - rb.size.x) / 2.f - rb.position.x, 200.f});
-    window.draw(resultLabel);
+    resultLabel_.draw(window, font);
+    if (!reasonText_.empty())
+        reasonLabel_.draw(window, font);
 
-    if (!reasonText_.empty()) {
-        sf::Text reasonLabel(font, "(" + reasonText_ + ")", 20);
-        reasonLabel.setFillColor(sf::Color(160, 160, 160));
-        auto rr = reasonLabel.getGlobalBounds();
-        reasonLabel.setPosition({(App::WindowWidth - rr.size.x) / 2.f - rr.position.x, 250.f});
-        window.draw(reasonLabel);
-    }
+    if (rematchBtn_.isEnabled())
+        rematchBtn_.draw(window, font);
+    if (!moves_.empty())
+        analyzeBtn_.draw(window, font);
 
-    float btnX = (App::WindowWidth - BtnW) / 2.f;
-
-    sf::RectangleShape btn({BtnW, BtnH});
-    btn.setPosition({btnX, BtnY});
-    bool rematchActive = rematchHovered_ || focus_ == 0;
-    btn.setFillColor(rematchActive
-        ? sf::Color(80, 160, 80) : sf::Color(60, 130, 60));
-    btn.setOutlineColor(rematchHovered_ ? sf::Color(200, 200, 200)
-                        : focus_ == 0 ? sf::Color(160, 160, 160)
-                        : sf::Color(100, 100, 100));
-    btn.setOutlineThickness(rematchHovered_ ? 2.f : 1.f);
-    window.draw(btn);
-
-    sf::Text btnText(font, "Rematch", 18);
-    btnText.setFillColor(sf::Color(240, 240, 240));
-    auto bb = btnText.getGlobalBounds();
-    btnText.setPosition({
-        btnX + (BtnW - bb.size.x) / 2.f - bb.position.x,
-        BtnY + (BtnH - bb.size.y) / 2.f - bb.position.y
-    });
-    window.draw(btnText);
-
-    if (!moves_.empty()) {
-        sf::RectangleShape analyzeBtn({BtnW, BtnH});
-        analyzeBtn.setPosition({btnX, AnalyzeBtnY});
-        bool analyzeActive = analyzeHovered_ || focus_ == 1;
-        analyzeBtn.setFillColor(analyzeActive
-            ? sf::Color(80, 100, 140) : sf::Color(60, 80, 120));
-        analyzeBtn.setOutlineColor(analyzeHovered_ ? sf::Color(200, 200, 200)
-                                   : focus_ == 1 ? sf::Color(160, 160, 160)
-                                   : sf::Color(100, 100, 100));
-        analyzeBtn.setOutlineThickness(analyzeHovered_ ? 2.f : 1.f);
-        window.draw(analyzeBtn);
-
-        sf::Text analyzeText(font, "Analyze", 18);
-        analyzeText.setFillColor(sf::Color(240, 240, 240));
-        auto ab = analyzeText.getGlobalBounds();
-        analyzeText.setPosition({
-            btnX + (BtnW - ab.size.x) / 2.f - ab.position.x,
-            AnalyzeBtnY + (BtnH - ab.size.y) / 2.f - ab.position.y
-        });
-        window.draw(analyzeText);
-    }
-
-    sf::Text hint(font, "Tab to switch, Enter to select", 14);
-    hint.setFillColor(sf::Color(100, 100, 100));
-    auto hb = hint.getGlobalBounds();
-    float hintY = !moves_.empty() ? AnalyzeBtnY + BtnH + 16.f : BtnY + BtnH + 16.f;
-    hint.setPosition({(App::WindowWidth - hb.size.x) / 2.f - hb.position.x, hintY});
-    window.draw(hint);
+    hint_.draw(window, font);
 }
 
 } // namespace chess::client

@@ -2,6 +2,10 @@ add_library(chessclient STATIC
     src/connection.cpp
     src/app.cpp
     src/boardview.cpp
+    src/widgets/label.cpp
+    src/widgets/panel.cpp
+    src/widgets/button.cpp
+    src/widgets/text_field.cpp
     src/screens/connect_screen.cpp
     src/screens/menu_screen.cpp
     src/screens/game_screen.cpp

@@ -1,6 +1,8 @@
 #pragma once
 
 #include "app.h"
+#include "widgets/button.h"
+#include "widgets/label.h"
 #include <chess/board.h>
 #include <chess/move.h>
 #include <chess/net/messages.h>
@@ -23,15 +25,24 @@ public:
     void draw(sf::RenderWindow& window) override;
 
 private:
+    void activateRematch();
+    void activateAnalyze();
+    void cycleFocus();
+    void layoutWidgets();
+
     App& app_;
     std::string resultText_;
     std::string reasonText_;
-    bool rematchHovered_ = false;
-    bool analyzeHovered_ = false;
-    int focus_ = 0;
     Board initialBoard_;
     std::vector<chess::Move> moves_;
     std::vector<std::string> sanMoves_;
+
+    Button rematchBtn_;
+    Button analyzeBtn_;
+    Label resultLabel_;
+    Label reasonLabel_;
+    Label hint_;
+    int focus_ = 0;
 };
 
 } // namespace chess::client
