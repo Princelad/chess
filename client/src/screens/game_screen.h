@@ -4,11 +4,15 @@
 #include "boardview.h"
 #include "hud.h"
 #include "promo_state.h"
+#include "widgets/button.h"
+#include "widgets/label.h"
+#include "widgets/panel.h"
+#include "widgets/text_field.h"
 #include <chess/board.h>
+#include <chess/move.h>
 #include <chess/types.h>
 
-#include <chess/move.h>
-
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -27,19 +31,15 @@ private:
     void deselect();
     void sendPromotionMove(chess::PieceType type);
     void cancelPromotion();
+    PromoCell promoCell(int index) const;
     void sendChat();
-    void handleButtonClick(int mx, int my);
     void drawButtons(sf::RenderWindow& window);
     void drawChat(sf::RenderWindow& window);
-
-    PromoCell promoCell(int index) const;
 
     App& app_;
     Board board_;
     Color myColor_;
-    std::string opponentName_;
     BoardView boardView_;
-
     HighlightState hl_;
     std::optional<PromotionState> promo_;
     bool inCheck_ = false;
@@ -47,13 +47,23 @@ private:
     bool myTurn_ = false;
     bool gameOver_ = false;
     bool drawOfferPending_ = false;
-    std::vector<std::string> chatLog_;
-    std::string chatInput_;
-    bool chatFocused_ = false;
 
+    std::string opponentName_;
     Board initialBoard_;
     std::vector<chess::Move> moves_;
     std::vector<std::string> sanMoves_;
+
+    std::vector<std::string> chatLog_;
+    TextField chatInput_;
+    Panel chatLogBg_;
+    Label chatLabel_;
+    Label drawOfferLabel_;
+    Button resignBtn_;
+    Button offerDrawBtn_;
+    Button declineBtn_;
+    Button acceptBtn_;
+
+    void layoutPanel();
 };
 
 } // namespace chess::client

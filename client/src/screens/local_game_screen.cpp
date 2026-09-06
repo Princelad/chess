@@ -66,6 +66,17 @@ LocalGameScreen::LocalGameScreen(App& app, Color myColor,
     inCheck_ = chess::inCheck(board_, myColor_);
     hud_.setInfo("Computer", myColor_, myTurn_, gameOver_);
 
+    backBtn_.setLabel("Back to Menu");
+    backBtn_.setColors(sf::Color(160, 55, 55), sf::Color(185, 65, 65),
+                       sf::Color(135, 45, 45), sf::Color(70, 45, 45),
+                       sf::Color(140, 90, 90), sf::Color(240, 240, 240),
+                       sf::Color(90, 60, 60), sf::Color(210, 120, 120),
+                       sf::Color(180, 140, 140));
+    backBtn_.setRect(sf::FloatRect(
+        sf::Vector2f(boardView_.panelX(), hud_.contentBottom()),
+        sf::Vector2f(140.f, BtnH)));
+    backBtn_.setOnClick([this] { returnToMenu(); });
+
     engine_ = std::make_unique<uci::UciEngine>(std::move(enginePath));
     auto info = engine_->init();
     if (info.name.empty() && !engine_->isRunning()) {
@@ -319,31 +330,26 @@ void LocalGameScreen::handleEvent(const sf::Event& event)
         return;
     }
 
+    sf::Vector2f local(0.f, 0.f);
+    if (const auto* mm = event.getIf<sf::Event::MouseMoved>())
+        local = app_.toLocal(mm->position);
+    else if (const auto* mb = event.getIf<sf::Event::MouseButtonPressed>())
+        local = app_.toLocal(mb->position);
+    else if (const auto* rb = event.getIf<sf::Event::MouseButtonReleased>())
+        local = app_.toLocal(rb->position);
+
+    if (!gameOver_ && backBtn_.handleEvent(event, local)) return;
+
     if (const auto* mb = event.getIf<sf::Event::MouseButtonPressed>()) {
         if (mb->button != sf::Mouse::Button::Left) return;
-        int mx = mb->position.x;
-        int my = mb->position.y;
-
-        if (!gameOver_) {
-            float px = boardView_.panelX();
-            float btnY = hud_.contentBottom();
-            auto inRect = [mx, my](float x, float y, float w, float h) {
-                return mx >= x && mx < x + w && my >= y && my < y + h;
-            };
-            if (inRect(px, btnY, 140.f, BtnH)) {
-                returnToMenu();
-                return;
-            }
-        }
 
         if (gameOver_ || !myTurn_ || engineThinking_ || engineFailed_) return;
 
         if (promo_) {
-            auto pos = static_cast<sf::Vector2f>(mb->position);
             for (int i = 0; i < static_cast<int>(promo_->candidates.size()); ++i) {
                 auto cell = promoCell(i);
                 sf::FloatRect rect(cell.pos, {cell.size, cell.size});
-                if (rect.contains(pos)) {
+                if (rect.contains(local)) {
                     applyPromotionMove(promo_->candidates[i].promotion);
                     return;
                 }
@@ -352,8 +358,7 @@ void LocalGameScreen::handleEvent(const sf::Event& event)
             return;
         }
 
-        auto square = boardView_.pixelToSquare(
-            static_cast<sf::Vector2f>(mb->position));
+        auto square = boardView_.pixelToSquare(local);
         if (!square) return;
 
         auto [file, rank] = *square;
@@ -437,9 +442,8 @@ void LocalGameScreen::draw(sf::RenderWindow& window)
 
     hud_.draw(window, font);
 
-    float px = boardView_.panelX();
-    float btnY = hud_.contentBottom();
-    drawBtn(window, px, btnY, 140.f, BtnH, sf::Color(180, 60, 60), font, "Back to Menu");
+    if (!gameOver_)
+        backBtn_.draw(window, font);
 }
 
 } // namespace chess::client
