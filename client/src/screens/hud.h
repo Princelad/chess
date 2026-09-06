@@ -1,5 +1,7 @@
 #pragma once
 
+#include "widgets/label.h"
+#include "widgets/panel.h"
 #include <chess/types.h>
 
 #include <SFML/Graphics.hpp>
@@ -21,7 +23,7 @@ public:
     void setGameOver(bool gameOver);
     void handleScroll(float delta);
     void update(float dtSec);
-    void draw(sf::RenderWindow& window, const sf::Font& font) const;
+    void draw(sf::RenderWindow& window, const sf::Font& font);
 
     float contentBottom() const;
     float moveListBottom() const;
@@ -40,6 +42,12 @@ private:
 
     std::string statusMsg_;
     float statusTimer_ = 0.f;
+
+    Label opponentLabel_;
+    Label infoLabel_;
+    Label statusLabel_;
+    Label headerLabel_;
+    Panel listBg_;
 };
 
 } // namespace chess::client
