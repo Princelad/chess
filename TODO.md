@@ -556,11 +556,11 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [x] Unimplemented entries visible but disabled (greyed out)
   - [x] Replace linear screen flow with a back-stack (Esc = go back)
 
-- [ ] **9.2 Widget layer + responsive layout**
-  - [ ] Factor reusable widgets from Phase 6 screens: `Button` (hover/pressed/disabled), `TextField` (focus/caret), `Panel`, `Label`
-  - [ ] Layout helpers (margins, alignment, vertical/horizontal stacks)
-  - [ ] Settle 7.2's resize question: window resize rescales board + side panel proportionally
-  - [ ] View transform keeps pixel↔square mapping correct at any scale
+- [x] **9.2 Widget layer + responsive layout**
+  - [x] Factor reusable widgets from Phase 6 screens: `Button` (hover/pressed/disabled), `TextField` (focus/caret), `Panel`, `Label`
+  - [x] Layout helpers (margins, alignment, vertical/horizontal stacks)
+  - [x] Settle 7.2's resize question: window resize rescales board + side panel proportionally
+  - [x] View transform keeps pixel↔square mapping correct at any scale
 
 - [ ] **9.3 Move-list navigator + captured material**
   - [ ] Clickable two-column SAN grid replaces the plain text list
