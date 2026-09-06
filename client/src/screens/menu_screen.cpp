@@ -1,6 +1,7 @@
 #include "menu_screen.h"
 #include "connect_screen.h"
 #include "local_game_screen.h"
+#include "widgets/layout.h"
 
 #include <cstdlib>
 
@@ -14,34 +15,68 @@ constexpr float MenuStartY = 200.f;
 MenuScreen::MenuScreen(App& app)
     : app_(app)
 {
+    static const char* Labels[EntryCount] = {
+        "Play Online",
+        "Play vs Computer",
+        "Puzzles",
+        "Archive",
+        "Settings"
+    };
+    for (int i = 0; i < EntryCount; ++i) {
+        entries_[i].setLabel(Labels[i]);
+        const bool disabled = i >= 2;
+        entries_[i].setEnabled(!disabled);
+        entries_[i].setOnClick([this, i] {
+            if (i == 0) {
+                app_.pushScreen(std::make_unique<ConnectScreen>(app_));
+            } else if (i == 1) {
+                const char* env = std::getenv("CHESS_ENGINE_PATH");
+                std::string enginePath = env ? env : "stockfish";
+                app_.pushScreen(std::make_unique<LocalGameScreen>(
+                    app_, Color::White, std::move(enginePath), 5));
+            }
+        });
+    }
+    entries_[0].setFocused(true);
+
+    title_.setText("Chess");
+    title_.setFontSize(36);
+    title_.setColor(sf::Color(255, 255, 255));
+
+    hint_.setText("Mouse or arrow keys + Enter");
+    hint_.setFontSize(14);
+    hint_.setColor(sf::Color(100, 100, 100));
+
+    layoutButtons();
 }
 
-float MenuScreen::entryX() const
+void MenuScreen::layoutButtons()
 {
-    return (App::WindowWidth - EntryW) / 2.f;
+    const float areaTop = MenuStartY - EntryH / 2.f;
+    const float areaH = EntryH * EntryCount + EntryGap * (EntryCount - 1);
+    const sf::FloatRect area(
+        sf::Vector2f(0.f, areaTop),
+        sf::Vector2f(App::WindowWidth, areaH));
+    const auto rects = layout::vstack(
+        area, EntryGap,
+        std::vector<sf::Vector2f>(EntryCount, {EntryW, EntryH}));
+    for (int i = 0; i < EntryCount; ++i)
+        entries_[i].setRect(rects[i]);
 }
 
-float MenuScreen::entryY(int index) const
+void MenuScreen::focusNext(bool down)
 {
-    return MenuStartY + index * (EntryH + EntryGap);
-}
-
-bool MenuScreen::isDisabled(int index) const
-{
-    return index >= 2;
-}
-
-void MenuScreen::activateEntry(int index)
-{
-    if (index < 0 || index >= EntryCount || isDisabled(index)) return;
-
-    if (index == 0) {
-        app_.pushScreen(std::make_unique<ConnectScreen>(app_));
-    } else if (index == 1) {
-        const char* env = std::getenv("CHESS_ENGINE_PATH");
-        std::string enginePath = env ? env : "stockfish";
-        app_.pushScreen(std::make_unique<LocalGameScreen>(
-            app_, Color::White, std::move(enginePath), 5));
+    int next = focused_;
+    for (int i = 0; i < EntryCount; ++i) {
+        next = down ? (next + 1) : (next - 1);
+        if (next < 0) next = EntryCount - 1;
+        if (next >= EntryCount) next = 0;
+        if (entries_[next].isEnabled()) {
+            entries_[focused_].setFocused(false);
+            focused_ = next;
+            entries_[focused_].setFocused(true);
+            return;
+        }
     }
 }
 
@@ -49,45 +84,21 @@ void MenuScreen::handleEvent(const sf::Event& event)
 {
     if (const auto* kp = event.getIf<sf::Event::KeyPressed>()) {
         if (kp->code == sf::Keyboard::Key::Escape) return;
-
-        if (kp->code == sf::Keyboard::Key::Up) {
-            for (int i = hovered_ - 1; i >= 0; --i) {
-                if (!isDisabled(i)) { hovered_ = i; return; }
-            }
-            return;
-        }
-        if (kp->code == sf::Keyboard::Key::Down) {
-            for (int i = hovered_ + 1; i < EntryCount; ++i) {
-                if (!isDisabled(i)) { hovered_ = i; return; }
-            }
-            return;
-        }
-
-        if (kp->code == sf::Keyboard::Key::Enter) {
-            if (hovered_ < 0) hovered_ = 0;
-            activateEntry(hovered_);
-            return;
-        }
+        if (kp->code == sf::Keyboard::Key::Up) { focusNext(false); return; }
+        if (kp->code == sf::Keyboard::Key::Down) { focusNext(true); return; }
     }
 
-    if (const auto* mm = event.getIf<sf::Event::MouseMoved>()) {
-        float mx = static_cast<float>(mm->position.x);
-        float my = static_cast<float>(mm->position.y);
-        float x0 = entryX();
-        hovered_ = -1;
-        for (int i = 0; i < EntryCount; ++i) {
-            float y0 = entryY(i);
-            if (mx >= x0 && mx <= x0 + EntryW && my >= y0 && my <= y0 + EntryH) {
-                hovered_ = i;
-                break;
-            }
-        }
-    }
+    sf::Vector2f local(0.f, 0.f);
+    if (const auto* mm = event.getIf<sf::Event::MouseMoved>())
+        local = app_.toLocal(mm->position);
+    else if (const auto* mb = event.getIf<sf::Event::MouseButtonPressed>())
+        local = app_.toLocal(mb->position);
+    else if (const auto* rb = event.getIf<sf::Event::MouseButtonReleased>())
+        local = app_.toLocal(rb->position);
 
-    if (const auto* mb = event.getIf<sf::Event::MouseButtonPressed>()) {
-        if (mb->button == sf::Mouse::Button::Left) {
-            activateEntry(hovered_);
-        }
+    for (int i = 0; i < EntryCount; ++i) {
+        if (entries_[i].isEnabled() && entries_[i].handleEvent(event, local))
+            return;
     }
 }
 
@@ -96,62 +107,25 @@ void MenuScreen::update(float /*dtSec*/) {}
 void MenuScreen::draw(sf::RenderWindow& window)
 {
     auto& font = app_.font();
-    float cx = entryX();
 
-    sf::Text title(font, "Chess", 36);
-    title.setFillColor(sf::Color(255, 255, 255));
-    auto tb = title.getGlobalBounds();
-    title.setPosition({(App::WindowWidth - tb.size.x) / 2.f - tb.position.x, TitleY});
-    window.draw(title);
-
-    const char* labels[EntryCount] = {
-        "Play Online",
-        "Play vs Computer",
-        "Puzzles",
-        "Archive",
-        "Settings"
-    };
-
-    for (int i = 0; i < EntryCount; ++i) {
-        float y0 = entryY(i);
-        bool disabled = isDisabled(i);
-        bool hovered = (i == hovered_) && !disabled;
-
-        sf::RectangleShape rect({EntryW, EntryH});
-        rect.setPosition({cx, y0});
-        if (disabled) {
-            rect.setFillColor(sf::Color(40, 38, 36));
-            rect.setOutlineColor(sf::Color(55, 53, 51));
-        } else if (hovered) {
-            rect.setFillColor(sf::Color(70, 68, 66));
-            rect.setOutlineColor(sf::Color(140, 140, 140));
-        } else {
-            rect.setFillColor(sf::Color(58, 56, 54));
-            rect.setOutlineColor(sf::Color(80, 78, 76));
-        }
-        rect.setOutlineThickness(1.f);
-        window.draw(rect);
-
-        sf::Text label(font, labels[i], 20);
-        label.setFillColor(disabled
-            ? sf::Color(90, 90, 90)
-            : sf::Color(220, 220, 220));
-        auto lb = label.getGlobalBounds();
-        label.setPosition({
-            cx + (EntryW - lb.size.x) / 2.f - lb.position.x,
-            y0 + (EntryH - lb.size.y) / 2.f - lb.position.y
-        });
-        window.draw(label);
-    }
-
-    sf::Text hint(font, "Mouse or arrow keys + Enter", 14);
-    hint.setFillColor(sf::Color(100, 100, 100));
-    auto hb = hint.getGlobalBounds();
-    hint.setPosition({
-        (App::WindowWidth - hb.size.x) / 2.f - hb.position.x,
-        entryY(EntryCount - 1) + EntryH + 40.f
+    auto titleBounds = title_.bounds(font);
+    title_.setPosition({
+        (App::WindowWidth - titleBounds.size.x) / 2.f - titleBounds.position.x,
+        TitleY
     });
-    window.draw(hint);
+    title_.draw(window, font);
+
+    for (int i = 0; i < EntryCount; ++i)
+        entries_[i].draw(window, font);
+
+    const float hintY = MenuStartY + EntryH * EntryCount
+                        + EntryGap * (EntryCount - 1) + 40.f;
+    auto hintBounds = hint_.bounds(font);
+    hint_.setPosition({
+        (App::WindowWidth - hintBounds.size.x) / 2.f - hintBounds.position.x,
+        hintY
+    });
+    hint_.draw(window, font);
 }
 
 } // namespace chess::client

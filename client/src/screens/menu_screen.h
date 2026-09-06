@@ -1,6 +1,10 @@
 #pragma once
 
 #include "app.h"
+#include "widgets/button.h"
+#include "widgets/label.h"
+
+#include <array>
 
 namespace chess::client {
 
@@ -18,12 +22,13 @@ private:
     static constexpr float EntryGap = 8.f;
 
     App& app_;
-    int hovered_ = -1;
+    std::array<Button, EntryCount> entries_;
+    int focused_ = 0;
+    Label title_;
+    Label hint_;
 
-    float entryX() const;
-    float entryY(int index) const;
-    bool isDisabled(int index) const;
-    void activateEntry(int index);
+    void focusNext(bool down);
+    void layoutButtons();
 };
 
 } // namespace chess::client
