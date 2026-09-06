@@ -2,10 +2,14 @@
 
 #include "app.h"
 #include "boardview.h"
+#include "widgets/button.h"
+#include "widgets/label.h"
+#include "widgets/panel.h"
 #include <chess/board.h>
 #include <chess/move.h>
 #include <chess/uci/engine.h>
 
+#include <array>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -38,9 +42,9 @@ private:
     void startEngineAnalysis();
     void drawEvalBar(sf::RenderWindow& window) const;
     void drawBestMoveArrow(sf::RenderWindow& window) const;
-    void drawMoveList(sf::RenderWindow& window) const;
-    void drawNavButtons(sf::RenderWindow& window);
-    void drawEvalText(sf::RenderWindow& window) const;
+    void drawMoveList(sf::RenderWindow& window);
+    void drawEvalText(sf::RenderWindow& window);
+    void layoutPanel();
 
     static constexpr float EvalBarWidth = 20.f;
 
@@ -63,13 +67,14 @@ private:
 
     int moveScroll_ = 0;
 
-    struct NavBtn {
-        sf::FloatRect rect;
-        std::string label;
-        NavBtn(float x, float y, float w, float h, std::string l)
-            : rect({x, y}, {w, h}), label(std::move(l)) {}
-    };
-    std::vector<NavBtn> navBtns_;
+    std::array<Button, 4> navButtons_;
+    Panel moveListBg_;
+    Label resultLabel_;
+    Label analysisLabel_;
+    Label plyLabel_;
+    Label hint_;
+    Label evalTextLabel_;
+    Label turnLabel_;
 };
 
 } // namespace chess::client

@@ -1,5 +1,6 @@
 #include "analysis_screen.h"
 #include "ui_helpers.h"
+#include "widgets/layout.h"
 
 #include <chess/movegen.h>
 #include <chess/san.h>
@@ -11,15 +12,14 @@
 namespace chess::client {
 
 namespace {
-constexpr float BtnH = 30.f;
 constexpr float MoveLineH = 16.f;
 constexpr float MoveFontSize = 13;
 constexpr float MoveListTop = 130.f;
 constexpr float MoveListBottom = 400.f;
 constexpr float NavBtnY = 410.f;
-constexpr float NavBtnW = 60.f;
 constexpr float NavBtnH = 30.f;
 constexpr float EvalTextY = 450.f;
+const char* NavLabels[4] = { "|<", "<", ">", ">|" };
 
 float evalToBarFraction(int cp)
 {
@@ -59,15 +59,45 @@ AnalysisScreen::AnalysisScreen(App& app,
 {
     evals_.resize(moves_.size() + 1);
 
-    float px = boardView_.panelX();
-    float panelW = static_cast<float>(App::WindowWidth) - px - 8.f;
-    float btnW = (panelW - 18.f) / 4.f;
+    resultLabel_.setText(resultText_);
+    resultLabel_.setFontSize(14);
+    resultLabel_.setColor(sf::Color(160, 160, 160));
 
-    navBtns_.emplace_back(px, NavBtnY, btnW, NavBtnH, "|<");
-    navBtns_.emplace_back(px + btnW + 6.f, NavBtnY, btnW, NavBtnH, "<");
-    navBtns_.emplace_back(px + 2.f * (btnW + 6.f), NavBtnY, btnW, NavBtnH, ">");
-    navBtns_.emplace_back(px + 3.f * (btnW + 6.f), NavBtnY, btnW, NavBtnH, ">|");
+    analysisLabel_.setText("Analysis");
+    analysisLabel_.setFontSize(18);
+    analysisLabel_.setColor(sf::Color(200, 200, 200));
 
+    plyLabel_.setText("");
+    plyLabel_.setFontSize(14);
+    plyLabel_.setColor(sf::Color(120, 120, 120));
+
+    hint_.setText("Esc: back");
+    hint_.setFontSize(12);
+    hint_.setColor(sf::Color(80, 80, 80));
+
+    evalTextLabel_.setFontSize(14);
+    evalTextLabel_.setColor(sf::Color(200, 200, 200));
+    turnLabel_.setFontSize(14);
+    turnLabel_.setColor(sf::Color(120, 120, 120));
+
+    for (int i = 0; i < 4; ++i) {
+        navButtons_[i].setLabel(NavLabels[i]);
+        navButtons_[i].setColors(sf::Color(60, 60, 70), sf::Color(70, 70, 80),
+                                 sf::Color(50, 50, 58), sf::Color(40, 40, 45),
+                                 sf::Color(80, 80, 85), sf::Color(220, 220, 220),
+                                 sf::Color(80, 80, 90), sf::Color(140, 140, 160),
+                                 sf::Color(160, 160, 180));
+        navButtons_[i].setOnClick([this, i] {
+            switch (i) {
+                case 0: goToPly(0); break;
+                case 1: goToPly(currentPly_ - 1); break;
+                case 2: goToPly(currentPly_ + 1); break;
+                case 3: goToPly(static_cast<int>(moves_.size())); break;
+            }
+        });
+    }
+
+    layoutPanel();
     goToPly(0);
 
     const char* envPath = std::getenv("CHESS_ENGINE_PATH");
@@ -98,6 +128,36 @@ AnalysisScreen::~AnalysisScreen()
     if (engine_) engine_->quit();
 }
 
+void AnalysisScreen::layoutPanel()
+{
+    auto& font = app_.font();
+
+    float px = boardView_.panelX();
+    float panelW = static_cast<float>(App::WindowWidth) - px - 8.f;
+
+    resultLabel_.setPosition({px, 30.f});
+    analysisLabel_.setPosition({px, 55.f});
+    plyLabel_.setPosition({px, 80.f});
+    hint_.setPosition({px, 600.f});
+
+    moveListBg_.setRect(sf::FloatRect(
+        sf::Vector2f(px, MoveListTop),
+        sf::Vector2f(panelW, MoveListBottom - MoveListTop)));
+    moveListBg_.setFill(sf::Color(25, 25, 25));
+    moveListBg_.setOutline(sf::Color(80, 80, 80));
+
+    const auto rects = layout::hstack(
+        sf::FloatRect(sf::Vector2f(px, NavBtnY),
+                      sf::Vector2f(panelW, NavBtnH)),
+        6.f,
+        std::vector<sf::Vector2f>(4, {(panelW - 18.f) / 4.f, NavBtnH}));
+    for (int i = 0; i < 4; ++i)
+        navButtons_[i].setRect(rects[i]);
+
+    evalTextLabel_.setPosition({px, EvalTextY});
+    turnLabel_.setPosition({px, EvalTextY + 22.f});
+}
+
 void AnalysisScreen::goToPly(int ply)
 {
     int clamped = std::clamp(ply, 0, static_cast<int>(moves_.size()));
@@ -124,6 +184,13 @@ void AnalysisScreen::goToPly(int ply)
     hl_.checkSquare = chess::inCheck(board_, sideToMove)
         ? findKingSquare(board_, sideToMove)
         : std::optional<std::pair<int,int>>{};
+
+    const bool atStart = (currentPly_ == 0);
+    const bool atEnd = (currentPly_ == static_cast<int>(moves_.size()));
+    navButtons_[0].setEnabled(!atStart);
+    navButtons_[1].setEnabled(!atStart);
+    navButtons_[2].setEnabled(!atEnd);
+    navButtons_[3].setEnabled(!atEnd);
 
     startEngineAnalysis();
 
@@ -172,38 +239,38 @@ void AnalysisScreen::handleEvent(const sf::Event& event)
         return;
     }
 
+    sf::Vector2f local(0.f, 0.f);
+    if (const auto* mm = event.getIf<sf::Event::MouseMoved>())
+        local = app_.toLocal(mm->position);
+    else if (const auto* mb = event.getIf<sf::Event::MouseButtonPressed>())
+        local = app_.toLocal(mb->position);
+    else if (const auto* rb = event.getIf<sf::Event::MouseButtonReleased>())
+        local = app_.toLocal(rb->position);
+
+    for (auto& btn : navButtons_) {
+        if (btn.handleEvent(event, local)) return;
+    }
+
     if (const auto* mb = event.getIf<sf::Event::MouseButtonPressed>()) {
         if (mb->button != sf::Mouse::Button::Left) return;
-        float mx = static_cast<float>(mb->position.x);
-        float my = static_cast<float>(mb->position.y);
-
-        for (int i = 0; i < static_cast<int>(navBtns_.size()); ++i) {
-            if (navBtns_[i].rect.contains({mx, my})) {
-                switch (i) {
-                    case 0: goToPly(0); break;
-                    case 1: goToPly(currentPly_ - 1); break;
-                    case 2: goToPly(currentPly_ + 1); break;
-                    case 3: goToPly(static_cast<int>(moves_.size())); break;
-                }
-                return;
-            }
-        }
-
         float px = boardView_.panelX();
         float panelW = static_cast<float>(App::WindowWidth) - px - 8.f;
-        if (mx >= px && mx < px + panelW && my >= MoveListTop && my < MoveListBottom) {
-            int lineIdx = static_cast<int>((my - MoveListTop + 2.f) / MoveLineH) + moveScroll_;
+        if (local.x >= px && local.x < px + panelW &&
+            local.y >= MoveListTop && local.y < MoveListBottom) {
+            int lineIdx = static_cast<int>((local.y - MoveListTop + 2.f) / MoveLineH)
+                          + moveScroll_;
             int ply = lineIdx * 2;
             if (lineIdx >= 0 && ply <= static_cast<int>(moves_.size())) {
                 int clickedPly = std::min(ply, static_cast<int>(moves_.size()));
                 goToPly(clickedPly);
             }
         }
+        return;
     }
 
     if (const auto* ws = event.getIf<sf::Event::MouseWheelScrolled>()) {
         float px = boardView_.panelX();
-        if (ws->position.x >= px) {
+        if (app_.toLocal(ws->position).x >= px) {
             float listH = MoveListBottom - MoveListTop;
             int vis = std::max(1, static_cast<int>(listH / MoveLineH));
             int maxScroll = std::max(0, static_cast<int>((moves_.size() + 1) / 2) - vis);
@@ -243,30 +310,18 @@ void AnalysisScreen::draw(sf::RenderWindow& window)
     drawEvalBar(window);
     drawBestMoveArrow(window);
     drawMoveList(window);
-    drawNavButtons(window);
+    for (auto& btn : navButtons_)
+        btn.draw(window, font);
     drawEvalText(window);
 
-    sf::Text resultLabel(font, resultText_, 14);
-    resultLabel.setFillColor(sf::Color(160, 160, 160));
-    resultLabel.setPosition({boardView_.panelX(), 30.f});
-    window.draw(resultLabel);
+    resultLabel_.draw(window, font);
+    analysisLabel_.draw(window, font);
 
-    sf::Text analysisLabel(font, "Analysis", 18);
-    analysisLabel.setFillColor(sf::Color(200, 200, 200));
-    analysisLabel.setPosition({boardView_.panelX(), 55.f});
-    window.draw(analysisLabel);
+    plyLabel_.setText("Position " + std::to_string(currentPly_)
+                      + " / " + std::to_string(static_cast<int>(moves_.size())));
+    plyLabel_.draw(window, font);
 
-    std::string plyInfo = "Position " + std::to_string(currentPly_)
-                        + " / " + std::to_string(static_cast<int>(moves_.size()));
-    sf::Text plyLabel(font, plyInfo, 14);
-    plyLabel.setFillColor(sf::Color(120, 120, 120));
-    plyLabel.setPosition({boardView_.panelX(), 80.f});
-    window.draw(plyLabel);
-
-    sf::Text hint(font, "Esc: back", 12);
-    hint.setFillColor(sf::Color(80, 80, 80));
-    hint.setPosition({boardView_.panelX(), 600.f});
-    window.draw(hint);
+    hint_.draw(window, font);
 }
 
 void AnalysisScreen::drawEvalBar(sf::RenderWindow& window) const
@@ -274,10 +329,11 @@ void AnalysisScreen::drawEvalBar(sf::RenderWindow& window) const
     sf::Vector2f origin = boardView_.boardOrigin();
     float boardH = boardView_.squareSize() * 8.f;
 
-    sf::RectangleShape bg({EvalBarWidth, boardH});
-    bg.setPosition({origin.x - EvalBarWidth - 4.f, origin.y});
-    bg.setFillColor(sf::Color(40, 40, 40));
-    window.draw(bg);
+    Panel bg(sf::FloatRect(
+        sf::Vector2f(origin.x - EvalBarWidth - 4.f, origin.y),
+        sf::Vector2f(EvalBarWidth, boardH)),
+        sf::Color(40, 40, 40));
+    bg.draw(window);
 
     if (currentPly_ < 0 || currentPly_ >= static_cast<int>(evals_.size()))
         return;
@@ -371,7 +427,7 @@ void AnalysisScreen::drawBestMoveArrow(sf::RenderWindow& window) const
     window.draw(head);
 }
 
-void AnalysisScreen::drawMoveList(sf::RenderWindow& window) const
+void AnalysisScreen::drawMoveList(sf::RenderWindow& window)
 {
     float px = boardView_.panelX();
     float panelW = static_cast<float>(App::WindowWidth) - px - 8.f;
@@ -388,10 +444,7 @@ void AnalysisScreen::drawMoveList(sf::RenderWindow& window) const
     window.draw(header);
 
     float listH = MoveListBottom - MoveListTop;
-    sf::RectangleShape listBg({panelW, listH});
-    listBg.setPosition({px, MoveListTop});
-    listBg.setFillColor(sf::Color(25, 25, 25));
-    window.draw(listBg);
+    moveListBg_.draw(window);
 
     int vis = std::max(1, static_cast<int>(listH / MoveLineH));
     int totalPairs = (static_cast<int>(moves_.size()) + 1) / 2;
@@ -433,17 +486,17 @@ void AnalysisScreen::drawMoveList(sf::RenderWindow& window) const
             if (highlightWhite && !highlightBlack) {
                 if (whitePly < static_cast<int>(sanMoves_.size())) {
                     auto before = sf::Text(font, std::to_string(i + 1) + ". ", MoveFontSize);
-                    hlW = before.getGlobalBounds().size.x + 6.f;
+                    hlW = before.getLocalBounds().size.x + 6.f;
                 }
             } else if (highlightBlack) {
                 if (whitePly < static_cast<int>(sanMoves_.size())) {
                     auto before = sf::Text(font,
                         std::to_string(i + 1) + ". " + sanMoves_[whitePly] + "  ",
                         MoveFontSize);
-                    hlX = px + 4.f + before.getGlobalBounds().size.x;
+                    hlX = px + 4.f + before.getLocalBounds().size.x;
                     if (blackPly < static_cast<int>(sanMoves_.size())) {
                         hlW = sf::Text(font, sanMoves_[blackPly], MoveFontSize)
-                            .getGlobalBounds().size.x + 6.f;
+                            .getLocalBounds().size.x + 6.f;
                     }
                 }
             }
@@ -467,28 +520,7 @@ void AnalysisScreen::drawMoveList(sf::RenderWindow& window) const
     }
 }
 
-void AnalysisScreen::drawNavButtons(sf::RenderWindow& window)
-{
-    auto& font = app_.font();
-    for (const auto& btn : navBtns_) {
-        sf::Color fill = sf::Color(60, 60, 70);
-
-        bool atStart = (currentPly_ == 0);
-        bool atEnd = (currentPly_ == static_cast<int>(moves_.size()));
-
-        if ((btn.label == "|<" && atStart) ||
-            (btn.label == "<" && atStart) ||
-            (btn.label == ">" && atEnd) ||
-            (btn.label == ">|" && atEnd)) {
-            fill = sf::Color(40, 40, 45);
-        }
-
-        drawBtn(window, btn.rect.position.x, btn.rect.position.y,
-                btn.rect.size.x, btn.rect.size.y, fill, font, btn.label);
-    }
-}
-
-void AnalysisScreen::drawEvalText(sf::RenderWindow& window) const
+void AnalysisScreen::drawEvalText(sf::RenderWindow& window)
 {
     auto& font = app_.font();
 
@@ -498,18 +530,13 @@ void AnalysisScreen::drawEvalText(sf::RenderWindow& window) const
             std::lock_guard<std::mutex> lock(evalMutex_);
             evalStr = formatEval(evals_[currentPly_]);
         }
-        sf::Text evalLabel(font, "Eval: " + evalStr, 14);
-        evalLabel.setFillColor(sf::Color(200, 200, 200));
-        evalLabel.setPosition({boardView_.panelX(), EvalTextY});
-        window.draw(evalLabel);
+        evalTextLabel_.setText("Eval: " + evalStr);
     }
+    evalTextLabel_.draw(window, font);
 
     Color sideToMove = board_.sideToMove();
-    std::string turnStr = sideToMove == Color::White ? "White to move" : "Black to move";
-    sf::Text turnLabel(font, turnStr, 14);
-    turnLabel.setFillColor(sf::Color(120, 120, 120));
-    turnLabel.setPosition({boardView_.panelX(), EvalTextY + 22.f});
-    window.draw(turnLabel);
+    turnLabel_.setText(sideToMove == Color::White ? "White to move" : "Black to move");
+    turnLabel_.draw(window, font);
 }
 
 } // namespace chess::client
