@@ -1,7 +1,11 @@
 #pragma once
 
 #include "app.h"
+#include "widgets/button.h"
+#include "widgets/label.h"
+#include "widgets/text_field.h"
 
+#include <array>
 #include <string>
 
 namespace chess::client {
@@ -16,20 +20,24 @@ public:
     void draw(sf::RenderWindow& window) override;
 
 private:
+    static constexpr std::size_t FieldCount = 3;
+
     void tryConnect();
+    void cycleField(bool backward);
+    void layoutWidgets();
+    const std::string& name() const;
 
     App& app_;
     ConnectPhase phase_ = ConnectPhase::Idle;
 
-    std::string host_;
-    std::string port_;
-    std::string name_;
-    std::string status_;
-    std::string error_;
-
-    int activeField_ = 0;
-    float cursorBlink_ = 0.f;
-    bool cursorVisible_ = true;
+    std::array<TextField, FieldCount> fields_;
+    std::array<Label, FieldCount> labels_;
+    std::size_t activeField_ = 0;
+    Button connectBtn_;
+    Label title_;
+    Label hint_;
+    Label status_;
+    Label error_;
 };
 
 } // namespace chess::client
