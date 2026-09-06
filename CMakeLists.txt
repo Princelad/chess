@@ -9,7 +9,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 option(BUILD_TESTING "Build tests" ON)
 include(CTest)
 
-find_package(SFML 3 COMPONENTS graphics window network QUIET)
+find_package(SFML 3 COMPONENTS Graphics Window Network QUIET)
 if(SFML_FOUND)
     set(CHESS_SFML_GRAPHICS_TARGET SFML::Graphics)
     set(CHESS_SFML_WINDOW_TARGET SFML::Window)
