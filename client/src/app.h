@@ -35,6 +35,11 @@ public:
     sf::Font& font() { return *font_; }
     Connection& connection() { return connection_; }
 
+    // Map a window-space mouse pixel to logical (view-space) coordinates.
+    sf::Vector2f toLocal(sf::Vector2i pixel) const;
+
+    sf::Vector2u viewportSize() const { return viewport_; }
+
     void setLastConnection(const std::string& host, const std::string& port, const std::string& name) {
         lastHost_ = host;
         lastPort_ = port;
@@ -58,6 +63,7 @@ public:
 private:
     void loadAssets();
     void loadPieceTextures();
+    void buildView(unsigned int width, unsigned int height);
 
     sf::RenderWindow window_;
     Connection connection_;
@@ -69,6 +75,8 @@ private:
     std::string lastHost_ = "localhost";
     std::string lastPort_ = "5555";
     std::string lastName_;
+    sf::View view_;
+    sf::Vector2u viewport_;
 };
 
 } // namespace chess::client
