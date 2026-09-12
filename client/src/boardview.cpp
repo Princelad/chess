@@ -2,6 +2,7 @@
 #include "app.h"
 
 #include <algorithm>
+#include <cmath>
 
 namespace chess::client {
 
@@ -45,6 +46,100 @@ std::optional<std::pair<int, int>> BoardView::pixelToSquare(sf::Vector2f pixel) 
     int ic = static_cast<int>(col);
     int ir = static_cast<int>(row);
     return toFileRank(ic, ir);
+}
+
+sf::Vector2f BoardView::squareCenter(int file, int rank) const
+{
+    auto pos = squareToPixel(file, rank);
+    return { pos.x + squareSize_ / 2.f, pos.y + squareSize_ / 2.f };
+}
+
+void BoardView::drawAnnotations(sf::RenderWindow& window,
+                                const std::vector<AnnotatedArrow>& arrows,
+                                const std::vector<std::pair<int, int>>& circles) const
+{
+    static const sf::Color AnnColor(220, 130, 40, 170);
+
+    for (const auto& a : arrows) {
+        sf::Vector2f from = squareCenter(a.from.first, a.from.second);
+        sf::Vector2f to = squareCenter(a.to.first, a.to.second);
+        sf::Vector2f dir = to - from;
+        float len = std::hypot(dir.x, dir.y);
+        if (len < 1.f) continue;
+        sf::Vector2f unit = dir / len;
+
+        float shaftLen = len - squareSize_ * 0.35f;
+        sf::Vector2f shaftEnd = from + unit * shaftLen;
+        float shaftW = squareSize_ * 0.09f;
+        sf::Vector2f perp(-unit.y, unit.x);
+
+        sf::ConvexShape shaft(4);
+        shaft.setPoint(0, from + perp * shaftW);
+        shaft.setPoint(1, shaftEnd + perp * shaftW);
+        shaft.setPoint(2, shaftEnd - perp * shaftW);
+        shaft.setPoint(3, from - perp * shaftW);
+        shaft.setFillColor(AnnColor);
+        window.draw(shaft);
+
+        float headW = squareSize_ * 0.22f;
+        sf::ConvexShape head(3);
+        head.setPoint(0, to);
+        head.setPoint(1, shaftEnd + perp * headW);
+        head.setPoint(2, shaftEnd - perp * headW);
+        head.setFillColor(AnnColor);
+        window.draw(head);
+    }
+
+    for (const auto& c : circles) {
+        sf::Vector2f center = squareCenter(c.first, c.second);
+        float radius = squareSize_ * 0.32f;
+        sf::CircleShape ring(radius);
+        ring.setFillColor(sf::Color::Transparent);
+        ring.setOutlineColor(AnnColor);
+        ring.setOutlineThickness(squareSize_ * 0.06f);
+        ring.setOrigin({ radius, radius });
+        ring.setPosition(center);
+        window.draw(ring);
+    }
+}
+
+void BoardView::drawDraggedPiece(sf::RenderWindow& window, const sf::Font& font,
+                                 chess::Piece piece, sf::Vector2f cursor,
+                                 const App& app) const
+{
+    float pieceSize = squareSize_ * 0.8f;
+
+    sf::CircleShape shadow(squareSize_ * 0.55f);
+    shadow.setFillColor(sf::Color(0, 0, 0, 70));
+    shadow.setOrigin({ shadow.getRadius(), shadow.getRadius() });
+    shadow.setPosition(cursor + sf::Vector2f(0.f, squareSize_ * 0.12f));
+    window.draw(shadow);
+
+    sf::Vector2f topLeft = cursor - sf::Vector2f(pieceSize / 2.f, pieceSize / 2.f);
+
+    if (app.piecesLoaded()) {
+        const auto& tex = app.pieceTexture(piece.color, piece.type);
+        sf::Sprite sprite(tex);
+        float scale = pieceSize / static_cast<float>(tex.getSize().x);
+        sprite.setScale({ scale, scale });
+        sprite.setPosition(topLeft);
+        window.draw(sprite);
+    } else {
+        static const char pieceLetters[] = { 'P', 'N', 'B', 'R', 'Q', 'K' };
+        unsigned int letterSize = static_cast<unsigned int>(squareSize_ * 0.5f);
+        if (letterSize < 12) letterSize = 12;
+        sf::Text letter(font,
+                        std::string(1, pieceLetters[static_cast<int>(piece.type)]),
+                        letterSize);
+        letter.setFillColor(piece.color == Color::White
+            ? sf::Color(240, 240, 240) : sf::Color(40, 40, 40));
+        auto lb = letter.getLocalBounds();
+        letter.setPosition({
+            topLeft.x + (pieceSize - lb.size.x) / 2.f - lb.position.x,
+            topLeft.y + (pieceSize - lb.size.y) / 2.f - lb.position.y
+        });
+        window.draw(letter);
+    }
 }
 
 void BoardView::drawSquares(sf::RenderWindow& window) const

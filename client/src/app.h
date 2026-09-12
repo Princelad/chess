@@ -49,6 +49,9 @@ public:
     const std::string& lastPort() const { return lastPort_; }
     const std::string& lastName() const { return lastName_; }
 
+    bool autoQueen() const { return autoQueen_; }
+    void setAutoQueen(bool on) { autoQueen_ = on; }
+
     static constexpr int PieceIndex(Color c, PieceType t) {
         return static_cast<int>(c) * 6 + static_cast<int>(t);
     }
@@ -75,6 +78,7 @@ private:
     std::string lastHost_ = "localhost";
     std::string lastPort_ = "5555";
     std::string lastName_;
+    bool autoQueen_ = true;
     sf::View view_;
     sf::Vector2u viewport_;
 };

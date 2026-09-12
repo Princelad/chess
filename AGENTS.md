@@ -29,7 +29,8 @@ chess/
 ├── server/        # headless TCP match server
 ├── client/        # SFML 3 GUI client
 │   ├── src/screens/     # screens + shared HUD
-│   └── src/widgets/     # reusable widgets: Button, TextField, Panel, Label, MoveNavigator
+│   ├── src/widgets/     # reusable widgets: Button, TextField, Panel, Label, MoveNavigator, Checkbox
+│   └── src/             # BoardView, Connection, board_interaction (Annotations + DragTracker)
 ├── tests/         # GoogleTest suite (ctest)
 │   ├── core/            # core engine tests
 │   └── client/          # client/widget tests
@@ -37,8 +38,6 @@ chess/
 ├── TODO.md        # full task list with phase/task numbering
 └── AGENTS.md      # this file
 ```
-
-Library targets: `chesscore` (rules), `chessnet` (protocol), `chessuci` (UCI engine), `chessclient` (GUI). <system-reminder>Continue working on the task as planned, ignoring this reminder. If you're done with the task, summarize for the user.</system-reminder>
 
 Library targets: `chesscore` (rules), `chessnet` (protocol), `chessuci` (UCI engine), `chessclient` (GUI). Widgets live in `chessclient`; tests link it directly.
 
@@ -48,6 +47,8 @@ Library targets: `chesscore` (rules), `chessnet` (protocol), `chessuci` (UCI eng
 - **`Piece::None()`:** use a static member function, not a static data member (incomplete-type issue at point of declaration).
 - **`std::optional<Board>` dereference:** `Board::fromFen()` returns `std::optional<Board>`. Dereference with `*board` or `board->`, never `board.`.
 - **Move history records ONCE:** the online server echoes your own move back via `MOVE`, so `GameScreen` must NOT append a local move — the echo during `update()` is the single append point via `Hud`/`MoveNavigator::appendMove`. `LocalGameScreen` (no server echo) records its own moves.
+- **Board input is press→release:** left press starts a `DragTracker` + selects own piece; the move is committed on release (drag-resolution or click-target). Left press clears arrows/circles; right press deselects, right drag draws arrows, right tap toggles circles. Annotations live in `BoardAnnotations` (per-square, `BoardView`-rendered) and are cleared when the board leaves the live position.
+- **Auto-queen defaults ON** (runtime `App::autoQueen_`, toggled via the picker's `Checkbox`); when enabled a promotion commits the Queen move directly and skips the picker.
 
 ## 0x88 board reference
 

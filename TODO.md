@@ -568,11 +568,11 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [x] Read-only replay of historical positions from move history
   - [x] Captured-piece row + material diff per player card
 
-- [ ] **9.4 Board interaction: drag-and-drop + annotations + promotion options**
-  - [ ] Drag-and-drop piece movement (activation threshold; dropping off-board cancels)
-  - [ ] Right-click drag draws arrows; plain right-click toggles a circle
-  - [ ] Left-click clears user annotations; right-click also deselects
-  - [ ] Auto-queen setting; promotion picker dialog vs inline choice
+- [x] **9.4 Board interaction: drag-and-drop + annotations + promotion options**
+  - [x] Drag-and-drop piece movement (activation threshold; dropping off-board cancels)
+  - [x] Right-click drag draws arrows; plain right-click toggles a circle
+  - [x] Left-click clears user annotations; right-click also deselects
+  - [x] Auto-queen setting; promotion picker dialog vs inline choice
 
 - [ ] **9.5 Settings screen + config file**
   - [ ] INI-style config persisted to `~/.config/chess/config.ini`
