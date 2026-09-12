@@ -18,18 +18,16 @@ constexpr std::size_t MaxChatInput = 200;
 
 GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName)
     : app_(app)
-    , board_(Board::fromStartPos())
     , myColor_(myColor)
     , opponentName_(opponentName)
     , boardView_(static_cast<float>(App::WindowWidth),
                  static_cast<float>(App::WindowHeight),
                  myColor)
-    , hud_(boardView_.panelX(),
+    , hud_(app_, boardView_.panelX(),
            static_cast<float>(App::WindowWidth) - boardView_.panelX() - 8.f)
     , myTurn_(myColor == Color::White)
-    , initialBoard_(Board::fromStartPos())
 {
-    inCheck_ = chess::inCheck(board_, myColor_);
+    hud_.setGame(Board::fromStartPos(), {}, {});
     hud_.setInfo(opponentName_, myColor_, myTurn_, gameOver_);
 
     chatInput_.setMaxLength(MaxChatInput);
@@ -136,7 +134,7 @@ void GameScreen::selectPiece(int file, int rank)
     hl_.selectedSquare = { file, rank };
     hl_.legalMoveTargets.clear();
     Square from = squareOf(file, rank);
-    auto moves = chess::generateLegalMoves(board_);
+    auto moves = chess::generateLegalMoves(hud_.navigator().finalBoard());
     for (const auto& m : moves) {
         if (m.from == from) {
             hl_.legalMoveTargets.push_back({
@@ -149,10 +147,11 @@ void GameScreen::selectPiece(int file, int rank)
 
 void GameScreen::trySendMove(int targetFile, int targetRank)
 {
+    const Board& live = hud_.navigator().finalBoard();
     Square from = squareOf(hl_.selectedSquare->first, hl_.selectedSquare->second);
     Square to = squareOf(targetFile, targetRank);
 
-    auto moves = chess::generateLegalMoves(board_);
+    auto moves = chess::generateLegalMoves(live);
     const chess::Move* found = nullptr;
     for (const auto& m : moves) {
         if (m.from == from && m.to == to) {
@@ -182,9 +181,7 @@ void GameScreen::trySendMove(int targetFile, int targetRank)
         return;
     }
 
-    std::string san = chess::san::toSan(board_, *found);
-    moves_.push_back(*found);
-    sanMoves_.push_back(san);
+    std::string san = chess::san::toSan(live, *found);
     app_.connection().send(chess::net::MoveMsg{san});
     myTurn_ = false;
     hud_.setInfo(opponentName_, myColor_, myTurn_, gameOver_);
@@ -197,14 +194,24 @@ void GameScreen::deselect()
     hl_.legalMoveTargets.clear();
 }
 
+void GameScreen::syncViewHighlights()
+{
+    const Board& shown = hud_.navigator().board();
+    hl_.lastMoveFrom = hud_.navigator().lastMoveFrom();
+    hl_.lastMoveTo = hud_.navigator().lastMoveTo();
+    Color stm = shown.sideToMove();
+    hl_.checkSquare = chess::inCheck(shown, stm)
+        ? findKingSquare(shown, stm)
+        : std::optional<std::pair<int, int>>{};
+}
+
 void GameScreen::sendPromotionMove(chess::PieceType type)
 {
     if (!promo_) return;
+    const Board& live = hud_.navigator().finalBoard();
     for (const auto& m : promo_->candidates) {
         if (m.promotion == type) {
-            std::string san = chess::san::toSan(board_, m);
-            moves_.push_back(m);
-            sanMoves_.push_back(san);
+            std::string san = chess::san::toSan(live, m);
             app_.connection().send(chess::net::MoveMsg{san});
             myTurn_ = false;
             hud_.setInfo(opponentName_, myColor_, myTurn_, gameOver_);
@@ -267,6 +274,7 @@ void GameScreen::handleEvent(const sf::Event& event)
             deselect();
             return;
         }
+        if (hud_.navigator().handleEvent(event, {0.f, 0.f})) return;
         return;
     }
 
@@ -291,10 +299,12 @@ void GameScreen::handleEvent(const sf::Event& event)
     if (const auto* we = event.getIf<sf::Event::MouseWheelScrolled>()) {
         float px = boardView_.panelX();
         if (app_.toLocal(we->position).x >= px) {
-            hud_.handleScroll(-we->delta);
+            hud_.handleScroll(we->delta);
             return;
         }
     }
+
+    if (hud_.navigator().handleEvent(event, local)) return;
 
     if (!gameOver_) {
         if (drawOfferPending_) {
@@ -310,6 +320,11 @@ void GameScreen::handleEvent(const sf::Event& event)
         if (mb->button != sf::Mouse::Button::Left) return;
 
         if (gameOver_ || !myTurn_) return;
+
+        if (!hud_.navigator().atEnd()) {
+            hud_.navigator().goEnd();
+            deselect();
+        }
 
         if (promo_) {
             for (int i = 0; i < static_cast<int>(promo_->candidates.size()); ++i) {
@@ -328,7 +343,7 @@ void GameScreen::handleEvent(const sf::Event& event)
         if (!square) return;
 
         auto [file, rank] = *square;
-        Piece piece = board_.pieceAt(squareOf(file, rank));
+        Piece piece = hud_.navigator().finalBoard().pieceAt(squareOf(file, rank));
 
         if (hl_.selectedSquare) {
             if (file == hl_.selectedSquare->first &&
@@ -358,25 +373,11 @@ void GameScreen::update(float dtSec)
         auto msg = app_.connection().nextMessage();
 
         if (auto* move = std::get_if<chess::net::ServerMoveMsg>(&msg)) {
-            auto parsed = chess::san::fromSan(board_, move->san);
+            auto parsed = chess::san::fromSan(hud_.navigator().finalBoard(), move->san);
             if (parsed) {
-                hl_.lastMoveFrom = std::make_pair(
-                    static_cast<int>(chess::fileOf(parsed->from)),
-                    static_cast<int>(chess::rankOf(parsed->from)));
-                hl_.lastMoveTo = std::make_pair(
-                    static_cast<int>(chess::fileOf(parsed->to)),
-                    static_cast<int>(chess::rankOf(parsed->to)));
+                hud_.navigator().appendMove(*parsed, move->san);
                 hl_.selectedSquare.reset();
                 hl_.legalMoveTargets.clear();
-
-                board_.makeMove(*parsed);
-                moves_.push_back(*parsed);
-                sanMoves_.push_back(move->san);
-                hud_.addMove(move->san);
-                inCheck_ = chess::inCheck(board_, myColor_);
-                hl_.checkSquare = inCheck_
-                    ? findKingSquare(board_, myColor_)
-                    : std::optional<std::pair<int,int>>{};
                 myTurn_ = true;
                 hud_.setInfo(opponentName_, myColor_, myTurn_, gameOver_);
             }
@@ -388,7 +389,8 @@ void GameScreen::update(float dtSec)
             hud_.setInfo(opponentName_, myColor_, myTurn_, gameOver_);
             app_.switchScreen(std::make_unique<GameOverScreen>(
                 app_, gameOver->result, gameOver->reason,
-                initialBoard_, moves_, sanMoves_));
+                hud_.navigator().initialBoard(), hud_.navigator().moves(),
+                hud_.navigator().sans()));
             return;
         }
         else if (auto* drawOffer = std::get_if<chess::net::ServerDrawOfferMsg>(&msg)) {
@@ -424,7 +426,8 @@ void GameScreen::update(float dtSec)
         gameOver_ = true;
         app_.switchScreen(std::make_unique<GameOverScreen>(
             app_, net::GameResult::Abort, net::GameOverReason::Disconnection,
-            initialBoard_, moves_, sanMoves_));
+            hud_.navigator().initialBoard(), hud_.navigator().moves(),
+            hud_.navigator().sans()));
     }
 }
 
@@ -494,11 +497,13 @@ void GameScreen::drawChat(sf::RenderWindow& window)
 void GameScreen::draw(sf::RenderWindow& window)
 {
     auto& font = app_.font();
+    const Board& shown = hud_.navigator().board();
 
     boardView_.drawSquares(window);
-    boardView_.drawHighlights(window, hl_, board_);
+    syncViewHighlights();
+    boardView_.drawHighlights(window, hl_, shown);
     boardView_.drawLabels(window, font);
-    boardView_.drawPieces(window, font, board_, app_);
+    boardView_.drawPieces(window, font, shown, app_);
 
     if (promo_) {
         for (int i = 0; i < static_cast<int>(promo_->candidates.size()); ++i) {

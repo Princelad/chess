@@ -52,18 +52,16 @@ net::GameResult toResult(GameState state, Color sideToMove)
 LocalGameScreen::LocalGameScreen(App& app, Color myColor,
                                  std::string enginePath, int depth)
     : app_(app)
-    , board_(Board::fromStartPos())
     , myColor_(myColor)
     , boardView_(static_cast<float>(App::WindowWidth),
                  static_cast<float>(App::WindowHeight),
                  myColor)
-    , hud_(boardView_.panelX(),
+    , hud_(app_, boardView_.panelX(),
            static_cast<float>(App::WindowWidth) - boardView_.panelX() - 8.f)
     , myTurn_(myColor == Color::White)
     , engineDepth_(depth)
-    , initialBoard_(Board::fromStartPos())
 {
-    inCheck_ = chess::inCheck(board_, myColor_);
+    hud_.setGame(Board::fromStartPos(), {}, {});
     hud_.setInfo("Computer", myColor_, myTurn_, gameOver_);
 
     backBtn_.setLabel("Back to Menu");
@@ -108,7 +106,7 @@ void LocalGameScreen::selectPiece(int file, int rank)
     hl_.selectedSquare = { file, rank };
     hl_.legalMoveTargets.clear();
     Square from = squareOf(file, rank);
-    auto moves = chess::generateLegalMoves(board_);
+    auto moves = chess::generateLegalMoves(hud_.navigator().finalBoard());
     for (const auto& m : moves) {
         if (m.from == from) {
             hl_.legalMoveTargets.push_back({
@@ -121,10 +119,11 @@ void LocalGameScreen::selectPiece(int file, int rank)
 
 void LocalGameScreen::tryMove(int targetFile, int targetRank)
 {
+    const Board& live = hud_.navigator().finalBoard();
     Square from = squareOf(hl_.selectedSquare->first, hl_.selectedSquare->second);
     Square to = squareOf(targetFile, targetRank);
 
-    auto moves = chess::generateLegalMoves(board_);
+    auto moves = chess::generateLegalMoves(live);
     const chess::Move* found = nullptr;
     for (const auto& m : moves) {
         if (m.from == from && m.to == to) {
@@ -153,39 +152,28 @@ void LocalGameScreen::tryMove(int targetFile, int targetRank)
         return;
     }
 
-    std::string san = chess::san::toSan(board_, *found);
-    moves_.push_back(*found);
-    sanMoves_.push_back(san);
-    board_.makeMove(*found);
-    hl_.lastMoveFrom = { static_cast<int>(chess::fileOf(found->from)),
-                         static_cast<int>(chess::rankOf(found->from)) };
-    hl_.lastMoveTo = { static_cast<int>(chess::fileOf(found->to)),
-                       static_cast<int>(chess::rankOf(found->to)) };
+    std::string san = chess::san::toSan(live, *found);
+    hud_.navigator().appendMove(*found, san);
     deselect();
-    hud_.addMove(san);
 
-    inCheck_ = chess::inCheck(board_, opposite(myColor_));
-    hl_.checkSquare = inCheck_
-        ? findKingSquare(board_, opposite(myColor_))
-        : std::optional<std::pair<int,int>>{};
-
-    auto state = chess::evaluateGameState(board_);
+    auto state = chess::evaluateGameState(hud_.navigator().finalBoard());
     if (state != GameState::Ongoing) {
         gameOver_ = true;
         myTurn_ = false;
         hud_.setGameOver(true);
         hud_.setInfo("Computer", myColor_, myTurn_, gameOver_);
         app_.switchScreen(std::make_unique<GameOverScreen>(
-            app_, toResult(state, board_.sideToMove()),
-            toReason(state, board_),
-            initialBoard_, moves_, sanMoves_));
+            app_, toResult(state, hud_.navigator().finalBoard().sideToMove()),
+            toReason(state, hud_.navigator().finalBoard()),
+            hud_.navigator().initialBoard(), hud_.navigator().moves(),
+            hud_.navigator().sans()));
         return;
     }
 
     myTurn_ = false;
     engineThinking_ = true;
     hud_.setStatus("Computer thinking...", 999.f);
-    engine_->position(board_.toFen());
+    engine_->position(hud_.navigator().finalBoard().toFen());
     engine_->go(engineDepth_);
     hud_.setInfo("Computer", myColor_, myTurn_, gameOver_);
 }
@@ -196,45 +184,46 @@ void LocalGameScreen::deselect()
     hl_.legalMoveTargets.clear();
 }
 
+void LocalGameScreen::syncViewHighlights()
+{
+    const Board& shown = hud_.navigator().board();
+    hl_.lastMoveFrom = hud_.navigator().lastMoveFrom();
+    hl_.lastMoveTo = hud_.navigator().lastMoveTo();
+    Color stm = shown.sideToMove();
+    hl_.checkSquare = chess::inCheck(shown, stm)
+        ? findKingSquare(shown, stm)
+        : std::optional<std::pair<int, int>>{};
+}
+
 void LocalGameScreen::applyPromotionMove(chess::PieceType type)
 {
     if (!promo_) return;
+    const Board& live = hud_.navigator().finalBoard();
     for (const auto& m : promo_->candidates) {
         if (m.promotion == type) {
-            std::string san = chess::san::toSan(board_, m);
-            moves_.push_back(m);
-            sanMoves_.push_back(san);
-            board_.makeMove(m);
-            hl_.lastMoveFrom = { static_cast<int>(chess::fileOf(m.from)),
-                                 static_cast<int>(chess::rankOf(m.from)) };
-            hl_.lastMoveTo = { static_cast<int>(chess::fileOf(m.to)),
-                               static_cast<int>(chess::rankOf(m.to)) };
-            hud_.addMove(san);
+            std::string san = chess::san::toSan(live, m);
+            hud_.navigator().appendMove(m, san);
             promo_.reset();
             deselect();
 
-            inCheck_ = chess::inCheck(board_, opposite(myColor_));
-            hl_.checkSquare = inCheck_
-                ? findKingSquare(board_, opposite(myColor_))
-                : std::optional<std::pair<int,int>>{};
-
-            auto state = chess::evaluateGameState(board_);
+            auto state = chess::evaluateGameState(hud_.navigator().finalBoard());
             if (state != GameState::Ongoing) {
                 gameOver_ = true;
                 myTurn_ = false;
                 hud_.setGameOver(true);
                 hud_.setInfo("Computer", myColor_, myTurn_, gameOver_);
                 app_.switchScreen(std::make_unique<GameOverScreen>(
-                    app_, toResult(state, board_.sideToMove()),
-                    toReason(state, board_),
-                    initialBoard_, moves_, sanMoves_));
+                    app_, toResult(state, hud_.navigator().finalBoard().sideToMove()),
+                    toReason(state, hud_.navigator().finalBoard()),
+                    hud_.navigator().initialBoard(), hud_.navigator().moves(),
+                    hud_.navigator().sans()));
                 return;
             }
 
             myTurn_ = false;
             engineThinking_ = true;
             hud_.setStatus("Computer thinking...", 999.f);
-            engine_->position(board_.toFen());
+            engine_->position(hud_.navigator().finalBoard().toFen());
             engine_->go(engineDepth_);
             hud_.setInfo("Computer", myColor_, myTurn_, gameOver_);
             return;
@@ -252,25 +241,13 @@ void LocalGameScreen::cancelPromotion()
 
 bool LocalGameScreen::applyEngineMove()
 {
-    auto move = engine_->tryGetBestMove(board_);
+    auto move = engine_->tryGetBestMove(hud_.navigator().finalBoard());
     if (!move) return false;
 
-    std::string san = chess::san::toSan(board_, *move);
-    moves_.push_back(*move);
-    sanMoves_.push_back(san);
-    board_.makeMove(*move);
-    hl_.lastMoveFrom = { static_cast<int>(chess::fileOf(move->from)),
-                         static_cast<int>(chess::rankOf(move->from)) };
-    hl_.lastMoveTo = { static_cast<int>(chess::fileOf(move->to)),
-                       static_cast<int>(chess::rankOf(move->to)) };
+    std::string san = chess::san::toSan(hud_.navigator().finalBoard(), *move);
+    hud_.navigator().appendMove(*move, san);
     hl_.selectedSquare.reset();
     hl_.legalMoveTargets.clear();
-    hud_.addMove(san);
-
-    inCheck_ = chess::inCheck(board_, myColor_);
-    hl_.checkSquare = inCheck_
-        ? findKingSquare(board_, myColor_)
-        : std::optional<std::pair<int,int>>{};
 
     engineThinking_ = false;
     hud_.setStatus("", 0.f);
@@ -281,7 +258,7 @@ bool LocalGameScreen::applyEngineMove()
 
 void LocalGameScreen::checkGameOver()
 {
-    auto state = chess::evaluateGameState(board_);
+    auto state = chess::evaluateGameState(hud_.navigator().finalBoard());
     if (state == GameState::Ongoing) return;
 
     gameOver_ = true;
@@ -290,9 +267,10 @@ void LocalGameScreen::checkGameOver()
     hud_.setInfo("Computer", myColor_, myTurn_, gameOver_);
 
     app_.switchScreen(std::make_unique<GameOverScreen>(
-        app_, toResult(state, board_.sideToMove()),
-        toReason(state, board_),
-        initialBoard_, moves_, sanMoves_));
+        app_, toResult(state, hud_.navigator().finalBoard().sideToMove()),
+        toReason(state, hud_.navigator().finalBoard()),
+        hud_.navigator().initialBoard(), hud_.navigator().moves(),
+        hud_.navigator().sans()));
 }
 
 void LocalGameScreen::returnToMenu()
@@ -327,6 +305,7 @@ void LocalGameScreen::handleEvent(const sf::Event& event)
             deselect();
             return;
         }
+        if (hud_.navigator().handleEvent(event, {0.f, 0.f})) return;
         return;
     }
 
@@ -338,12 +317,27 @@ void LocalGameScreen::handleEvent(const sf::Event& event)
     else if (const auto* rb = event.getIf<sf::Event::MouseButtonReleased>())
         local = app_.toLocal(rb->position);
 
+    if (const auto* we = event.getIf<sf::Event::MouseWheelScrolled>()) {
+        float px = boardView_.panelX();
+        if (app_.toLocal(we->position).x >= px) {
+            hud_.handleScroll(we->delta);
+            return;
+        }
+    }
+
+    if (hud_.navigator().handleEvent(event, local)) return;
+
     if (!gameOver_ && backBtn_.handleEvent(event, local)) return;
 
     if (const auto* mb = event.getIf<sf::Event::MouseButtonPressed>()) {
         if (mb->button != sf::Mouse::Button::Left) return;
 
         if (gameOver_ || !myTurn_ || engineThinking_ || engineFailed_) return;
+
+        if (!hud_.navigator().atEnd()) {
+            hud_.navigator().goEnd();
+            deselect();
+        }
 
         if (promo_) {
             for (int i = 0; i < static_cast<int>(promo_->candidates.size()); ++i) {
@@ -362,7 +356,7 @@ void LocalGameScreen::handleEvent(const sf::Event& event)
         if (!square) return;
 
         auto [file, rank] = *square;
-        Piece piece = board_.pieceAt(squareOf(file, rank));
+        Piece piece = hud_.navigator().finalBoard().pieceAt(squareOf(file, rank));
 
         if (hl_.selectedSquare) {
             if (file == hl_.selectedSquare->first &&
@@ -397,11 +391,13 @@ void LocalGameScreen::update(float /*dtSec*/)
 void LocalGameScreen::draw(sf::RenderWindow& window)
 {
     auto& font = app_.font();
+    const Board& shown = hud_.navigator().board();
 
     boardView_.drawSquares(window);
-    boardView_.drawHighlights(window, hl_, board_);
+    syncViewHighlights();
+    boardView_.drawHighlights(window, hl_, shown);
     boardView_.drawLabels(window, font);
-    boardView_.drawPieces(window, font, board_, app_);
+    boardView_.drawPieces(window, font, shown, app_);
 
     if (promo_) {
         for (int i = 0; i < static_cast<int>(promo_->candidates.size()); ++i) {

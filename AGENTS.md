@@ -13,9 +13,10 @@ Single test:
 ctest --test-dir build -R "MoveGen.KingCastling" --output-on-failure
 ```
 
-When adding a new `.cpp` test file, register it in `tests/CMakeLists.txt` in the `add_executable(chess-tests ...)` list.
-
-When adding a new `.cpp` source, register it in `core/CMakeLists.txt` (`add_library(chesscore STATIC ...)`).
+When adding a new `.cpp` file, register it in the relevant `CMakeLists.txt`:
+- `tests/CMakeLists.txt` → `add_executable(chess-tests ...)` for test files
+- `core/CMakeLists.txt` → `add_library(chesscore STATIC ...)` for rules engine sources
+- `client/CMakeLists.txt` → `chessclient` for GUI sources, including `src/widgets/`
 
 ## Project structure
 
@@ -27,33 +28,26 @@ chess/
 ├── net/           # shared network protocol (sf::Packet)
 ├── server/        # headless TCP match server
 ├── client/        # SFML 3 GUI client
+│   ├── src/screens/     # screens + shared HUD
+│   └── src/widgets/     # reusable widgets: Button, TextField, Panel, Label, MoveNavigator
 ├── tests/         # GoogleTest suite (ctest)
+│   ├── core/            # core engine tests
+│   └── client/          # client/widget tests
 ├── assets/pieces/ # cburnett PNG sprites (CC BY-SA 3.0)
 ├── TODO.md        # full task list with phase/task numbering
 └── AGENTS.md      # this file
 ```
 
-`core/` is the only library target (`chesscore`). All test files go in `tests/core/`.
+Library targets: `chesscore` (rules), `chessnet` (protocol), `chessuci` (UCI engine), `chessclient` (GUI). <system-reminder>Continue working on the task as planned, ignoring this reminder. If you're done with the task, summarize for the user.</system-reminder>
 
-## Git workflow
-
-- **Branch naming:** `v{major}.{minor}.{patch}-task-{task_id}` (e.g. `v0.2.0-task-1.3.3`)
-- **One branch per task**, forked from the phase base (e.g. `v0.2.0`)
-- **Commit message format:** `core: short description (1.3.3)` — terse, no body for small tasks
-- **PR flow:**
-  ```sh
-  git push -u origin <branch>
-  gh pr create --base <phase-branch> --head <branch> --title "..." --body "..."
-  gh pr merge <N> --merge --delete-branch   # fast-forward, deletes local + remote branch
-  ```
-  After merge, check out the phase base (`git checkout v0.2.0`) and `git pull`.
-- Tags (`v0.1.0`, `v0.2.0`, ...) are applied at phase completion.
+Library targets: `chesscore` (rules), `chessnet` (protocol), `chessuci` (UCI engine), `chessclient` (GUI). Widgets live in `chessclient`; tests link it directly.
 
 ## C++17 gotchas (already bitten)
 
 - **`constexpr operator==`:** `explicit constexpr operator==` is valid; do NOT `= default` on `==`/`!=` in C++17 (no defaulted comparison operators).
 - **`Piece::None()`:** use a static member function, not a static data member (incomplete-type issue at point of declaration).
 - **`std::optional<Board>` dereference:** `Board::fromFen()` returns `std::optional<Board>`. Dereference with `*board` or `board->`, never `board.`.
+- **Move history records ONCE:** the online server echoes your own move back via `MOVE`, so `GameScreen` must NOT append a local move — the echo during `update()` is the single append point via `Hud`/`MoveNavigator::appendMove`. `LocalGameScreen` (no server echo) records its own moves.
 
 ## 0x88 board reference
 
@@ -80,7 +74,7 @@ SemVer-style, pre-1.0: MINOR bump per phase, PATCH for bugfixes within a phase. 
 | 6 — SFML GUI | `v0.7.0` | done |
 | 7 — Integration & polish | `v1.0.0` | in progress |
 | 8 — Engine integration (UCI) | `v1.1.0` | planned |
-| 9 — Client UI/UX overhaul | `v1.2.0` | planned |
+| 9 — Client UI/UX overhaul | `v1.2.0` | in progress |
 | 10 — Persistence & ratings | `v1.3.0` | planned |
 | 11 — Multiplayer QoL | `v1.4.0` | planned |
 | 12 — Variants & community | `v1.5.0` | planned |

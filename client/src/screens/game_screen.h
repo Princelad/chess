@@ -31,27 +31,23 @@ private:
     void deselect();
     void sendPromotionMove(chess::PieceType type);
     void cancelPromotion();
+    void syncViewHighlights();
     PromoCell promoCell(int index) const;
     void sendChat();
     void drawButtons(sf::RenderWindow& window);
     void drawChat(sf::RenderWindow& window);
 
     App& app_;
-    Board board_;
     Color myColor_;
     BoardView boardView_;
     HighlightState hl_;
     std::optional<PromotionState> promo_;
-    bool inCheck_ = false;
     Hud hud_;
     bool myTurn_ = false;
     bool gameOver_ = false;
     bool drawOfferPending_ = false;
 
     std::string opponentName_;
-    Board initialBoard_;
-    std::vector<chess::Move> moves_;
-    std::vector<std::string> sanMoves_;
 
     std::vector<std::string> chatLog_;
     TextField chatInput_;
