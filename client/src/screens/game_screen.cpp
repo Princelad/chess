@@ -37,6 +37,10 @@ GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName)
         chatInput_.setFocused(false);
     });
 
+    autoQueenCheck_.setOnToggle([this](bool checked) {
+        app_.setAutoQueen(checked);
+    });
+
     chatLabel_.setText("Chat:");
     chatLabel_.setFontSize(14);
     chatLabel_.setColor(sf::Color(160, 160, 160));
@@ -153,10 +157,11 @@ void GameScreen::trySendMove(int targetFile, int targetRank)
 
     auto moves = chess::generateLegalMoves(live);
     const chess::Move* found = nullptr;
+    std::vector<chess::Move> promos;
     for (const auto& m : moves) {
         if (m.from == from && m.to == to) {
             found = &m;
-            if (m.isPromotion()) break;
+            if (m.isPromotion()) promos.push_back(m);
         }
     }
 
@@ -167,25 +172,36 @@ void GameScreen::trySendMove(int targetFile, int targetRank)
     }
 
     if (found->isPromotion()) {
-        PromotionState ps;
-        ps.fromFile = hl_.selectedSquare->first;
-        ps.fromRank = hl_.selectedSquare->second;
-        ps.toFile = targetFile;
-        ps.toRank = targetRank;
-
-        for (const auto& m : moves) {
-            if (m.from == from && m.to == to && m.isPromotion())
-                ps.candidates.push_back(m);
+        if (auto qm = autoQueenMove(promos)) {
+            commitMove(*qm);
+            return;
         }
-        promo_ = std::move(ps);
+        buildPromotion(hl_.selectedSquare->first, hl_.selectedSquare->second,
+                       targetFile, targetRank);
         return;
     }
 
-    std::string san = chess::san::toSan(live, *found);
-    app_.connection().send(chess::net::MoveMsg{san});
-    myTurn_ = false;
-    hud_.setInfo(opponentName_, myColor_, myTurn_, gameOver_);
-    deselect();
+    commitMove(*found);
+}
+
+void GameScreen::buildPromotion(int fromFile, int fromRank, int toFile, int toRank)
+{
+    PromotionState ps;
+    ps.fromFile = fromFile;
+    ps.fromRank = fromRank;
+    ps.toFile = toFile;
+    ps.toRank = toRank;
+
+    const Board& live = hud_.navigator().finalBoard();
+    Square from = squareOf(ps.fromFile, ps.fromRank);
+    Square to = squareOf(ps.toFile, ps.toRank);
+    auto moves = chess::generateLegalMoves(live);
+    for (const auto& m : moves) {
+        if (m.from == from && m.to == to && m.isPromotion())
+            ps.candidates.push_back(m);
+    }
+    promo_ = std::move(ps);
+    promoHover_ = -1;
 }
 
 void GameScreen::deselect()
@@ -205,29 +221,72 @@ void GameScreen::syncViewHighlights()
         : std::optional<std::pair<int, int>>{};
 }
 
+void GameScreen::commitMove(const chess::Move& m)
+{
+    std::string san = chess::san::toSan(hud_.navigator().finalBoard(), m);
+    app_.connection().send(chess::net::MoveMsg{san});
+    myTurn_ = false;
+    hud_.setInfo(opponentName_, myColor_, myTurn_, gameOver_);
+    deselect();
+}
+
 void GameScreen::sendPromotionMove(chess::PieceType type)
 {
     if (!promo_) return;
-    const Board& live = hud_.navigator().finalBoard();
     for (const auto& m : promo_->candidates) {
         if (m.promotion == type) {
-            std::string san = chess::san::toSan(live, m);
-            app_.connection().send(chess::net::MoveMsg{san});
-            myTurn_ = false;
-            hud_.setInfo(opponentName_, myColor_, myTurn_, gameOver_);
             promo_.reset();
-            deselect();
+            promoHover_ = -1;
+            commitMove(m);
             return;
         }
     }
     promo_.reset();
+    promoHover_ = -1;
     deselect();
 }
 
 void GameScreen::cancelPromotion()
 {
     promo_.reset();
+    promoHover_ = -1;
     deselect();
+}
+
+void GameScreen::clearBoardInput()
+{
+    drag_.cancel();
+    dragFrom_.reset();
+    rightPress_.reset();
+}
+
+bool GameScreen::ownPieceAt(int file, int rank)
+{
+    Piece piece = hud_.navigator().finalBoard().pieceAt(squareOf(file, rank));
+    return !piece.isNone() && piece.color == myColor_;
+}
+
+sf::FloatRect GameScreen::autoQueenRect() const
+{
+    auto cell = promoCell(static_cast<int>(promo_->candidates.size()) - 1);
+    float sq = boardView_.squareSize();
+    return { { cell.pos.x, cell.pos.y + cell.size + 3.f },
+             { sq * 1.6f, 22.f } };
+}
+
+std::optional<chess::PieceType> GameScreen::promoTypeForKey(sf::Keyboard::Key key) const
+{
+    switch (key) {
+        case sf::Keyboard::Key::Q:
+        case sf::Keyboard::Key::Num1: return chess::PieceType::Queen;
+        case sf::Keyboard::Key::R:
+        case sf::Keyboard::Key::Num2: return chess::PieceType::Rook;
+        case sf::Keyboard::Key::B:
+        case sf::Keyboard::Key::Num3: return chess::PieceType::Bishop;
+        case sf::Keyboard::Key::N:
+        case sf::Keyboard::Key::Num4: return chess::PieceType::Knight;
+        default: return std::nullopt;
+    }
 }
 
 PromoCell GameScreen::promoCell(int index) const
@@ -266,15 +325,28 @@ void GameScreen::handleEvent(const sf::Event& event)
 
         if (kp->code == sf::Keyboard::Key::Escape) {
             if (promo_) { cancelPromotion(); return; }
+            clearBoardInput();
             deselect();
             return;
         }
         if (kp->code == sf::Keyboard::Key::Space) {
             if (promo_) { cancelPromotion(); return; }
+            clearBoardInput();
             deselect();
             return;
         }
-        if (hud_.navigator().handleEvent(event, {0.f, 0.f})) return;
+
+        if (promo_) {
+            if (auto t = promoTypeForKey(kp->code)) {
+                sendPromotionMove(*t);
+                return;
+            }
+        }
+
+        if (hud_.navigator().handleEvent(event, {0.f, 0.f})) {
+            clearBoardInput();
+            return;
+        }
         return;
     }
 
@@ -290,6 +362,25 @@ void GameScreen::handleEvent(const sf::Event& event)
     else if (const auto* rb = event.getIf<sf::Event::MouseButtonReleased>())
         local = app_.toLocal(rb->position);
 
+    if (const auto* mm = event.getIf<sf::Event::MouseMoved>()) {
+        (void)mm;
+        cursor_ = local;
+        if (promo_) {
+            promoHover_ = -1;
+            for (int i = 0; i < static_cast<int>(promo_->candidates.size()); ++i) {
+                auto cell = promoCell(i);
+                if (sf::FloatRect(cell.pos, {cell.size, cell.size}).contains(local)) {
+                    promoHover_ = i;
+                    break;
+                }
+            }
+            autoQueenCheck_.setRect(autoQueenRect());
+            autoQueenCheck_.handleEvent(event, local);
+            return;
+        }
+        if (drag_.isActive()) drag_.move(local.x, local.y);
+    }
+
     if (const auto* mb = event.getIf<sf::Event::MouseButtonPressed>()) {
         if (mb->button == sf::Mouse::Button::Left) {
             if (chatInput_.handleEvent(*mb, local)) return;
@@ -304,7 +395,10 @@ void GameScreen::handleEvent(const sf::Event& event)
         }
     }
 
-    if (hud_.navigator().handleEvent(event, local)) return;
+    if (hud_.navigator().handleEvent(event, local)) {
+        clearBoardInput();
+        return;
+    }
 
     if (!gameOver_) {
         if (drawOfferPending_) {
@@ -317,47 +411,88 @@ void GameScreen::handleEvent(const sf::Event& event)
     }
 
     if (const auto* mb = event.getIf<sf::Event::MouseButtonPressed>()) {
-        if (mb->button != sf::Mouse::Button::Left) return;
+        if (mb->button == sf::Mouse::Button::Left) {
+            if (promo_) {
+                autoQueenCheck_.setRect(autoQueenRect());
+                if (autoQueenCheck_.handleEvent(*mb, local)) return;
+                for (int i = 0; i < static_cast<int>(promo_->candidates.size()); ++i) {
+                    auto cell = promoCell(i);
+                    if (sf::FloatRect(cell.pos, {cell.size, cell.size}).contains(local)) {
+                        sendPromotionMove(promo_->candidates[i].promotion);
+                        return;
+                    }
+                }
+                cancelPromotion();
+                return;
+            }
 
-        if (gameOver_ || !myTurn_) return;
+            annotations_.clear();
+            if (gameOver_ || !myTurn_) return;
 
-        if (!hud_.navigator().atEnd()) {
-            hud_.navigator().goEnd();
+            if (!hud_.navigator().atEnd()) {
+                hud_.navigator().goEnd();
+                deselect();
+            }
+
+            auto square = boardView_.pixelToSquare(local);
+            if (!square) return;
+
+            drag_.press(local.x, local.y);
+            cursor_ = local;
+            dragFrom_ = *square;
+
+            if (ownPieceAt(square->first, square->second))
+                selectPiece(square->first, square->second);
+        } else if (mb->button == sf::Mouse::Button::Right) {
+            if (promo_) cancelPromotion();
+            clearBoardInput();
             deselect();
+            rightPress_ = boardView_.pixelToSquare(local);
         }
+        return;
+    }
 
-        if (promo_) {
-            for (int i = 0; i < static_cast<int>(promo_->candidates.size()); ++i) {
-                auto cell = promoCell(i);
-                sf::FloatRect rect(cell.pos, {cell.size, cell.size});
-                if (rect.contains(local)) {
-                    sendPromotionMove(promo_->candidates[i].promotion);
-                    return;
+    if (const auto* rb = event.getIf<sf::Event::MouseButtonReleased>()) {
+        if (rb->button == sf::Mouse::Button::Left) {
+            bool wasDragging = drag_.release();
+            auto square = boardView_.pixelToSquare(local);
+            cursor_ = local;
+
+            if (dragFrom_) {
+                if (wasDragging) {
+                    if (square && *square != *dragFrom_
+                        && ownPieceAt(dragFrom_->first, dragFrom_->second)) {
+                        selectPiece(dragFrom_->first, dragFrom_->second);
+                        trySendMove(square->first, square->second);
+                    }
+                } else if (hl_.selectedSquare) {
+                    if (square && *square == *hl_.selectedSquare) {
+                        deselect();
+                    } else if (square && ownPieceAt(square->first, square->second)) {
+                        selectPiece(square->first, square->second);
+                    } else if (square) {
+                        trySendMove(square->first, square->second);
+                    } else {
+                        deselect();
+                    }
                 }
             }
-            cancelPromotion();
+            dragFrom_.reset();
             return;
         }
 
-        auto square = boardView_.pixelToSquare(local);
-        if (!square) return;
-
-        auto [file, rank] = *square;
-        Piece piece = hud_.navigator().finalBoard().pieceAt(squareOf(file, rank));
-
-        if (hl_.selectedSquare) {
-            if (file == hl_.selectedSquare->first &&
-                rank == hl_.selectedSquare->second) {
-                deselect();
-            } else if (!piece.isNone() && piece.color == myColor_) {
-                selectPiece(file, rank);
-            } else {
-                trySendMove(file, rank);
+        if (rb->button == sf::Mouse::Button::Right) {
+            auto square = boardView_.pixelToSquare(local);
+            if (rightPress_) {
+                if (square && *square == *rightPress_) {
+                    annotations_.toggleCircle(square->first, square->second);
+                } else if (square) {
+                    annotations_.addArrow(rightPress_->first, rightPress_->second,
+                                          square->first, square->second);
+                }
             }
-        } else {
-            if (!piece.isNone() && piece.color == myColor_) {
-                selectPiece(file, rank);
-            }
+            rightPress_.reset();
+            return;
         }
     }
 }
@@ -499,11 +634,22 @@ void GameScreen::draw(sf::RenderWindow& window)
     auto& font = app_.font();
     const Board& shown = hud_.navigator().board();
 
+    if (!hud_.navigator().atEnd() && !annotations_.empty())
+        annotations_.clear();
+
     boardView_.drawSquares(window);
     syncViewHighlights();
     boardView_.drawHighlights(window, hl_, shown);
     boardView_.drawLabels(window, font);
     boardView_.drawPieces(window, font, shown, app_);
+    boardView_.drawAnnotations(window, annotations_.arrows(), annotations_.circles());
+
+    if (drag_.isDragging() && dragFrom_) {
+        Piece dragged = hud_.navigator().finalBoard().pieceAt(
+            squareOf(dragFrom_->first, dragFrom_->second));
+        if (!dragged.isNone() && dragged.color == myColor_)
+            boardView_.drawDraggedPiece(window, font, dragged, cursor_, app_);
+    }
 
     if (promo_) {
         for (int i = 0; i < static_cast<int>(promo_->candidates.size()); ++i) {
@@ -514,6 +660,13 @@ void GameScreen::draw(sf::RenderWindow& window)
             cell.setOutlineColor(sf::Color(180, 180, 180, 180));
             cell.setOutlineThickness(1.f);
             window.draw(cell);
+
+            if (i == promoHover_) {
+                sf::RectangleShape hover({c.size, c.size});
+                hover.setPosition(c.pos);
+                hover.setFillColor(sf::Color(255, 255, 255, 30));
+                window.draw(hover);
+            }
 
             PieceType pt = promo_->candidates[i].promotion;
             float pieceSize = c.size * 0.8f;
@@ -540,6 +693,11 @@ void GameScreen::draw(sf::RenderWindow& window)
                 window.draw(letter);
             }
         }
+
+        autoQueenCheck_.setLabel("Auto-queen");
+        autoQueenCheck_.setChecked(app_.autoQueen());
+        autoQueenCheck_.setRect(autoQueenRect());
+        autoQueenCheck_.draw(window, font);
     }
 
     hud_.draw(window, font);

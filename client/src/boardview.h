@@ -1,5 +1,7 @@
 #pragma once
 
+#include "board_interaction.h"
+
 #include <chess/board.h>
 #include <chess/types.h>
 
@@ -31,8 +33,15 @@ public:
     void drawLabels(sf::RenderWindow& window, const sf::Font& font) const;
     void drawPieces(sf::RenderWindow& window, const sf::Font& font,
                     const Board& board, const App& app) const;
+    void drawAnnotations(sf::RenderWindow& window,
+                         const std::vector<AnnotatedArrow>& arrows,
+                         const std::vector<std::pair<int, int>>& circles) const;
+    void drawDraggedPiece(sf::RenderWindow& window, const sf::Font& font,
+                          chess::Piece piece, sf::Vector2f cursor,
+                          const App& app) const;
 
     std::optional<std::pair<int, int>> pixelToSquare(sf::Vector2f pixel) const;
+    sf::Vector2f squareCenter(int file, int rank) const;
 
     float panelX() const { return panelX_; }
     float squareSize() const { return squareSize_; }
