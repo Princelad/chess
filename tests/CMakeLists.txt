@@ -33,6 +33,7 @@ if(BUILD_TESTING)
         server/match_test.cpp
         server/bot_match_test.cpp
         client/connection_test.cpp
+        client/move_navigator_test.cpp
         e2e/e2e_test.cpp
         uci/engine_test.cpp)
 

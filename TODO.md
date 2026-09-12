@@ -562,11 +562,11 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [x] Settle 7.2's resize question: window resize rescales board + side panel proportionally
   - [x] View transform keeps pixel↔square mapping correct at any scale
 
-- [ ] **9.3 Move-list navigator + captured material**
-  - [ ] Clickable two-column SAN grid replaces the plain text list
-  - [ ] Navigator controls `|< < > >|` + ←/→/Home/End keys; jump to any ply
-  - [ ] Read-only replay of historical positions from move history
-  - [ ] Captured-piece row + material diff per player card
+- [x] **9.3 Move-list navigator + captured material**
+  - [x] Clickable two-column SAN grid replaces the plain text list
+  - [x] Navigator controls `|< < > >|` + ←/→/Home/End keys; jump to any ply
+  - [x] Read-only replay of historical positions from move history
+  - [x] Captured-piece row + material diff per player card
 
 - [ ] **9.4 Board interaction: drag-and-drop + annotations + promotion options**
   - [ ] Drag-and-drop piece movement (activation threshold; dropping off-board cancels)
