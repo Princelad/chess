@@ -4,6 +4,7 @@ src/connection.cpp
     src/boardview.cpp
     src/board_interaction.cpp
     src/config.cpp
+    src/sfx.cpp
     src/widgets/label.cpp
     src/widgets/panel.cpp
     src/widgets/button.cpp
@@ -22,10 +23,12 @@ target_include_directories(chessclient PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(chessclient PUBLIC chessnet chesscore chessuci
     ${CHESS_SFML_GRAPHICS_TARGET}
     ${CHESS_SFML_WINDOW_TARGET}
-    ${CHESS_SFML_NETWORK_TARGET})
+    ${CHESS_SFML_NETWORK_TARGET}
+    ${CHESS_SFML_AUDIO_TARGET})
 
 add_executable(chess-client src/main.cpp)
 target_link_libraries(chess-client PRIVATE chessclient
     ${CHESS_SFML_GRAPHICS_TARGET}
     ${CHESS_SFML_WINDOW_TARGET}
-    ${CHESS_SFML_NETWORK_TARGET})
+    ${CHESS_SFML_NETWORK_TARGET}
+    ${CHESS_SFML_AUDIO_TARGET})

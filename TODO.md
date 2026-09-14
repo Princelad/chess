@@ -589,9 +589,9 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [x] Pieces slide from source to destination using the fixed-timestep loop from 6.1
   - [x] Duration/easing configurable via 9.5 settings
 
-- [ ] **9.8 Sound effects**
-  - [ ] Move/capture/check/checkmate clips via `sf::SoundBuffer`
-  - [ ] Volume/mute controlled by 9.5 settings
+- [x] **9.8 Sound effects**
+  - [x] Move/capture/check/checkmate clips via `sf::SoundBuffer`
+  - [x] Volume/mute controlled by 9.5 settings
 
 ---
 

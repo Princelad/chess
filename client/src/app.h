@@ -10,6 +10,7 @@
 #include <chess/types.h>
 #include "config.h"
 #include "connection.h"
+#include "sfx.h"
 #include "themes.h"
 
 #include <SFML/Graphics.hpp>
@@ -36,6 +37,7 @@ public:
 
     sf::Font& font() { return *font_; }
     Connection& connection() { return connection_; }
+    SoundManager& sounds() { return sounds_; }
 
     // Map a window-space mouse pixel to logical (view-space) coordinates.
     sf::Vector2f toLocal(sf::Vector2i pixel) const;
@@ -104,6 +106,7 @@ private:
     sf::RenderWindow window_;
     Connection connection_;
     Config config_;
+    SoundManager sounds_;
     std::unique_ptr<Screen> screen_;
     std::vector<std::unique_ptr<Screen>> stack_;
     std::optional<sf::Font> font_;

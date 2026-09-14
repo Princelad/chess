@@ -46,6 +46,21 @@ SettingsScreen::SettingsScreen(App& app)
     animDurPrev_.setOnClick([this] { cycleAnimDur(-1); });
     animDurNext_.setOnClick([this] { cycleAnimDur(1); });
 
+    soundCheck_.setLabel("Enable sounds");
+    soundCheck_.setChecked(!app_.config().getBool("sound.muted", false));
+    soundCheck_.setOnToggle([this](bool on) {
+        app_.config().setBool("sound.muted", !on);
+        app_.config().save();
+        app_.sounds().setEnabled(on);
+    });
+
+    soundVolPrev_.setLabel("Previous volume");
+    soundVolNext_.setLabel("Next volume");
+    soundVolPrev_.setFocusable(false);
+    soundVolNext_.setFocusable(false);
+    soundVolPrev_.setOnClick([this] { cycleSoundVol(-1); });
+    soundVolNext_.setOnClick([this] { cycleSoundVol(1); });
+
     themePrev_.setLabel("Previous theme");
     themeNext_.setLabel("Next theme");
     themePrev_.setFocusable(false);
@@ -80,6 +95,7 @@ SettingsScreen::SettingsScreen(App& app)
 
     updateThemeLabel();
     updateAnimDurLabel();
+    updateSoundVolLabel();
     layoutRows();
     applyFocus();
 }
@@ -92,6 +108,7 @@ void SettingsScreen::layoutRows()
         { sf::Vector2f(RowsW, 34.f),  // auto-queen
           sf::Vector2f(RowsW, 34.f),  // coords
           sf::Vector2f(RowsW, 34.f),  // animation
+          sf::Vector2f(RowsW, 34.f),  // sound
           sf::Vector2f(RowsW, 34.f),  // theme
           sf::Vector2f(RowsW, 36.f),  // piece set path
           sf::Vector2f(RowsW, 18.f),  // status
@@ -103,53 +120,60 @@ void SettingsScreen::layoutRows()
 
     const float btnW = 48.f;
     const float btnH = 30.f;
-    const float y2 = rows[2].position.y + (rows[2].size.y - btnH) / 2.f;
-    animDurPrev_.setRect(sf::FloatRect(
-        sf::Vector2f(rows[2].position.x, y2), sf::Vector2f(btnW, btnH)));
-    animDurNext_.setRect(sf::FloatRect(
-        sf::Vector2f(rows[2].position.x + rows[2].size.x - btnW, y2),
-        sf::Vector2f(btnW, btnH)));
 
-    auto adl = animDurName_.bounds(app_.font());
-    animDurName_.setPosition({
-        rows[2].position.x + (rows[2].size.x - adl.size.x) / 2.f - adl.position.x,
-        y2 + (btnH - adl.size.y) / 2.f - adl.position.y
-    });
+    auto placeCycleRow = [&](Checkbox& check, Button& prev, Button& next,
+                             Label& name, int rowIdx) {
+        check.setRect(rows[rowIdx]);
+        const float yy = rows[rowIdx].position.y + (rows[rowIdx].size.y - btnH) / 2.f;
+        prev.setRect(sf::FloatRect(
+            sf::Vector2f(rows[rowIdx].position.x, yy), sf::Vector2f(btnW, btnH)));
+        next.setRect(sf::FloatRect(
+            sf::Vector2f(rows[rowIdx].position.x + rows[rowIdx].size.x - btnW, yy),
+            sf::Vector2f(btnW, btnH)));
+        auto nb = name.bounds(app_.font());
+        name.setPosition({
+            rows[rowIdx].position.x + (rows[rowIdx].size.x - nb.size.x) / 2.f
+                - nb.position.x,
+            yy + (btnH - nb.size.y) / 2.f - nb.position.y
+        });
+    };
+    placeCycleRow(animCheck_, animDurPrev_, animDurNext_, animDurName_, 2);
+    placeCycleRow(soundCheck_, soundVolPrev_, soundVolNext_, soundVolName_, 3);
 
-    const float yTheme = rows[3].position.y + (rows[3].size.y - btnH) / 2.f;
+    const float yTheme = rows[4].position.y + (rows[4].size.y - btnH) / 2.f;
     themePrev_.setRect(sf::FloatRect(
-        sf::Vector2f(rows[3].position.x, yTheme), sf::Vector2f(btnW, btnH)));
+        sf::Vector2f(rows[4].position.x, yTheme), sf::Vector2f(btnW, btnH)));
     themeNext_.setRect(sf::FloatRect(
-        sf::Vector2f(rows[3].position.x + rows[3].size.x - btnW, yTheme),
+        sf::Vector2f(rows[4].position.x + rows[4].size.x - btnW, yTheme),
         sf::Vector2f(btnW, btnH)));
 
     auto tf = themeName_.bounds(app_.font());
     themeName_.setPosition({
-        rows[3].position.x + (rows[3].size.x - tf.size.x) / 2.f - tf.position.x,
+        rows[4].position.x + (rows[4].size.x - tf.size.x) / 2.f - tf.position.x,
         yTheme + (btnH - tf.size.y) / 2.f - tf.position.y
     });
 
-    piecesCaption_.setPosition({ rows[4].position.x, rows[4].position.y - 20.f });
+    piecesCaption_.setPosition({ rows[5].position.x, rows[5].position.y - 20.f });
 
     const float fieldW = 300.f;
     const float applyW = 70.f;
-    const float y3 = rows[4].position.y + (rows[4].size.y - 32.f) / 2.f;
+    const float y3 = rows[5].position.y + (rows[5].size.y - 32.f) / 2.f;
     piecesField_.setRect(sf::FloatRect(
-        sf::Vector2f(rows[4].position.x, y3), sf::Vector2f(fieldW, 32.f)));
+        sf::Vector2f(rows[5].position.x, y3), sf::Vector2f(fieldW, 32.f)));
     applyBtn_.setRect(sf::FloatRect(
-        sf::Vector2f(rows[4].position.x + rows[4].size.x - applyW, y3),
+        sf::Vector2f(rows[5].position.x + rows[5].size.x - applyW, y3),
         sf::Vector2f(applyW, 32.f)));
 
     auto sb = status_.bounds(app_.font());
-    status_.setPosition({ rows[5].position.x, rows[5].position.y - sb.position.y });
+    status_.setPosition({ rows[6].position.x, rows[6].position.y - sb.position.y });
 
     const float resetW = 150.f;
     const float backW = 90.f;
-    const float y5 = rows[6].position.y + (rows[6].size.y - 34.f) / 2.f;
+    const float y5 = rows[7].position.y + (rows[7].size.y - 34.f) / 2.f;
     resetBtn_.setRect(sf::FloatRect(
-        sf::Vector2f(rows[6].position.x, y5), sf::Vector2f(resetW, 34.f)));
+        sf::Vector2f(rows[7].position.x, y5), sf::Vector2f(resetW, 34.f)));
     backBtn_.setRect(sf::FloatRect(
-        sf::Vector2f(rows[6].position.x + rows[6].size.x - backW, y5),
+        sf::Vector2f(rows[7].position.x + rows[7].size.x - backW, y5),
         sf::Vector2f(backW, 34.f)));
 }
 
@@ -199,6 +223,8 @@ void SettingsScreen::resetDefaults()
     coordsCheck_.setChecked(true);
     animCheck_.setChecked(true);
     updateAnimDurLabel();
+    soundCheck_.setChecked(true);
+    updateSoundVolLabel();
     piecesField_.setText("");
     piecesField_.setFocused(false);
     applyPiecesPath();
@@ -215,6 +241,8 @@ void SettingsScreen::setStatus(const std::string& text)
 namespace {
 constexpr float kAnimDurs[] = { 0.15f, 0.3f, 0.5f };
 constexpr const char* kAnimDurLabels[] = { "Fast  0.15", "Normal  0.3", "Slow  0.5" };
+constexpr int kVols[] = { 25, 60, 100 };
+constexpr const char* kVolLabels[] = { "Quiet  25", "Medium  60", "Loud  100" };
 } // anonymous namespace
 
 void SettingsScreen::updateAnimDurLabel()
@@ -250,6 +278,32 @@ void SettingsScreen::cycleAnimDur(int dir)
     layoutRows();
 }
 
+void SettingsScreen::updateSoundVolLabel()
+{
+    const int v = std::clamp(app_.config().getInt("sound.volume", 100), 0, 100);
+    int idx = 2;
+    if (v <= 25) idx = 0;
+    else if (v <= 60) idx = 1;
+    soundVolName_.setText(kVolLabels[idx]);
+    soundVolName_.setFontSize(15);
+    soundVolName_.setColor(sf::Color(230, 230, 230));
+}
+
+void SettingsScreen::cycleSoundVol(int dir)
+{
+    const int v = std::clamp(app_.config().getInt("sound.volume", 100), 0, 100);
+    int idx = 2;
+    if (v <= 25) idx = 0;
+    else if (v <= 60) idx = 1;
+    idx = (idx + dir) % 3;
+    if (idx < 0) idx += 3;
+    app_.config().setInt("sound.volume", kVols[idx]);
+    app_.config().save();
+    app_.sounds().setVolume(kVols[idx]);
+    updateSoundVolLabel();
+    layoutRows();
+}
+
 void SettingsScreen::focusNext(bool down)
 {
     int next = focusIdx_;
@@ -258,7 +312,8 @@ void SettingsScreen::focusNext(bool down)
         if (next < 0) next = FocusCount - 1;
         if (next >= FocusCount) next = 0;
         if (next == FocusThemePrev || next == FocusThemeNext ||
-            next == FocusAnimDurPrev || next == FocusAnimDurNext)
+            next == FocusAnimDurPrev || next == FocusAnimDurNext ||
+            next == FocusSoundVolPrev || next == FocusSoundVolNext)
             continue;
         focusIdx_ = next;
         applyFocus();
@@ -271,6 +326,7 @@ void SettingsScreen::applyFocus()
     autoQueenCheck_.setFocused(focusIdx_ == FocusAutoQueen);
     coordsCheck_.setFocused(focusIdx_ == FocusCoords);
     animCheck_.setFocused(focusIdx_ == FocusAnimToggle);
+    soundCheck_.setFocused(focusIdx_ == FocusSoundToggle);
     piecesField_.setFocused(focusIdx_ == FocusPiecesField);
     applyBtn_.setFocused(focusIdx_ == FocusApply);
     resetBtn_.setFocused(focusIdx_ == FocusReset);
@@ -299,6 +355,9 @@ void SettingsScreen::handleEvent(const sf::Event& event)
     if (animCheck_.handleEvent(event, local)) return;
     if (animDurPrev_.handleEvent(event, local)) return;
     if (animDurNext_.handleEvent(event, local)) return;
+    if (soundCheck_.handleEvent(event, local)) return;
+    if (soundVolPrev_.handleEvent(event, local)) return;
+    if (soundVolNext_.handleEvent(event, local)) return;
     if (themePrev_.handleEvent(event, local)) return;
     if (themeNext_.handleEvent(event, local)) return;
     if (piecesField_.handleEvent(event, local)) return;
@@ -329,6 +388,10 @@ void SettingsScreen::draw(sf::RenderWindow& window)
     animDurPrev_.draw(window, font);
     animDurNext_.draw(window, font);
     animDurName_.draw(window, font);
+    soundCheck_.draw(window, font);
+    soundVolPrev_.draw(window, font);
+    soundVolNext_.draw(window, font);
+    soundVolName_.draw(window, font);
     themePrev_.draw(window, font);
     themeNext_.draw(window, font);
     themeName_.draw(window, font);

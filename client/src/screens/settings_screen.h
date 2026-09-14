@@ -23,6 +23,9 @@ private:
         FocusAnimToggle,
         FocusAnimDurPrev,
         FocusAnimDurNext,
+        FocusSoundToggle,
+        FocusSoundVolPrev,
+        FocusSoundVolNext,
         FocusThemePrev,
         FocusThemeNext,
         FocusPiecesField,
@@ -38,6 +41,8 @@ private:
     void updateThemeLabel();
     void updateAnimDurLabel();
     void cycleAnimDur(int dir);
+    void updateSoundVolLabel();
+    void cycleSoundVol(int dir);
     void applyPiecesPath();
     void resetDefaults();
     void setStatus(const std::string& text);
@@ -53,6 +58,11 @@ private:
     Button animDurPrev_;
     Button animDurNext_;
     Label animDurName_;
+
+    Checkbox soundCheck_;
+    Button soundVolPrev_;
+    Button soundVolNext_;
+    Label soundVolName_;
 
     Button themePrev_;
     Button themeNext_;

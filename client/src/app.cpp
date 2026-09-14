@@ -15,6 +15,8 @@ App::App()
     , config_(Config::defaultPath())
 {
     window_.setFramerateLimit(120);
+    sounds_.setEnabled(!config_.getBool("sound.muted", false));
+    sounds_.setVolume(std::clamp(config_.getInt("sound.volume", 100), 0, 100));
     loadAssets();
     buildView(viewport_.x, viewport_.y);
     screen_ = std::make_unique<MenuScreen>(*this);

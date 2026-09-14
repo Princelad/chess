@@ -187,6 +187,7 @@ void LocalGameScreen::applyMove(const chess::Move& m)
     const float duration = static_cast<float>(cfg.getFloat("animation.duration", 0.3));
     if (cfg.getBool("animation.enabled", true) && duration > 0.f)
         anim_.start(m, hud_.navigator().finalBoard(), duration);
+    app_.sounds().playMove(hud_.navigator().finalBoard(), m);
 
     std::string san = chess::san::toSan(hud_.navigator().finalBoard(), m);
     hud_.navigator().appendMove(m, san);
@@ -300,6 +301,7 @@ bool LocalGameScreen::applyEngineMove()
     const float duration = static_cast<float>(cfg.getFloat("animation.duration", 0.3));
     if (cfg.getBool("animation.enabled", true) && duration > 0.f)
         anim_.start(*move, hud_.navigator().finalBoard(), duration);
+    app_.sounds().playMove(hud_.navigator().finalBoard(), *move);
 
     std::string san = chess::san::toSan(hud_.navigator().finalBoard(), *move);
     hud_.navigator().appendMove(*move, san);

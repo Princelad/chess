@@ -565,13 +565,14 @@ void GameScreen::update(float dtSec)
         if (auto* move = std::get_if<chess::net::ServerMoveMsg>(&msg)) {
             auto parsed = chess::san::fromSan(hud_.navigator().finalBoard(), move->san);
             if (parsed) {
+                const Board& before = hud_.navigator().finalBoard();
                 const auto& cfg = app_.config();
                 const float duration = static_cast<float>(
                     cfg.getFloat("animation.duration", 0.3));
                 if (cfg.getBool("animation.enabled", true) && duration > 0.f) {
-                    anim_.start(*parsed,
-                                hud_.navigator().finalBoard(), duration);
+                    anim_.start(*parsed, before, duration);
                 }
+                app_.sounds().playMove(before, *parsed);
                 hud_.navigator().appendMove(*parsed, move->san);
                 hl_.selectedSquare.reset();
                 hl_.legalMoveTargets.clear();
