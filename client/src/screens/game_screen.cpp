@@ -555,6 +555,7 @@ void GameScreen::update(float dtSec)
 {
     hud_.update(dtSec);
     chatInput_.update(dtSec);
+    anim_.update(dtSec);
 
     app_.connection().poll();
 
@@ -564,6 +565,13 @@ void GameScreen::update(float dtSec)
         if (auto* move = std::get_if<chess::net::ServerMoveMsg>(&msg)) {
             auto parsed = chess::san::fromSan(hud_.navigator().finalBoard(), move->san);
             if (parsed) {
+                const auto& cfg = app_.config();
+                const float duration = static_cast<float>(
+                    cfg.getFloat("animation.duration", 0.3));
+                if (cfg.getBool("animation.enabled", true) && duration > 0.f) {
+                    anim_.start(*parsed,
+                                hud_.navigator().finalBoard(), duration);
+                }
                 hud_.navigator().appendMove(*parsed, move->san);
                 hl_.selectedSquare.reset();
                 hl_.legalMoveTargets.clear();
@@ -695,7 +703,7 @@ void GameScreen::draw(sf::RenderWindow& window)
     syncViewHighlights();
     boardView_.drawHighlights(window, hl_, shown);
     boardView_.drawLabels(window, font);
-    boardView_.drawPieces(window, font, shown, app_);
+    boardView_.drawPieces(window, font, shown, app_, &anim_);
     boardView_.drawAnnotations(window, annotations_.arrows(), annotations_.circles());
 
     if (drag_.isDragging() && dragFrom_) {

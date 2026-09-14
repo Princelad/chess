@@ -2,6 +2,7 @@
 #include "widgets/layout.h"
 
 #include <algorithm>
+#include <cmath>
 
 namespace chess::client {
 
@@ -30,6 +31,20 @@ SettingsScreen::SettingsScreen(App& app)
     coordsCheck_.setLabel("Show board coordinates");
     coordsCheck_.setChecked(app_.showCoordinates());
     coordsCheck_.setOnToggle([this](bool on) { app_.setShowCoordinates(on); });
+
+    animCheck_.setLabel("Move animation");
+    animCheck_.setChecked(app_.config().getBool("animation.enabled", true));
+    animCheck_.setOnToggle([this](bool on) {
+        app_.config().setBool("animation.enabled", on);
+        app_.config().save();
+    });
+
+    animDurPrev_.setLabel("Previous duration");
+    animDurNext_.setLabel("Next duration");
+    animDurPrev_.setFocusable(false);
+    animDurNext_.setFocusable(false);
+    animDurPrev_.setOnClick([this] { cycleAnimDur(-1); });
+    animDurNext_.setOnClick([this] { cycleAnimDur(1); });
 
     themePrev_.setLabel("Previous theme");
     themeNext_.setLabel("Next theme");
@@ -64,6 +79,7 @@ SettingsScreen::SettingsScreen(App& app)
                                  : "Piece set: " + configured);
 
     updateThemeLabel();
+    updateAnimDurLabel();
     layoutRows();
     applyFocus();
 }
@@ -75,6 +91,7 @@ void SettingsScreen::layoutRows()
         RowGap,
         { sf::Vector2f(RowsW, 34.f),  // auto-queen
           sf::Vector2f(RowsW, 34.f),  // coords
+          sf::Vector2f(RowsW, 34.f),  // animation
           sf::Vector2f(RowsW, 34.f),  // theme
           sf::Vector2f(RowsW, 36.f),  // piece set path
           sf::Vector2f(RowsW, 18.f),  // status
@@ -82,43 +99,57 @@ void SettingsScreen::layoutRows()
 
     autoQueenCheck_.setRect(rows[0]);
     coordsCheck_.setRect(rows[1]);
+    animCheck_.setRect(rows[2]);
 
     const float btnW = 48.f;
     const float btnH = 30.f;
     const float y2 = rows[2].position.y + (rows[2].size.y - btnH) / 2.f;
-    themePrev_.setRect(sf::FloatRect(
+    animDurPrev_.setRect(sf::FloatRect(
         sf::Vector2f(rows[2].position.x, y2), sf::Vector2f(btnW, btnH)));
-    themeNext_.setRect(sf::FloatRect(
+    animDurNext_.setRect(sf::FloatRect(
         sf::Vector2f(rows[2].position.x + rows[2].size.x - btnW, y2),
+        sf::Vector2f(btnW, btnH)));
+
+    auto adl = animDurName_.bounds(app_.font());
+    animDurName_.setPosition({
+        rows[2].position.x + (rows[2].size.x - adl.size.x) / 2.f - adl.position.x,
+        y2 + (btnH - adl.size.y) / 2.f - adl.position.y
+    });
+
+    const float yTheme = rows[3].position.y + (rows[3].size.y - btnH) / 2.f;
+    themePrev_.setRect(sf::FloatRect(
+        sf::Vector2f(rows[3].position.x, yTheme), sf::Vector2f(btnW, btnH)));
+    themeNext_.setRect(sf::FloatRect(
+        sf::Vector2f(rows[3].position.x + rows[3].size.x - btnW, yTheme),
         sf::Vector2f(btnW, btnH)));
 
     auto tf = themeName_.bounds(app_.font());
     themeName_.setPosition({
-        rows[2].position.x + (rows[2].size.x - tf.size.x) / 2.f - tf.position.x,
-        y2 + (btnH - tf.size.y) / 2.f - tf.position.y
+        rows[3].position.x + (rows[3].size.x - tf.size.x) / 2.f - tf.position.x,
+        yTheme + (btnH - tf.size.y) / 2.f - tf.position.y
     });
 
-    piecesCaption_.setPosition({ rows[3].position.x, rows[3].position.y - 20.f });
+    piecesCaption_.setPosition({ rows[4].position.x, rows[4].position.y - 20.f });
 
     const float fieldW = 300.f;
     const float applyW = 70.f;
-    const float y3 = rows[3].position.y + (rows[3].size.y - 32.f) / 2.f;
+    const float y3 = rows[4].position.y + (rows[4].size.y - 32.f) / 2.f;
     piecesField_.setRect(sf::FloatRect(
-        sf::Vector2f(rows[3].position.x, y3), sf::Vector2f(fieldW, 32.f)));
+        sf::Vector2f(rows[4].position.x, y3), sf::Vector2f(fieldW, 32.f)));
     applyBtn_.setRect(sf::FloatRect(
-        sf::Vector2f(rows[3].position.x + rows[3].size.x - applyW, y3),
+        sf::Vector2f(rows[4].position.x + rows[4].size.x - applyW, y3),
         sf::Vector2f(applyW, 32.f)));
 
     auto sb = status_.bounds(app_.font());
-    status_.setPosition({ rows[4].position.x, rows[4].position.y - sb.position.y });
+    status_.setPosition({ rows[5].position.x, rows[5].position.y - sb.position.y });
 
     const float resetW = 150.f;
     const float backW = 90.f;
-    const float y5 = rows[5].position.y + (rows[5].size.y - 34.f) / 2.f;
+    const float y5 = rows[6].position.y + (rows[6].size.y - 34.f) / 2.f;
     resetBtn_.setRect(sf::FloatRect(
-        sf::Vector2f(rows[5].position.x, y5), sf::Vector2f(resetW, 34.f)));
+        sf::Vector2f(rows[6].position.x, y5), sf::Vector2f(resetW, 34.f)));
     backBtn_.setRect(sf::FloatRect(
-        sf::Vector2f(rows[5].position.x + rows[5].size.x - backW, y5),
+        sf::Vector2f(rows[6].position.x + rows[6].size.x - backW, y5),
         sf::Vector2f(backW, 34.f)));
 }
 
@@ -166,6 +197,8 @@ void SettingsScreen::resetDefaults()
 
     autoQueenCheck_.setChecked(true);
     coordsCheck_.setChecked(true);
+    animCheck_.setChecked(true);
+    updateAnimDurLabel();
     piecesField_.setText("");
     piecesField_.setFocused(false);
     applyPiecesPath();
@@ -179,6 +212,44 @@ void SettingsScreen::setStatus(const std::string& text)
     status_.setText(text);
 }
 
+namespace {
+constexpr float kAnimDurs[] = { 0.15f, 0.3f, 0.5f };
+constexpr const char* kAnimDurLabels[] = { "Fast  0.15", "Normal  0.3", "Slow  0.5" };
+} // anonymous namespace
+
+void SettingsScreen::updateAnimDurLabel()
+{
+    const double d = app_.config().getFloat("animation.duration", 0.3);
+    int idx = 1;
+    for (int i = 0; i < 3; ++i) {
+        if (std::abs(static_cast<float>(d) - kAnimDurs[i]) < 0.01f) {
+            idx = i;
+            break;
+        }
+    }
+    animDurName_.setText(kAnimDurLabels[idx]);
+    animDurName_.setFontSize(15);
+    animDurName_.setColor(sf::Color(230, 230, 230));
+}
+
+void SettingsScreen::cycleAnimDur(int dir)
+{
+    const double d = app_.config().getFloat("animation.duration", 0.3);
+    int idx = 1;
+    for (int i = 0; i < 3; ++i) {
+        if (std::abs(static_cast<float>(d) - kAnimDurs[i]) < 0.01f) {
+            idx = i;
+            break;
+        }
+    }
+    idx = (idx + dir) % 3;
+    if (idx < 0) idx += 3;
+    app_.config().set("animation.duration", std::to_string(kAnimDurs[idx]));
+    app_.config().save();
+    updateAnimDurLabel();
+    layoutRows();
+}
+
 void SettingsScreen::focusNext(bool down)
 {
     int next = focusIdx_;
@@ -186,7 +257,9 @@ void SettingsScreen::focusNext(bool down)
         next = down ? (next + 1) : (next - 1);
         if (next < 0) next = FocusCount - 1;
         if (next >= FocusCount) next = 0;
-        if (next == FocusThemePrev || next == FocusThemeNext) continue;
+        if (next == FocusThemePrev || next == FocusThemeNext ||
+            next == FocusAnimDurPrev || next == FocusAnimDurNext)
+            continue;
         focusIdx_ = next;
         applyFocus();
         return;
@@ -197,6 +270,7 @@ void SettingsScreen::applyFocus()
 {
     autoQueenCheck_.setFocused(focusIdx_ == FocusAutoQueen);
     coordsCheck_.setFocused(focusIdx_ == FocusCoords);
+    animCheck_.setFocused(focusIdx_ == FocusAnimToggle);
     piecesField_.setFocused(focusIdx_ == FocusPiecesField);
     applyBtn_.setFocused(focusIdx_ == FocusApply);
     resetBtn_.setFocused(focusIdx_ == FocusReset);
@@ -222,6 +296,9 @@ void SettingsScreen::handleEvent(const sf::Event& event)
 
     if (autoQueenCheck_.handleEvent(event, local)) return;
     if (coordsCheck_.handleEvent(event, local)) return;
+    if (animCheck_.handleEvent(event, local)) return;
+    if (animDurPrev_.handleEvent(event, local)) return;
+    if (animDurNext_.handleEvent(event, local)) return;
     if (themePrev_.handleEvent(event, local)) return;
     if (themeNext_.handleEvent(event, local)) return;
     if (piecesField_.handleEvent(event, local)) return;
@@ -248,6 +325,10 @@ void SettingsScreen::draw(sf::RenderWindow& window)
 
     autoQueenCheck_.draw(window, font);
     coordsCheck_.draw(window, font);
+    animCheck_.draw(window, font);
+    animDurPrev_.draw(window, font);
+    animDurNext_.draw(window, font);
+    animDurName_.draw(window, font);
     themePrev_.draw(window, font);
     themeNext_.draw(window, font);
     themeName_.draw(window, font);

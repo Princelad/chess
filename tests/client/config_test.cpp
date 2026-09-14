@@ -131,6 +131,23 @@ TEST(Config, BoolIntParsingFallsBackToDefault)
     std::filesystem::remove(path);
 }
 
+TEST(Config, FloatParsingFallsBackToDefault)
+{
+    const auto path = tempPath("float");
+    {
+        std::ofstream out(path);
+        out << "[animation]\n"
+            << "duration = 0.3\n"
+            << "bad = fast\n";
+    }
+    Config c(path.string());
+    ASSERT_TRUE(c.load());
+    EXPECT_DOUBLE_EQ(c.getFloat("animation.duration", 0.15), 0.3);
+    EXPECT_DOUBLE_EQ(c.getFloat("animation.bad", 0.15), 0.15); // non-numeric -> default
+    EXPECT_DOUBLE_EQ(c.getFloat("animation.missing", 0.15), 0.15);
+    std::filesystem::remove(path);
+}
+
 TEST(Config, MissingKeysReturnDefaults)
 {
     Config c(tempPath("missing").string());

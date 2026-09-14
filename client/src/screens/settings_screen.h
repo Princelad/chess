@@ -20,6 +20,9 @@ private:
     enum FocusId {
         FocusAutoQueen,
         FocusCoords,
+        FocusAnimToggle,
+        FocusAnimDurPrev,
+        FocusAnimDurNext,
         FocusThemePrev,
         FocusThemeNext,
         FocusPiecesField,
@@ -33,6 +36,8 @@ private:
     void focusNext(bool down);
     void applyFocus();
     void updateThemeLabel();
+    void updateAnimDurLabel();
+    void cycleAnimDur(int dir);
     void applyPiecesPath();
     void resetDefaults();
     void setStatus(const std::string& text);
@@ -43,6 +48,11 @@ private:
 
     Checkbox autoQueenCheck_;
     Checkbox coordsCheck_;
+
+    Checkbox animCheck_;
+    Button animDurPrev_;
+    Button animDurNext_;
+    Label animDurName_;
 
     Button themePrev_;
     Button themeNext_;

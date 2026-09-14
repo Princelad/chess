@@ -183,6 +183,11 @@ void LocalGameScreen::buildPromotion(int fromFile, int fromRank, int toFile, int
 
 void LocalGameScreen::applyMove(const chess::Move& m)
 {
+    const auto& cfg = app_.config();
+    const float duration = static_cast<float>(cfg.getFloat("animation.duration", 0.3));
+    if (cfg.getBool("animation.enabled", true) && duration > 0.f)
+        anim_.start(m, hud_.navigator().finalBoard(), duration);
+
     std::string san = chess::san::toSan(hud_.navigator().finalBoard(), m);
     hud_.navigator().appendMove(m, san);
     deselect();
@@ -290,6 +295,11 @@ bool LocalGameScreen::applyEngineMove()
 {
     auto move = engine_->tryGetBestMove(hud_.navigator().finalBoard());
     if (!move) return false;
+
+    const auto& cfg = app_.config();
+    const float duration = static_cast<float>(cfg.getFloat("animation.duration", 0.3));
+    if (cfg.getBool("animation.enabled", true) && duration > 0.f)
+        anim_.start(*move, hud_.navigator().finalBoard(), duration);
 
     std::string san = chess::san::toSan(hud_.navigator().finalBoard(), *move);
     hud_.navigator().appendMove(*move, san);
@@ -545,9 +555,10 @@ void LocalGameScreen::handleEvent(const sf::Event& event)
     }
 }
 
-void LocalGameScreen::update(float /*dtSec*/)
+void LocalGameScreen::update(float dtSec)
 {
     hud_.update(0.f);
+    anim_.update(dtSec);
 
     if (gameOver_ || engineFailed_) return;
 
@@ -570,7 +581,7 @@ void LocalGameScreen::draw(sf::RenderWindow& window)
     syncViewHighlights();
     boardView_.drawHighlights(window, hl_, shown);
     boardView_.drawLabels(window, font);
-    boardView_.drawPieces(window, font, shown, app_);
+    boardView_.drawPieces(window, font, shown, app_, &anim_);
     boardView_.drawAnnotations(window, annotations_.arrows(), annotations_.circles());
 
     if (drag_.isDragging() && dragFrom_) {

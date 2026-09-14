@@ -4,6 +4,7 @@
 #include "board_interaction.h"
 #include "boardview.h"
 #include "hud.h"
+#include "move_animator.h"
 #include "promo_state.h"
 #include "widgets/button.h"
 #include "widgets/checkbox.h"
@@ -57,6 +58,7 @@ private:
     sf::Vector2f cursor_{0.f, 0.f};
     std::pair<int, int> keyCursor_{4, 4};
     bool showingHelp_ = false;
+    MoveAnimator anim_;
     int promoHover_ = -1;
     std::optional<PromotionState> promo_;
     Checkbox autoQueenCheck_;

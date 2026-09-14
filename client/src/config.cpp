@@ -143,6 +143,17 @@ int Config::getInt(const std::string& key, int def) const
     }
 }
 
+double Config::getFloat(const std::string& key, double def) const
+{
+    const auto it = entries_.find(key);
+    if (it == entries_.end()) return def;
+    try {
+        return std::stod(it->second);
+    } catch (...) {
+        return def;
+    }
+}
+
 void Config::set(const std::string& key, const std::string& value)
 {
     if (!key.empty() && key.find('.') != std::string::npos)

@@ -22,6 +22,7 @@ public:
     std::string get(const std::string& key, const std::string& def = {}) const;
     bool getBool(const std::string& key, bool def) const;
     int getInt(const std::string& key, int def) const;
+    double getFloat(const std::string& key, double def) const;
 
     void set(const std::string& key, const std::string& value);
     void setBool(const std::string& key, bool value) { set(key, value ? "true" : "false"); }

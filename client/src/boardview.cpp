@@ -1,5 +1,6 @@
 #include "boardview.h"
 #include "app.h"
+#include "move_animator.h"
 
 #include <algorithm>
 #include <cmath>
@@ -110,15 +111,21 @@ void BoardView::drawDraggedPiece(sf::RenderWindow& window, const sf::Font& font,
                                  chess::Piece piece, sf::Vector2f cursor,
                                  const App& app) const
 {
-    float pieceSize = squareSize_ * 0.8f;
-
     sf::CircleShape shadow(squareSize_ * 0.55f);
     shadow.setFillColor(sf::Color(0, 0, 0, 70));
     shadow.setOrigin({ shadow.getRadius(), shadow.getRadius() });
     shadow.setPosition(cursor + sf::Vector2f(0.f, squareSize_ * 0.12f));
     window.draw(shadow);
 
-    sf::Vector2f topLeft = cursor - sf::Vector2f(pieceSize / 2.f, pieceSize / 2.f);
+    drawPieceAtCenter(window, font, piece, cursor, app);
+}
+
+void BoardView::drawPieceAtCenter(sf::RenderWindow& window, const sf::Font& font,
+                                  chess::Piece piece, sf::Vector2f center,
+                                  const App& app) const
+{
+    float pieceSize = squareSize_ * 0.8f;
+    sf::Vector2f topLeft = center - sf::Vector2f(pieceSize / 2.f, pieceSize / 2.f);
 
     if (app.piecesLoaded()) {
         const auto& tex = app.pieceTexture(piece.color, piece.type);
@@ -261,7 +268,8 @@ void BoardView::drawLabels(sf::RenderWindow& window, const sf::Font& font) const
 }
 
 void BoardView::drawPieces(sf::RenderWindow& window, const sf::Font& font,
-                            const Board& board, const App& app) const
+                           const Board& board, const App& app,
+                           const MoveAnimator* anim) const
 {
     float pieceSize = squareSize_ * 0.8f;
     float offset = (squareSize_ - pieceSize) / 2.f;
@@ -271,8 +279,22 @@ void BoardView::drawPieces(sf::RenderWindow& window, const sf::Font& font,
 
     const char pieceLetters[] = { 'P', 'N', 'B', 'R', 'Q', 'K' };
 
+    const bool animating = anim && anim->active() && !anim->empty();
+
+    auto animDestinationHolds = [&](int file, int rank) {
+        if (!animating) return false;
+        for (const auto& step : anim->steps()) {
+            if (static_cast<int>(chess::fileOf(step.to)) == file &&
+                static_cast<int>(chess::rankOf(step.to)) == rank)
+                return true;
+        }
+        return false;
+    };
+
     for (int file = 0; file < 8; ++file) {
         for (int rank = 0; rank < 8; ++rank) {
+            if (animDestinationHolds(file, rank)) continue;
+
             Piece piece = board.pieceAt(squareOf(file, rank));
             if (piece.isNone()) continue;
 
@@ -299,6 +321,21 @@ void BoardView::drawPieces(sf::RenderWindow& window, const sf::Font& font,
                 window.draw(letter);
             }
         }
+    }
+
+    if (!animating) return;
+
+    const float p = anim->progress();
+    for (const auto& step : anim->steps()) {
+        const sf::Vector2f fromCenter =
+            squareCenter(static_cast<int>(chess::fileOf(step.from)),
+                         static_cast<int>(chess::rankOf(step.from)));
+        const sf::Vector2f toCenter =
+            squareCenter(static_cast<int>(chess::fileOf(step.to)),
+                         static_cast<int>(chess::rankOf(step.to)));
+        const sf::Vector2f pos =
+            fromCenter + p * (toCenter - fromCenter);
+        drawPieceAtCenter(window, font, step.piece, pos, app);
     }
 }
 

@@ -15,6 +15,7 @@
 namespace chess::client {
 
 class App;
+class MoveAnimator;
 
 struct HighlightState {
     std::optional<std::pair<int, int>> selectedSquare;
@@ -36,7 +37,8 @@ public:
                         const Board& board) const;
     void drawLabels(sf::RenderWindow& window, const sf::Font& font) const;
     void drawPieces(sf::RenderWindow& window, const sf::Font& font,
-                    const Board& board, const App& app) const;
+                    const Board& board, const App& app,
+                    const MoveAnimator* anim = nullptr) const;
     void drawAnnotations(sf::RenderWindow& window,
                          const std::vector<AnnotatedArrow>& arrows,
                          const std::vector<std::pair<int, int>>& circles) const;
@@ -60,6 +62,9 @@ private:
     std::pair<int, int> toFileRank(int col, int row) const;
     void drawSquareTint(sf::RenderWindow& window, int file, int rank,
                         sf::Color color) const;
+    void drawPieceAtCenter(sf::RenderWindow& window, const sf::Font& font,
+                           chess::Piece piece, sf::Vector2f center,
+                           const App& app) const;
 
     float margin_;
     float boardSize_;
