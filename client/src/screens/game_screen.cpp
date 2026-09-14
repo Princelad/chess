@@ -22,7 +22,9 @@ GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName)
     , opponentName_(opponentName)
     , boardView_(static_cast<float>(App::WindowWidth),
                  static_cast<float>(App::WindowHeight),
-                 myColor)
+                 myColor,
+                 app.boardTheme(),
+                 app.showCoordinates())
     , hud_(app_, boardView_.panelX(),
            static_cast<float>(App::WindowWidth) - boardView_.panelX() - 8.f)
     , myTurn_(myColor == Color::White)

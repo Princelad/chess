@@ -574,12 +574,12 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [x] Left-click clears user annotations; right-click also deselects
   - [x] Auto-queen setting; promotion picker dialog vs inline choice
 
-- [ ] **9.5 Settings screen + config file**
-  - [ ] INI-style config persisted to `~/.config/chess/config.ini`
-  - [ ] Sound volume/toggle (consumed by 9.8); animation toggle/duration (feeds 9.7)
-  - [ ] Board colors + piece-set path (foundation for 11.6 themes)
-  - [ ] Auto-queen, show-coordinates toggle
-  - [ ] Load/save round-trip tested
+- [x] **9.5 Settings screen + config file**
+  - [x] INI-style config persisted to `~/.config/chess/config.ini`
+  - [x] Sound volume/toggle (consumed by 9.8); animation toggle/duration (feeds 9.7)
+  - [x] Board colors + piece-set path (foundation for 11.6 themes)
+  - [x] Auto-queen, show-coordinates toggle
+  - [x] Load/save round-trip tested
 
 - [ ] **9.6 Keyboard play**
   - [ ] Arrow-key square cursor; Enter/Space selects/moves; Esc cancels/deselects

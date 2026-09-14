@@ -12,6 +12,7 @@ App::App()
               "Chess",
               sf::Style::Titlebar | sf::Style::Close | sf::Style::Resize)
     , viewport_(WindowWidth, WindowHeight)
+    , config_(Config::defaultPath())
 {
     window_.setFramerateLimit(120);
     loadAssets();
@@ -46,6 +47,17 @@ void App::buildView(unsigned int width, unsigned int height)
 
 void App::loadAssets()
 {
+    config_.load();
+    if (!config_.has("general.auto_queen")) config_.setBool("general.auto_queen", true);
+    if (!config_.has("board.colors")) config_.set("board.colors", "classic");
+    if (!config_.has("board.show_coordinates")) config_.setBool("board.show_coordinates", true);
+    if (!config_.has("pieces.path")) config_.set("pieces.path", "");
+    if (!config_.has("sound.volume")) config_.setInt("sound.volume", 100);
+    if (!config_.has("sound.muted")) config_.setBool("sound.muted", false);
+    if (!config_.has("animation.enabled")) config_.setBool("animation.enabled", true);
+    if (!config_.has("animation.duration")) config_.set("animation.duration", "0.3");
+    config_.save();
+
     font_.emplace();
     const char* paths[] = {
         "assets/fonts/Inter-Regular.ttf",
@@ -63,13 +75,16 @@ void App::loadAssets()
     loadPieceTextures();
 }
 
-void App::loadPieceTextures()
+bool App::loadPieceTextures()
 {
-    const char* dirs[] = {
+    const std::string customDir = config_.get("pieces.path", "");
+    std::vector<std::string> dirs;
+    if (!customDir.empty()) dirs.push_back(customDir);
+    dirs.insert(dirs.end(), {
         "assets/pieces/",
         "../assets/pieces/",
         "../../assets/pieces/",
-    };
+    });
 
     const char names[2][6] = {
         { 'w','w','w','w','w','w' },
@@ -85,7 +100,7 @@ void App::loadPieceTextures()
             filename += ".png";
 
             bool loaded = false;
-            for (const char* dir : dirs) {
+            for (const auto& dir : dirs) {
                 if (pieceTextures_[PieceIndex(
                         static_cast<Color>(c),
                         static_cast<PieceType>(t))].loadFromFile(dir + filename)) {
@@ -101,6 +116,18 @@ void App::loadPieceTextures()
     piecesLoaded_ = allLoaded;
     if (!allLoaded)
         std::cerr << "Warning: some piece textures failed to load\n";
+    return allLoaded;
+}
+
+bool App::reloadPieces()
+{
+    std::array<sf::Texture, 12> backup = pieceTextures_;
+    const bool wasLoaded = piecesLoaded_;
+    if (loadPieceTextures()) return true;
+
+    pieceTextures_ = std::move(backup);
+    piecesLoaded_ = wasLoaded;
+    return false;
 }
 
 void App::switchScreen(std::unique_ptr<Screen> screen)

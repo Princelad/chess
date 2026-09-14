@@ -6,9 +6,12 @@
 
 namespace chess::client {
 
-BoardView::BoardView(float windowWidth, float windowHeight, Color playerColor)
+BoardView::BoardView(float windowWidth, float windowHeight, Color playerColor,
+                     BoardTheme theme, bool showCoordinates)
     : margin_(20.f)
     , flipped_(playerColor == Color::Black)
+    , colors_(boardColorsFor(theme))
+    , showCoordinates_(showCoordinates)
 {
     float availW = windowWidth * 0.65f - margin_;
     float availH = windowHeight - 2.f * margin_;
@@ -144,16 +147,13 @@ void BoardView::drawDraggedPiece(sf::RenderWindow& window, const sf::Font& font,
 
 void BoardView::drawSquares(sf::RenderWindow& window) const
 {
-    static const sf::Color LightSquare(240, 217, 181);
-    static const sf::Color DarkSquare(181, 136, 99);
-
     sf::RectangleShape sq({ squareSize_, squareSize_ });
 
     for (int file = 0; file < 8; ++file) {
         for (int rank = 0; rank < 8; ++rank) {
             bool light = (file + rank) % 2 != 0;
             sq.setPosition(squareToPixel(file, rank));
-            sq.setFillColor(light ? LightSquare : DarkSquare);
+            sq.setFillColor(light ? colors_.light : colors_.dark);
             window.draw(sq);
         }
     }
@@ -219,11 +219,10 @@ void BoardView::drawHighlights(sf::RenderWindow& window, const HighlightState& h
 
 void BoardView::drawLabels(sf::RenderWindow& window, const sf::Font& font) const
 {
+    if (!showCoordinates_) return;
+
     unsigned int fontSize = static_cast<unsigned int>(squareSize_ * 0.2f);
     if (fontSize < 10) fontSize = 10;
-
-    static const sf::Color LightText(181, 136, 99);
-    static const sf::Color DarkText(240, 217, 181);
 
     const char files[] = "abcdefgh";
     const char ranks[] = "12345678";
@@ -237,7 +236,7 @@ void BoardView::drawLabels(sf::RenderWindow& window, const sf::Font& font) const
             bool light = (file + rank0) % 2 != 0;
             auto pos = squareToPixel(file, rank0);
             sf::Text text(font, std::string(1, files[file]), fontSize);
-            text.setFillColor(light ? LightText : DarkText);
+            text.setFillColor(labelColorFor(light ? colors_.light : colors_.dark));
             text.setPosition({
                 pos.x + squareSize_ - text.getGlobalBounds().size.x - 2.f,
                 pos.y + squareSize_ - text.getGlobalBounds().size.y - 1.f
@@ -250,7 +249,7 @@ void BoardView::drawLabels(sf::RenderWindow& window, const sf::Font& font) const
             bool light = (file0 + rank) % 2 != 0;
             auto pos = squareToPixel(file0, rank);
             sf::Text text(font, std::string(1, ranks[rank]), fontSize);
-            text.setFillColor(light ? LightText : DarkText);
+            text.setFillColor(labelColorFor(light ? colors_.light : colors_.dark));
             text.setPosition({ pos.x + 2.f, pos.y + 1.f });
             window.draw(text);
         }

@@ -1,6 +1,7 @@
 #include "menu_screen.h"
 #include "connect_screen.h"
 #include "local_game_screen.h"
+#include "settings_screen.h"
 #include "widgets/layout.h"
 
 #include <cstdlib>
@@ -24,7 +25,7 @@ MenuScreen::MenuScreen(App& app)
     };
     for (int i = 0; i < EntryCount; ++i) {
         entries_[i].setLabel(Labels[i]);
-        const bool disabled = i >= 2;
+        const bool disabled = i == 2 || i == 3;
         entries_[i].setEnabled(!disabled);
         entries_[i].setOnClick([this, i] {
             if (i == 0) {
@@ -34,6 +35,8 @@ MenuScreen::MenuScreen(App& app)
                 std::string enginePath = env ? env : "stockfish";
                 app_.pushScreen(std::make_unique<LocalGameScreen>(
                     app_, Color::White, std::move(enginePath), 5));
+            } else if (i == 4) {
+                app_.pushScreen(std::make_unique<SettingsScreen>(app_));
             }
         });
     }

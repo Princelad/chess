@@ -1,6 +1,7 @@
 #pragma once
 
 #include "board_interaction.h"
+#include "themes.h"
 
 #include <chess/board.h>
 #include <chess/types.h>
@@ -25,7 +26,9 @@ struct HighlightState {
 
 class BoardView {
 public:
-    BoardView(float windowWidth, float windowHeight, Color playerColor);
+    BoardView(float windowWidth, float windowHeight, Color playerColor,
+              BoardTheme theme = BoardTheme::Classic,
+              bool showCoordinates = true);
 
     void drawSquares(sf::RenderWindow& window) const;
     void drawHighlights(sf::RenderWindow& window, const HighlightState& hl,
@@ -60,6 +63,8 @@ private:
     sf::Vector2f boardOrigin_;
     float panelX_;
     bool flipped_;
+    BoardColors colors_;
+    bool showCoordinates_;
 };
 
 } // namespace chess::client

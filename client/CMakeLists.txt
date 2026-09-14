@@ -1,8 +1,9 @@
 add_library(chessclient STATIC
-    src/connection.cpp
+src/connection.cpp
     src/app.cpp
     src/boardview.cpp
     src/board_interaction.cpp
+    src/config.cpp
     src/widgets/label.cpp
     src/widgets/panel.cpp
     src/widgets/button.cpp
@@ -11,6 +12,7 @@ add_library(chessclient STATIC
     src/widgets/checkbox.cpp
     src/screens/connect_screen.cpp
     src/screens/menu_screen.cpp
+    src/screens/settings_screen.cpp
     src/screens/game_screen.cpp
     src/screens/game_over_screen.cpp
     src/screens/local_game_screen.cpp
