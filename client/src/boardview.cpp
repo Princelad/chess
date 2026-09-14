@@ -182,6 +182,10 @@ void BoardView::drawHighlights(sf::RenderWindow& window, const HighlightState& h
         drawSquareTint(window, hl.selectedSquare->first, hl.selectedSquare->second,
                        sf::Color(0, 120, 215, 100));
 
+    if (hl.cursorSquare)
+        drawSquareTint(window, hl.cursorSquare->first, hl.cursorSquare->second,
+                       sf::Color(255, 255, 255, 40));
+
     if (hl.checkSquare)
         drawSquareTint(window, hl.checkSquare->first, hl.checkSquare->second,
                        sf::Color(255, 0, 0, 100));

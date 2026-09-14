@@ -110,6 +110,24 @@ TEST(BoardView, TopLeftCornerMapsToA8Unflipped)
               std::make_pair(7, 0));
 }
 
+TEST(BoardView, ToggleFlipChangesMapping)
+{
+    BoardView view(960.f, 640.f, Color::White);
+    EXPECT_EQ(view.isFlipped(), false);
+    EXPECT_EQ(view.pixelToSquare(view.boardOrigin()), std::make_pair(0, 7));
+
+    view.toggleFlipped();
+    EXPECT_EQ(view.isFlipped(), true);
+    EXPECT_EQ(view.pixelToSquare(view.boardOrigin()), std::make_pair(7, 0));
+
+    view.toggleFlipped();
+    EXPECT_EQ(view.isFlipped(), false);
+    EXPECT_EQ(view.pixelToSquare(view.boardOrigin()), std::make_pair(0, 7));
+
+    view.setFlipped(true);
+    EXPECT_EQ(view.isFlipped(), true);
+}
+
 TEST(AutoQueenMove, ResolvesQueenCandidate)
 {
     chess::Move mq(chess::squareOf(4, 6), chess::squareOf(4, 7),

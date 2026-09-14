@@ -22,6 +22,7 @@ struct HighlightState {
     std::optional<std::pair<int, int>> lastMoveFrom;
     std::optional<std::pair<int, int>> lastMoveTo;
     std::optional<std::pair<int, int>> checkSquare;
+    std::optional<std::pair<int, int>> cursorSquare;
 };
 
 class BoardView {
@@ -50,6 +51,9 @@ public:
     float squareSize() const { return squareSize_; }
     sf::Vector2f boardOrigin() const { return boardOrigin_; }
     bool isFlipped() const { return flipped_; }
+
+    void setFlipped(bool flipped) { flipped_ = flipped; }
+    void toggleFlipped() { flipped_ = !flipped_; }
 
 private:
     sf::Vector2f squareToPixel(int file, int rank) const;

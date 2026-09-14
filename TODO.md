@@ -581,9 +581,9 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [x] Auto-queen, show-coordinates toggle
   - [x] Load/save round-trip tested
 
-- [ ] **9.6 Keyboard play**
-  - [ ] Arrow-key square cursor; Enter/Space selects/moves; Esc cancels/deselects
-  - [ ] `F` flips board; `?` shows shortcut help overlay
+- [x] **9.6 Keyboard play**
+  - [x] Arrow-key square cursor; Enter/Space selects/moves; Esc cancels/deselects
+  - [x] `F` flips board; `?` shows shortcut help overlay
 
 - [ ] **9.7 Move animation**
   - [ ] Pieces slide from source to destination using the fixed-timestep loop from 6.1

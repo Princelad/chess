@@ -36,6 +36,7 @@ if(BUILD_TESTING)
         client/move_navigator_test.cpp
         client/board_interaction_test.cpp
         client/config_test.cpp
+        client/keyboard_test.cpp
         e2e/e2e_test.cpp
         uci/engine_test.cpp)
 

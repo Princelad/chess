@@ -44,6 +44,7 @@ private:
     bool applyEngineMove();
     void checkGameOver();
     void returnToMenu();
+    void drawHelpOverlay(sf::RenderWindow& window);
 
     App& app_;
     Color myColor_;
@@ -54,6 +55,8 @@ private:
     std::optional<std::pair<int, int>> dragFrom_;
     std::optional<std::pair<int, int>> rightPress_;
     sf::Vector2f cursor_{0.f, 0.f};
+    std::pair<int, int> keyCursor_{4, 4};
+    bool showingHelp_ = false;
     int promoHover_ = -1;
     std::optional<PromotionState> promo_;
     Checkbox autoQueenCheck_;

@@ -1,11 +1,14 @@
 #include "game_screen.h"
 #include "game_over_screen.h"
+#include "keyboard.h"
 #include "ui_helpers.h"
 #include "widgets/layout.h"
 
 #include <chess/movegen.h>
 #include <chess/san.h>
 #include <chess/net/messages.h>
+
+#include <algorithm>
 
 namespace chess::client {
 
@@ -217,6 +220,7 @@ void GameScreen::syncViewHighlights()
     const Board& shown = hud_.navigator().board();
     hl_.lastMoveFrom = hud_.navigator().lastMoveFrom();
     hl_.lastMoveTo = hud_.navigator().lastMoveTo();
+    hl_.cursorSquare = keyCursor_;
     Color stm = shown.sideToMove();
     hl_.checkSquare = chess::inCheck(shown, stm)
         ? findKingSquare(shown, stm)
@@ -326,12 +330,7 @@ void GameScreen::handleEvent(const sf::Event& event)
         }
 
         if (kp->code == sf::Keyboard::Key::Escape) {
-            if (promo_) { cancelPromotion(); return; }
-            clearBoardInput();
-            deselect();
-            return;
-        }
-        if (kp->code == sf::Keyboard::Key::Space) {
+            if (showingHelp_) { showingHelp_ = false; return; }
             if (promo_) { cancelPromotion(); return; }
             clearBoardInput();
             deselect();
@@ -339,10 +338,62 @@ void GameScreen::handleEvent(const sf::Event& event)
         }
 
         if (promo_) {
+            if (kp->code == sf::Keyboard::Key::Space) { cancelPromotion(); return; }
             if (auto t = promoTypeForKey(kp->code)) {
                 sendPromotionMove(*t);
                 return;
             }
+            return;
+        }
+
+        switch (keyToAction(kp->code, kp->shift)) {
+            case KeyboardAction::Deselect:
+                clearBoardInput();
+                deselect();
+                return;
+            case KeyboardAction::Flip:
+                boardView_.toggleFlipped();
+                return;
+            case KeyboardAction::Help:
+                showingHelp_ = !showingHelp_;
+                return;
+            case KeyboardAction::PrevMove:
+                hud_.navigator().goBack();
+                clearBoardInput();
+                return;
+            case KeyboardAction::NextMove:
+                hud_.navigator().goForward();
+                clearBoardInput();
+                return;
+            case KeyboardAction::MoveCursor: {
+                auto [df, dr] = cursorDelta(kp->code);
+                keyCursor_ = moveCursorStep(keyCursor_.first, keyCursor_.second, df, dr);
+                return;
+            }
+            case KeyboardAction::Enter: {
+                if (!hud_.navigator().atEnd()) {
+                    hud_.navigator().goEnd();
+                    deselect();
+                }
+                if (gameOver_) return;
+                if (hl_.selectedSquare) {
+                    if (*hl_.selectedSquare == keyCursor_) {
+                        deselect();
+                    } else if (ownPieceAt(keyCursor_.first, keyCursor_.second)) {
+                        selectPiece(keyCursor_.first, keyCursor_.second);
+                    } else {
+                        trySendMove(keyCursor_.first, keyCursor_.second);
+                    }
+                } else {
+                    if (!myTurn_) return;
+                    if (ownPieceAt(keyCursor_.first, keyCursor_.second))
+                        selectPiece(keyCursor_.first, keyCursor_.second);
+                }
+                return;
+            }
+            case KeyboardAction::None:
+            default:
+                break;
         }
 
         if (hud_.navigator().handleEvent(event, {0.f, 0.f})) {
@@ -439,6 +490,7 @@ void GameScreen::handleEvent(const sf::Event& event)
             auto square = boardView_.pixelToSquare(local);
             if (!square) return;
 
+            keyCursor_ = *square;
             drag_.press(local.x, local.y);
             cursor_ = local;
             dragFrom_ = *square;
@@ -705,6 +757,69 @@ void GameScreen::draw(sf::RenderWindow& window)
     hud_.draw(window, font);
     drawButtons(window);
     drawChat(window);
+
+    if (showingHelp_) drawHelpOverlay(window);
+}
+
+void GameScreen::drawHelpOverlay(sf::RenderWindow& window)
+{
+    auto& font = app_.font();
+
+    sf::RectangleShape dim(
+        {static_cast<float>(App::WindowWidth), static_cast<float>(App::WindowHeight)});
+    dim.setFillColor(sf::Color(0, 0, 0, 120));
+    window.draw(dim);
+
+    const char* lines[] = {
+        "Shortcuts",
+        "Arrows — move cursor",
+        "Enter — select / move",
+        "Space — cancel / deselect",
+        "Esc — close help / deselect",
+        "F — flip board",
+        "[ / ] — previous / next move",
+        "Home / End — go to start / end",
+        "Q R B N or 1-4 — pick promotion",
+        "? — toggle this help",
+    };
+    constexpr int Count = static_cast<int>(sizeof(lines) / sizeof(lines[0]));
+
+    constexpr unsigned int HdrSize = 17;
+    constexpr unsigned int RowSize = 14;
+    constexpr float RowH = 24.f;
+    constexpr float PadX = 22.f;
+    constexpr float PadY = 18.f;
+
+    float maxW = 0.f;
+    for (int i = 0; i < Count; ++i) {
+        sf::Text t(font, lines[i], (i == 0) ? HdrSize : RowSize);
+        maxW = std::max(maxW, t.getLocalBounds().size.x);
+    }
+
+    const float panelW = maxW + 2.f * PadX;
+    const float panelH = RowH * static_cast<float>(Count) + 2.f * PadY;
+    const float px = (static_cast<float>(App::WindowWidth) - panelW) / 2.f;
+    const float py = (static_cast<float>(App::WindowHeight) - panelH) / 2.f;
+
+    sf::RectangleShape bg({panelW, panelH});
+    bg.setPosition({px, py});
+    bg.setFillColor(sf::Color(30, 30, 30, 235));
+    bg.setOutlineColor(sf::Color(90, 90, 90));
+    bg.setOutlineThickness(1.f);
+    window.draw(bg);
+
+    float y = py + PadY;
+    for (int i = 0; i < Count; ++i) {
+        sf::Text t(font, lines[i], (i == 0) ? HdrSize : RowSize);
+        t.setFillColor(i == 0 ? sf::Color(255, 255, 255) : sf::Color(210, 210, 210));
+        auto lb = t.getLocalBounds();
+        t.setPosition({
+            px + (panelW - lb.size.x) / 2.f - lb.position.x,
+            y - lb.position.y
+        });
+        window.draw(t);
+        y += RowH;
+    }
 }
 
 } // namespace chess::client
