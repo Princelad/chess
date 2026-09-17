@@ -82,7 +82,7 @@ SemVer-style, pre-1.0: MINOR bump per phase, PATCH for bugfixes within a phase. 
 | 6 — SFML GUI | `v0.7.0` | done |
 | 7 — Integration & polish | `v1.0.0` | in progress |
 | 8 — Engine integration (UCI) | `v1.1.0` | planned |
-| 9 — Client UI/UX overhaul | `v1.2.0` | in progress |
+| 9 — Client UI/UX overhaul | `v1.2.0` | done |
 | 10 — Persistence & ratings | `v1.3.0` | planned |
 | 11 — Multiplayer QoL | `v1.4.0` | planned |
 | 12 — Variants & community | `v1.5.0` | planned |
