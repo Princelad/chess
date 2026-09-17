@@ -2,6 +2,7 @@
 #include "widgets/checkbox.h"
 #include "widgets/label.h"
 #include "widgets/layout.h"
+#include "widgets/text_field.h"
 
 #include <gtest/gtest.h>
 
@@ -218,6 +219,81 @@ TEST(WidgetLayout, HStackSpansAndCenters)
     EXPECT_EQ(rects[0].size, sf::Vector2f(30.f, 20.f));
     EXPECT_EQ(rects[1].position.x, 50.f);
     EXPECT_EQ(rects[1].size, sf::Vector2f(40.f, 10.f));
+}
+
+sf::Event textEntered(char32_t code)
+{
+    return sf::Event::TextEntered{ code };
+}
+
+TEST(WidgetTextField, ClickFocusesAndOutsideClickBlurs)
+{
+    TextField field(sf::FloatRect({10.f, 10.f}, {200.f, 28.f}));
+    EXPECT_FALSE(field.isFocused());
+
+    EXPECT_TRUE(field.handleEvent(mousePressInside(field.rect()), {12.f, 12.f}));
+    EXPECT_TRUE(field.isFocused());
+
+    field.handleEvent(mousePressInside(sf::FloatRect({10.f, 60.f}, {50.f, 20.f})),
+                      {12.f, 62.f});
+    EXPECT_FALSE(field.isFocused());
+}
+
+TEST(WidgetTextField, TextEnteredAppendsAndBackspaceDeletes)
+{
+    TextField field(sf::FloatRect({10.f, 10.f}, {200.f, 28.f}));
+    field.setFocused(true);
+
+    field.handleEvent(textEntered(U'h'), {10.f, 10.f});
+    field.handleEvent(textEntered(U'i'), {10.f, 10.f});
+    EXPECT_EQ(field.text(), "hi");
+
+    field.handleEvent(textEntered(U'\b'), {10.f, 10.f});
+    EXPECT_EQ(field.text(), "h");
+}
+
+TEST(WidgetTextField, TextEnteredHonorsMaxLength)
+{
+    TextField field(sf::FloatRect({10.f, 10.f}, {200.f, 28.f}));
+    field.setMaxLength(3);
+    field.setFocused(true);
+
+    for (char32_t c : { U'a', U'b', U'c', U'd' })
+        field.handleEvent(textEntered(c), {10.f, 10.f});
+    EXPECT_EQ(field.text(), "abc");
+}
+
+TEST(WidgetTextField, EnterFiresCommitOnceWhileFocused)
+{
+    TextField field(sf::FloatRect({10.f, 10.f}, {200.f, 28.f}));
+    int commits = 0;
+    field.setOnCommit([&] { ++commits; });
+
+    // Enter before focus is a no-op.
+    EXPECT_FALSE(field.handleEvent(keyPress(sf::Keyboard::Key::Enter), {12.f, 12.f}));
+    EXPECT_EQ(commits, 0);
+
+    field.setFocused(true);
+    EXPECT_TRUE(field.handleEvent(keyPress(sf::Keyboard::Key::Enter), {12.f, 12.f}));
+    EXPECT_EQ(commits, 1);
+
+    // Non-Enter keys are not consumed while focused.
+    EXPECT_FALSE(field.handleEvent(keyPress(sf::Keyboard::Key::A), {12.f, 12.f}));
+    EXPECT_EQ(commits, 1);
+}
+
+TEST(WidgetTextField, DisabledIgnoresFocusClickTypeAndEnter)
+{
+    TextField field(sf::FloatRect({10.f, 10.f}, {200.f, 28.f}));
+    int commits = 0;
+    field.setOnCommit([&] { ++commits; });
+    field.setEnabled(false);
+
+    EXPECT_FALSE(field.handleEvent(mousePressInside(field.rect()), {12.f, 12.f}));
+    EXPECT_FALSE(field.handleEvent(textEntered(U'x'), {12.f, 12.f}));
+    field.setFocused(true);
+    EXPECT_FALSE(field.handleEvent(keyPress(sf::Keyboard::Key::Enter), {12.f, 12.f}));
+    EXPECT_EQ(commits, 0);
 }
 
 } // namespace

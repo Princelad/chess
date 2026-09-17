@@ -326,7 +326,9 @@ void GameScreen::handleEvent(const sf::Event& event)
         if (chatInput_.isFocused()) {
             if (kp->code == sf::Keyboard::Key::Escape) {
                 chatInput_.setFocused(false);
+                return;
             }
+            if (chatInput_.handleEvent(*kp, {0.f, 0.f})) return;
             return;
         }
 
