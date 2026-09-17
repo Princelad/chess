@@ -36,7 +36,7 @@ Sfx classifyMove(const Board& before, const Move& m)
 }
 
 std::vector<std::int16_t> SoundManager::synthTone(float freq, float seconds,
-                                               float decayPerSecond)
+                                                  float decayPerSecond)
 {
     const int samples = static_cast<int>(seconds * kSampleRate);
     std::vector<std::int16_t> out;
@@ -49,22 +49,6 @@ std::vector<std::int16_t> SoundManager::synthTone(float freq, float seconds,
         out.push_back(static_cast<std::int16_t>(amplitude * env * tone));
     }
     return out;
-}
-
-std::vector<std::int16_t> SoundManager::synthTone(float freq, float seconds,
-                                               float fadeOutStart,
-                                               float decayPerSecond)
-{
-    const int samples = static_cast<int>(seconds * kSampleRate);
-    const int fadePoint = static_cast<int>(fadeOutStart * kSampleRate);
-    std::vector<std::int16_t> tone = synthTone(freq, seconds, decayPerSecond);
-    for (int i = fadePoint; i < samples; ++i) {
-        const float frac =
-            1.f - static_cast<float>(i - fadePoint) /
-                      static_cast<float>(std::max(1, samples - fadePoint));
-        tone[i] = static_cast<std::int16_t>(tone[i] * frac);
-    }
-    return tone;
 }
 
 sf::SoundBuffer SoundManager::makeToneBuffer(float freq, float seconds,

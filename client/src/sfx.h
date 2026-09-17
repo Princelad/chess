@@ -38,12 +38,10 @@ public:
     bool enabled() const { return enabled_; }
     int volume() const { return volume_; }
 
-    // Synthesis helpers, exposed for testing.
+// Synthesis helpers, exposed for testing.
     static constexpr int sampleRate() { return cSampleRate; }
     static std::vector<std::int16_t> synthTone(float freq, float seconds,
-                                            float decayPerSecond);
-    static std::vector<std::int16_t> synthTone(float freq, float seconds,
-                                            float fadeOutStart, float decayPerSecond);
+                                               float decayPerSecond);
     static sf::SoundBuffer makeToneBuffer(float freq, float seconds,
                                           float decayPerSecond);
 
