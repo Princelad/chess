@@ -178,5 +178,63 @@ TEST(MoveNavigator, LastMoveHighlights)
     EXPECT_EQ(*nav.lastMoveTo(), std::make_pair(5, 2));   // f3
 }
 
+TEST(MoveNavigator, MultiCaptureAccumulatesForBothSides)
+{
+    auto start = Board::fromFen("4k3/8/8/p7/1n6/3N4/8/Q3K3 w - - 0 1");
+    ASSERT_TRUE(start.has_value());
+    auto g = playSans(*start, { "Qxa5", "Nxd3" });
+    ASSERT_EQ(g.moves.size(), 2u);
+    ASSERT_TRUE(g.moves[0].isCapture());
+    ASSERT_TRUE(g.moves[1].isCapture());
+
+    MoveNavigator nav;
+    nav.setGame(g.initial, g.moves, g.sans);
+
+    const auto& white = nav.capturedBy(Color::White);
+    EXPECT_EQ(white.value, 1);
+    EXPECT_EQ(white.counts[static_cast<int>(PieceType::Pawn)], 1);
+    ASSERT_EQ(white.pieces.size(), 1u);
+    EXPECT_EQ(white.pieces[0].color, Color::Black);
+
+    const auto& black = nav.capturedBy(Color::Black);
+    EXPECT_EQ(black.value, 3);
+    EXPECT_EQ(black.counts[static_cast<int>(PieceType::Knight)], 1);
+    ASSERT_EQ(black.pieces.size(), 1u);
+    EXPECT_EQ(black.pieces[0].color, Color::White);
+    EXPECT_EQ(black.pieces[0].type, PieceType::Knight);
+
+    EXPECT_EQ(nav.materialAdvantage(Color::White), -2);
+    EXPECT_EQ(nav.materialAdvantage(Color::Black), 2);
+}
+
+TEST(MoveNavigator, AppendAccountingMatchesSetGameRebuild)
+{
+    auto g = playSans(Board::fromStartPos(),
+                      { "e4", "d5", "exd5", "Nf6", "Nc3", "Qxd5" });
+    ASSERT_EQ(g.moves.size(), 6u);
+
+    MoveNavigator viaSet;
+    viaSet.setGame(g.initial, g.moves, g.sans);
+    viaSet.goEnd();
+
+    MoveNavigator viaAppend;
+    viaAppend.setGame(Board::fromStartPos(), {}, {});
+    for (std::size_t i = 0; i < g.moves.size(); ++i)
+        viaAppend.appendMove(g.moves[i], g.sans[i]);
+
+    EXPECT_EQ(viaAppend.totalPlies(), 6);
+    EXPECT_EQ(viaAppend.board().toFen(), viaSet.board().toFen());
+    EXPECT_EQ(viaAppend.finalBoard().toFen(), viaSet.finalBoard().toFen());
+    const auto& setWhite = viaSet.capturedBy(Color::White);
+    const auto& appendWhite = viaAppend.capturedBy(Color::White);
+    EXPECT_EQ(appendWhite.value, setWhite.value);
+    EXPECT_EQ(appendWhite.counts, setWhite.counts);
+    EXPECT_EQ(appendWhite.pieces.size(), setWhite.pieces.size());
+    EXPECT_EQ(viaAppend.materialAdvantage(Color::White),
+              viaSet.materialAdvantage(Color::White));
+    EXPECT_EQ(viaAppend.materialAdvantage(Color::Black),
+              viaSet.materialAdvantage(Color::Black));
+}
+
 } // namespace
 } // namespace chess::client

@@ -36,9 +36,9 @@ inline std::vector<sf::FloatRect> vstack(const sf::FloatRect& area, float gap,
     out.reserve(sizes.size());
 
     float totalH = 0.f;
-    for (const auto& s : sizes) {
-        totalH += s.y;
-        if (!out.empty()) totalH += gap;
+    for (std::size_t i = 0; i < sizes.size(); ++i) {
+        if (i > 0) totalH += gap;
+        totalH += sizes[i].y;
     }
 
     float y = area.position.y + (area.size.y - totalH) / 2.f;
@@ -61,9 +61,9 @@ inline std::vector<sf::FloatRect> hstack(const sf::FloatRect& area, float gap,
     out.reserve(sizes.size());
 
     float totalW = 0.f;
-    for (const auto& s : sizes) {
-        totalW += s.x;
-        if (!out.empty()) totalW += gap;
+    for (std::size_t i = 0; i < sizes.size(); ++i) {
+        if (i > 0) totalW += gap;
+        totalW += sizes[i].x;
     }
 
     float x = area.position.x + (area.size.x - totalW) / 2.f;
