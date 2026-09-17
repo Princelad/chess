@@ -3,6 +3,7 @@
 #include "app.h"
 #include "board_interaction.h"
 #include "boardview.h"
+#include "game_over_transition.h"
 #include "hud.h"
 #include "move_animator.h"
 #include "promo_state.h"
@@ -10,7 +11,6 @@
 #include "widgets/checkbox.h"
 #include <chess/board.h>
 #include <chess/move.h>
-#include <chess/movegen.h>
 #include <chess/net/messages.h>
 #include <chess/types.h>
 #include <chess/uci/engine.h>
@@ -70,9 +70,7 @@ private:
     bool gameOver_ = false;
     bool engineThinking_ = false;
     bool engineFailed_ = false;
-    bool pendingGameOver_ = false;
-    chess::GameState pendingState_ = chess::GameState::Ongoing;
-    float pendingGameOverTimer_ = 0.f;
+    GameOverTransition gameOverTransition_;
 
     std::unique_ptr<uci::UciEngine> engine_;
     int engineDepth_;

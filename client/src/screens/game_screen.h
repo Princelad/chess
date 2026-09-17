@@ -3,6 +3,7 @@
 #include "app.h"
 #include "board_interaction.h"
 #include "boardview.h"
+#include "game_over_transition.h"
 #include "hud.h"
 #include "move_animator.h"
 #include "promo_state.h"
@@ -68,10 +69,7 @@ private:
     bool myTurn_ = false;
     bool gameOver_ = false;
     bool drawOfferPending_ = false;
-    bool pendingGameOver_ = false;
-    chess::net::GameResult pendingResult_ = chess::net::GameResult::Abort;
-    chess::net::GameOverReason pendingReason_ = chess::net::GameOverReason::Disconnection;
-    float pendingGameOverTimer_ = 0.f;
+    GameOverTransition gameOverTransition_;
 
     std::string opponentName_;
 

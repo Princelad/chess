@@ -17,7 +17,6 @@ constexpr float BtnH = 30.f;
 constexpr float InputH = 28.f;
 constexpr std::size_t MaxChatLog = 50;
 constexpr std::size_t MaxChatInput = 200;
-constexpr float kGameOverDelay = 0.55f;
 }
 
 GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName)
@@ -560,9 +559,8 @@ void GameScreen::update(float dtSec)
     chatInput_.update(dtSec);
     anim_.update(dtSec);
 
-    if (pendingGameOver_) {
-        pendingGameOverTimer_ -= dtSec;
-        if (pendingGameOverTimer_ <= 0.f)
+    if (gameOverTransition_.armed()) {
+        if (gameOverTransition_.tick(dtSec))
             finishGameOver();
         return;
     }
@@ -595,15 +593,12 @@ void GameScreen::update(float dtSec)
             drawOfferPending_ = false;
             hud_.setGameOver(true);
             hud_.setInfo(opponentName_, myColor_, myTurn_, gameOver_);
-            pendingResult_ = gameOver->result;
-            pendingReason_ = gameOver->reason;
             const auto& cfg = app_.config();
             const float animDur = static_cast<float>(
                 cfg.getFloat("animation.duration", 0.3));
             const bool animOn = cfg.getBool("animation.enabled", true);
-            pendingGameOverTimer_ =
-                std::max(animOn ? animDur : 0.f, kGameOverDelay);
-            pendingGameOver_ = true;
+            gameOverTransition_.arm(gameOver->result, gameOver->reason,
+                                    gameOverDelaySec(animOn, animDur));
         }
         else if (auto* drawOffer = std::get_if<chess::net::ServerDrawOfferMsg>(&msg)) {
             (void)drawOffer;
@@ -645,9 +640,8 @@ void GameScreen::update(float dtSec)
 
 void GameScreen::finishGameOver()
 {
-    pendingGameOver_ = false;
     app_.switchScreen(std::make_unique<GameOverScreen>(
-        app_, pendingResult_, pendingReason_,
+        app_, gameOverTransition_.result(), gameOverTransition_.reason(),
         hud_.navigator().initialBoard(), hud_.navigator().moves(),
         hud_.navigator().sans()));
 }

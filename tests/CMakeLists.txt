@@ -40,6 +40,7 @@ if(BUILD_TESTING)
         client/move_animator_test.cpp
         client/sfx_test.cpp
         client/widget_test.cpp
+        client/game_over_transition_test.cpp
         e2e/e2e_test.cpp
         uci/engine_test.cpp)
 
