@@ -1,14 +1,23 @@
 #pragma once
 
 #include "app.h"
+#include "board_interaction.h"
 #include "boardview.h"
+#include "game_over_transition.h"
 #include "hud.h"
+#include "move_animator.h"
 #include "promo_state.h"
+#include "widgets/button.h"
+#include "widgets/checkbox.h"
+#include "widgets/label.h"
+#include "widgets/panel.h"
+#include "widgets/text_field.h"
 #include <chess/board.h>
+#include <chess/move.h>
+#include <chess/net/messages.h>
 #include <chess/types.h>
 
-#include <chess/move.h>
-
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -25,35 +34,56 @@ private:
     void selectPiece(int file, int rank);
     void trySendMove(int targetFile, int targetRank);
     void deselect();
+    void commitMove(const chess::Move& m);
+    void buildPromotion(int fromFile, int fromRank, int toFile, int toRank);
     void sendPromotionMove(chess::PieceType type);
     void cancelPromotion();
+    void syncViewHighlights();
+    void clearBoardInput();
+    bool ownPieceAt(int file, int rank);
+    sf::FloatRect autoQueenRect() const;
+    std::optional<chess::PieceType> promoTypeForKey(sf::Keyboard::Key key) const;
+    PromoCell promoCell(int index) const;
     void sendChat();
-    void handleButtonClick(int mx, int my);
     void drawButtons(sf::RenderWindow& window);
     void drawChat(sf::RenderWindow& window);
-
-    PromoCell promoCell(int index) const;
+    void drawHelpOverlay(sf::RenderWindow& window);
+    void finishGameOver();
 
     App& app_;
-    Board board_;
     Color myColor_;
-    std::string opponentName_;
     BoardView boardView_;
-
     HighlightState hl_;
+    BoardAnnotations annotations_;
+    DragTracker drag_;
+    std::optional<std::pair<int, int>> dragFrom_;
+    std::optional<std::pair<int, int>> rightPress_;
+    sf::Vector2f cursor_{0.f, 0.f};
+    std::pair<int, int> keyCursor_{4, 4};
+    bool showingHelp_ = false;
+    MoveAnimator anim_;
+    int promoHover_ = -1;
     std::optional<PromotionState> promo_;
-    bool inCheck_ = false;
+    Checkbox autoQueenCheck_;
     Hud hud_;
     bool myTurn_ = false;
     bool gameOver_ = false;
     bool drawOfferPending_ = false;
-    std::vector<std::string> chatLog_;
-    std::string chatInput_;
-    bool chatFocused_ = false;
+    GameOverTransition gameOverTransition_;
 
-    Board initialBoard_;
-    std::vector<chess::Move> moves_;
-    std::vector<std::string> sanMoves_;
+    std::string opponentName_;
+
+    std::vector<std::string> chatLog_;
+    TextField chatInput_;
+    Panel chatLogBg_;
+    Label chatLabel_;
+    Label drawOfferLabel_;
+    Button resignBtn_;
+    Button offerDrawBtn_;
+    Button declineBtn_;
+    Button acceptBtn_;
+
+    void layoutPanel();
 };
 
 } // namespace chess::client

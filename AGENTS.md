@@ -13,9 +13,10 @@ Single test:
 ctest --test-dir build -R "MoveGen.KingCastling" --output-on-failure
 ```
 
-When adding a new `.cpp` test file, register it in `tests/CMakeLists.txt` in the `add_executable(chess-tests ...)` list.
-
-When adding a new `.cpp` source, register it in `core/CMakeLists.txt` (`add_library(chesscore STATIC ...)`).
+When adding a new `.cpp` file, register it in the relevant `CMakeLists.txt`:
+- `tests/CMakeLists.txt` → `add_executable(chess-tests ...)` for test files
+- `core/CMakeLists.txt` → `add_library(chesscore STATIC ...)` for rules engine sources
+- `client/CMakeLists.txt` → `chessclient` for GUI sources, including `src/widgets/`
 
 ## Project structure
 
@@ -27,33 +28,35 @@ chess/
 ├── net/           # shared network protocol (sf::Packet)
 ├── server/        # headless TCP match server
 ├── client/        # SFML 3 GUI client
+│   ├── src/screens/     # screens + shared HUD
+│   ├── src/widgets/     # reusable widgets: Button, TextField, Panel, Label, MoveNavigator, Checkbox
+│   └── src/             # BoardView, Connection, board_interaction (Annotations + DragTracker),
+│                        # themes.h (BoardTheme/colors), sfx.h (procedural SoundManager),
+│                        # config.{h,cpp} (INI persistence)
 ├── tests/         # GoogleTest suite (ctest)
+│   ├── core/            # core engine tests
+│   └── client/          # client/widget tests
 ├── assets/pieces/ # cburnett PNG sprites (CC BY-SA 3.0)
 ├── TODO.md        # full task list with phase/task numbering
 └── AGENTS.md      # this file
 ```
 
-`core/` is the only library target (`chesscore`). All test files go in `tests/core/`.
-
-## Git workflow
-
-- **Branch naming:** `v{major}.{minor}.{patch}-task-{task_id}` (e.g. `v0.2.0-task-1.3.3`)
-- **One branch per task**, forked from the phase base (e.g. `v0.2.0`)
-- **Commit message format:** `core: short description (1.3.3)` — terse, no body for small tasks
-- **PR flow:**
-  ```sh
-  git push -u origin <branch>
-  gh pr create --base <phase-branch> --head <branch> --title "..." --body "..."
-  gh pr merge <N> --merge --delete-branch   # fast-forward, deletes local + remote branch
-  ```
-  After merge, check out the phase base (`git checkout v0.2.0`) and `git pull`.
-- Tags (`v0.1.0`, `v0.2.0`, ...) are applied at phase completion.
+Library targets: `chesscore` (rules), `chessnet` (protocol), `chessuci` (UCI engine), `chessclient` (GUI). Widgets live in `chessclient`; tests link it directly.
 
 ## C++17 gotchas (already bitten)
 
 - **`constexpr operator==`:** `explicit constexpr operator==` is valid; do NOT `= default` on `==`/`!=` in C++17 (no defaulted comparison operators).
 - **`Piece::None()`:** use a static member function, not a static data member (incomplete-type issue at point of declaration).
 - **`std::optional<Board>` dereference:** `Board::fromFen()` returns `std::optional<Board>`. Dereference with `*board` or `board->`, never `board.`.
+- **`find_if_not` + inverted predicate:** `find_if_not(begin, end, isNotSpace)` finds the first *space*, not the first non-space. For trimming use `isSpace` with `find_if_not` (or `isNotSpace` with `find_if`).
+- **Chat enter-send:** in `GameScreen`, `chatInput_` is focused by click; while focused, `handleEvent` forwards `KeyPressed` into `chatInput_.handleEvent` (Enter fires its `onCommit` → `sendChat()`). Escape unfocuses first. Text is typed via `TextEntered`, so backspace arrives as `TextEntered('\b')`, not a key press.
+- **Keyboard play (9.6):** in `GameScreen`/`LocalGameScreen`, arrows move a board cursor (`keyCursor_`, wraps at edges, syncs from mouse presses); Enter selects own piece then commits to the cursor square; `[`/`]` step the move list (replacing the navigator's Left/Right in those screens — Analysis still uses arrows); `F` calls `BoardView::toggleFlipped()`; `?`/`Slash` toggles the help overlay (`showingHelp_`, closes first on Esc). Pure mapping lives in `client/src/keyboard.h` (`keyToAction`, `moveCursorStep`). Cursor rendering rides on `HighlightState::cursorSquare`.
+- **INI config:** `Config` flattens keys as `section.key`, sees `[section]`/`key = value`, strips `#`/`;` comments, and persists to `~/.config/chess/config.ini` (created on save). Settings are applied and re-saved immediately from the Settings screen; `sound.{volume,muted}`/`animation.{enabled,duration}` are consumed by the SFX manager and move animator (9.7/9.8).
+- **Move history records ONCE:** the online server echoes your own move back via `MOVE`, so `GameScreen` must NOT append a local move — the echo during `update()` is the single append point via `Hud`/`MoveNavigator::appendMove`. `LocalGameScreen` (no server echo) records its own moves.
+- **Move animation (9.7):** pieces slide via `MoveAnimator` (in `client/src/move_animator.h`, header-only) — capture the pre-move state, advance `update(dt)` on the fixed-timestep, read eased `progress()` in `draw()` (frame-independent). Triggers are exactly the append points: the online `ServerMoveMsg` handler and `LocalGameScreen::applyMove`/`applyEngineMove`. `BoardView::drawPieces` takes a `const MoveAnimator*` (Analysis passes `nullptr`) and skips destination squares while animating. Duration/enable come from config keys `animation.enabled`/`animation.duration` (0/false = instant snap); no animation while replay-stepping. On the deciding move, the game-over screen switch is delayed via `GameOverTransition` (`client/src/game_over_transition.h`) so the final animation and mate/capture sound play out (`gameOverDelaySec` floors all delays at 0.55s).
+- **Sound (9.8):** `client/src/sfx.h` ships `SoundManager` (App-owned, `app_.sounds()`) with procedurally synthesized 16-bit/44.1 kHz clips (no asset files) — move bump, capture thock, two-tone check, descending mate. Pure `classifyMove(before, move)` picks the clip with precedence Checkmate > Check > Capture (incl. en passant) > Move, and is fired at the same append points as 7 animation. Requires the SFML `Audio` component — root `CMakeLists.txt` requests it (`SFML::Audio`/`sfml-audio`), and the FetchContent fallback builds audio too (needs OpenAL on Linux). SFML 3.1 nuances: `sf::Sound` has no default ctor (initialize with a buffer), `SoundBuffer::loadFromSamples` takes a 5th channel-map arg (use `{sf::SoundChannel::Mono}`), samples are `std::int16_t`.
+- **Board input is press→release:** left press starts a `DragTracker` + selects own piece; the move is committed on release (drag-resolution or click-target). Left press clears arrows/circles; right press deselects, right drag draws arrows, right tap toggles circles. Annotations live in `BoardAnnotations` (per-square, `BoardView`-rendered) and are cleared when the board leaves the live position.
+- **Auto-queen defaults ON** (config key `general.auto_queen`, toggled via the picker's `Checkbox` and the Settings screen); when enabled a promotion commits the Queen move directly and skips the picker.
 
 ## 0x88 board reference
 
@@ -80,7 +83,7 @@ SemVer-style, pre-1.0: MINOR bump per phase, PATCH for bugfixes within a phase. 
 | 6 — SFML GUI | `v0.7.0` | done |
 | 7 — Integration & polish | `v1.0.0` | in progress |
 | 8 — Engine integration (UCI) | `v1.1.0` | planned |
-| 9 — Client UI/UX overhaul | `v1.2.0` | planned |
+| 9 — Client UI/UX overhaul | `v1.2.0` | done |
 | 10 — Persistence & ratings | `v1.3.0` | planned |
 | 11 — Multiplayer QoL | `v1.4.0` | planned |
 | 12 — Variants & community | `v1.5.0` | planned |

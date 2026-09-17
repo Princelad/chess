@@ -25,22 +25,4 @@ inline std::string safeTruncate(const std::string& s, std::size_t maxBytes)
     return s.substr(0, n > 0 ? n - 1 : 0) + "...";
 }
 
-inline void drawBtn(sf::RenderWindow& window, float x, float y, float w, float h,
-                    sf::Color fill, const sf::Font& font, const std::string& label)
-{
-    sf::RectangleShape rect({w, h});
-    rect.setPosition({x, y});
-    rect.setFillColor(fill);
-    rect.setOutlineColor(sf::Color(100, 100, 100));
-    rect.setOutlineThickness(1.f);
-    window.draw(rect);
-
-    sf::Text txt(font, label, 14);
-    txt.setFillColor(sf::Color(240, 240, 240));
-    auto lb = txt.getGlobalBounds();
-    txt.setPosition({x + (w - lb.size.x) / 2.f - lb.position.x,
-                     y + (h - lb.size.y) / 2.f - lb.position.y});
-    window.draw(txt);
-}
-
 } // namespace chess::client

@@ -1,11 +1,17 @@
 #pragma once
 
 #include "app.h"
+#include "board_interaction.h"
 #include "boardview.h"
+#include "game_over_transition.h"
 #include "hud.h"
+#include "move_animator.h"
 #include "promo_state.h"
+#include "widgets/button.h"
+#include "widgets/checkbox.h"
 #include <chess/board.h>
 #include <chess/move.h>
+#include <chess/net/messages.h>
 #include <chess/types.h>
 #include <chess/uci/engine.h>
 
@@ -29,33 +35,48 @@ private:
     void selectPiece(int file, int rank);
     void tryMove(int targetFile, int targetRank);
     void deselect();
+    void applyMove(const chess::Move& m);
+    void buildPromotion(int fromFile, int fromRank, int toFile, int toRank);
     void applyPromotionMove(chess::PieceType type);
     void cancelPromotion();
+    void syncViewHighlights();
+    void clearBoardInput();
+    bool ownPieceAt(int file, int rank);
+    sf::FloatRect autoQueenRect() const;
+    std::optional<chess::PieceType> promoTypeForKey(sf::Keyboard::Key key) const;
     bool applyEngineMove();
     void checkGameOver();
-    void returnToConnect();
+    void finishGameOver();
+    void returnToMenu();
+    void drawHelpOverlay(sf::RenderWindow& window);
 
     App& app_;
-    Board board_;
     Color myColor_;
     BoardView boardView_;
     HighlightState hl_;
+    BoardAnnotations annotations_;
+    DragTracker drag_;
+    std::optional<std::pair<int, int>> dragFrom_;
+    std::optional<std::pair<int, int>> rightPress_;
+    sf::Vector2f cursor_{0.f, 0.f};
+    std::pair<int, int> keyCursor_{4, 4};
+    bool showingHelp_ = false;
+    MoveAnimator anim_;
+    int promoHover_ = -1;
     std::optional<PromotionState> promo_;
-    bool inCheck_ = false;
+    Checkbox autoQueenCheck_;
     Hud hud_;
     bool myTurn_ = false;
     bool gameOver_ = false;
     bool engineThinking_ = false;
     bool engineFailed_ = false;
+    GameOverTransition gameOverTransition_;
 
     std::unique_ptr<uci::UciEngine> engine_;
     int engineDepth_;
 
-    Board initialBoard_;
-    std::vector<chess::Move> moves_;
-    std::vector<std::string> sanMoves_;
-
     PromoCell promoCell(int index) const;
+    Button backBtn_;
 };
 
 } // namespace chess::client

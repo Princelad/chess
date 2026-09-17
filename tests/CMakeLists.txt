@@ -33,6 +33,14 @@ if(BUILD_TESTING)
         server/match_test.cpp
         server/bot_match_test.cpp
         client/connection_test.cpp
+        client/move_navigator_test.cpp
+        client/board_interaction_test.cpp
+        client/config_test.cpp
+        client/keyboard_test.cpp
+        client/move_animator_test.cpp
+        client/sfx_test.cpp
+        client/widget_test.cpp
+        client/game_over_transition_test.cpp
         e2e/e2e_test.cpp
         uci/engine_test.cpp)
 

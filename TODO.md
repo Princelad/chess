@@ -551,47 +551,50 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
 
 **Exit version:** `v1.2.0` — menu-driven client with scalable layout
 
-- [ ] **9.1 Menu shell & navigation**
-  - [ ] New root screen: Play online / vs Computer / Puzzles / Archive / Settings
-  - [ ] Unimplemented entries visible but disabled (greyed out)
-  - [ ] Replace linear screen flow with a back-stack (Esc = go back)
+- [x] **9.1 Menu shell & navigation**
+  - [x] New root screen: Play online / vs Computer / Puzzles / Archive / Settings
+  - [x] Unimplemented entries visible but disabled (greyed out)
+  - [x] Replace linear screen flow with a back-stack (Esc = go back)
+  - [~] Residual: menu entry model + `App` back-stack transitions are untested (App owns a RenderWindow; a headless harness is deferred)
 
-- [ ] **9.2 Widget layer + responsive layout**
-  - [ ] Factor reusable widgets from Phase 6 screens: `Button` (hover/pressed/disabled), `TextField` (focus/caret), `Panel`, `Label`
-  - [ ] Layout helpers (margins, alignment, vertical/horizontal stacks)
-  - [ ] Settle 7.2's resize question: window resize rescales board + side panel proportionally
-  - [ ] View transform keeps pixel↔square mapping correct at any scale
+- [x] **9.2 Widget layer + responsive layout**
+  - [x] Factor reusable widgets from Phase 6 screens: `Button` (hover/pressed/disabled), `TextField` (focus/caret), `Panel`, `Label`
+  - [x] Layout helpers (margins, alignment, vertical/horizontal stacks)
+  - [x] Settle 7.2's resize question: window resize rescales board + side panel proportionally
+  - [x] View transform keeps pixel↔square mapping correct at any scale
 
-- [ ] **9.3 Move-list navigator + captured material**
-  - [ ] Clickable two-column SAN grid replaces the plain text list
-  - [ ] Navigator controls `|< < > >|` + ←/→/Home/End keys; jump to any ply
-  - [ ] Read-only replay of historical positions from move history
-  - [ ] Captured-piece row + material diff per player card
+- [x] **9.3 Move-list navigator + captured material**
+  - [x] Clickable two-column SAN grid replaces the plain text list
+  - [x] Navigator controls `|< < > >|` + ←/→/Home/End keys; jump to any ply
+  - [x] Read-only replay of historical positions from move history
+  - [x] Captured-piece row + material diff per player card
+  - [~] Residual: player-card/HUD composition has no widget-level tests (needs a screen harness)
 
-- [ ] **9.4 Board interaction: drag-and-drop + annotations + promotion options**
-  - [ ] Drag-and-drop piece movement (activation threshold; dropping off-board cancels)
-  - [ ] Right-click drag draws arrows; plain right-click toggles a circle
-  - [ ] Left-click clears user annotations; right-click also deselects
-  - [ ] Auto-queen setting; promotion picker dialog vs inline choice
+- [x] **9.4 Board interaction: drag-and-drop + annotations + promotion options**
+  - [x] Drag-and-drop piece movement (activation threshold; dropping off-board cancels)
+  - [x] Right-click drag draws arrows; plain right-click toggles a circle
+  - [x] Left-click clears user annotations; right-click also deselects
+  - [x] Auto-queen setting; promotion picker dialog vs inline choice
+  - [~] Residual: drag→send/promo glue inside the game screens is untested (needs a screen harness)
 
-- [ ] **9.5 Settings screen + config file**
-  - [ ] INI-style config persisted to `~/.config/chess/config.ini`
-  - [ ] Sound volume/toggle (consumed by 9.8); animation toggle/duration (feeds 9.7)
-  - [ ] Board colors + piece-set path (foundation for 11.6 themes)
-  - [ ] Auto-queen, show-coordinates toggle
-  - [ ] Load/save round-trip tested
+- [x] **9.5 Settings screen + config file**
+  - [x] INI-style config persisted to `~/.config/chess/config.ini`
+  - [x] Sound volume/toggle (consumed by 9.8); animation toggle/duration (feeds 9.7)
+  - [x] Board colors + piece-set path (foundation for 11.6 themes)
+  - [x] Auto-queen, show-coordinates toggle
+  - [x] Load/save round-trip tested
 
-- [ ] **9.6 Keyboard play**
-  - [ ] Arrow-key square cursor; Enter/Space selects/moves; Esc cancels/deselects
-  - [ ] `F` flips board; `?` shows shortcut help overlay
+- [x] **9.6 Keyboard play**
+  - [x] Arrow-key square cursor; Enter/Space selects/moves; Esc cancels/deselects
+  - [x] `F` flips board; `?` shows shortcut help overlay
 
-- [ ] **9.7 Move animation**
-  - [ ] Pieces slide from source to destination using the fixed-timestep loop from 6.1
-  - [ ] Duration/easing configurable via 9.5 settings
+- [x] **9.7 Move animation**
+  - [x] Pieces slide from source to destination using the fixed-timestep loop from 6.1
+  - [x] Duration/easing configurable via 9.5 settings
 
-- [ ] **9.8 Sound effects**
-  - [ ] Move/capture/check/checkmate clips via `sf::SoundBuffer`
-  - [ ] Volume/mute controlled by 9.5 settings
+- [x] **9.8 Sound effects**
+  - [x] Move/capture/check/checkmate clips via `sf::SoundBuffer`
+  - [x] Volume/mute controlled by 9.5 settings
 
 ---
 

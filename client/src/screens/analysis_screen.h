@@ -2,10 +2,13 @@
 
 #include "app.h"
 #include "boardview.h"
+#include "widgets/label.h"
+#include "widgets/move_navigator.h"
 #include <chess/board.h>
 #include <chess/move.h>
 #include <chess/uci/engine.h>
 
+#include <array>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -34,42 +37,34 @@ public:
     void draw(sf::RenderWindow& window) override;
 
 private:
-    void goToPly(int ply);
     void startEngineAnalysis();
+    void syncHighlights();
     void drawEvalBar(sf::RenderWindow& window) const;
     void drawBestMoveArrow(sf::RenderWindow& window) const;
-    void drawMoveList(sf::RenderWindow& window) const;
-    void drawNavButtons(sf::RenderWindow& window);
-    void drawEvalText(sf::RenderWindow& window) const;
+    void drawEvalText(sf::RenderWindow& window);
+    void layoutPanel();
 
     static constexpr float EvalBarWidth = 20.f;
 
     App& app_;
-    Board initialBoard_;
-    std::vector<chess::Move> moves_;
-    std::vector<std::string> sanMoves_;
     std::string resultText_;
-    Board board_;
-    int currentPly_ = 0;
+    std::vector<PlyEval> evals_;
+    MoveNavigator navigator_;
 
     BoardView boardView_;
     HighlightState hl_;
-    std::vector<PlyEval> evals_;
 
     std::unique_ptr<uci::UciEngine> engine_;
     bool engineReady_ = false;
     int analysisPly_ = -1;
     mutable std::mutex evalMutex_;
 
-    int moveScroll_ = 0;
-
-    struct NavBtn {
-        sf::FloatRect rect;
-        std::string label;
-        NavBtn(float x, float y, float w, float h, std::string l)
-            : rect({x, y}, {w, h}), label(std::move(l)) {}
-    };
-    std::vector<NavBtn> navBtns_;
+    Label resultLabel_;
+    Label analysisLabel_;
+    Label plyLabel_;
+    Label hint_;
+    Label evalTextLabel_;
+    Label turnLabel_;
 };
 
 } // namespace chess::client

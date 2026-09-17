@@ -1,11 +1,14 @@
 #include "local_game_screen.h"
-#include "connect_screen.h"
 #include "game_over_screen.h"
+#include "keyboard.h"
+#include "menu_screen.h"
 #include "ui_helpers.h"
 
 #include <chess/movegen.h>
 #include <chess/net/messages.h>
 #include <chess/san.h>
+
+#include <algorithm>
 
 namespace chess::client {
 
@@ -52,19 +55,34 @@ net::GameResult toResult(GameState state, Color sideToMove)
 LocalGameScreen::LocalGameScreen(App& app, Color myColor,
                                  std::string enginePath, int depth)
     : app_(app)
-    , board_(Board::fromStartPos())
     , myColor_(myColor)
     , boardView_(static_cast<float>(App::WindowWidth),
                  static_cast<float>(App::WindowHeight),
-                 myColor)
-    , hud_(boardView_.panelX(),
+                 myColor,
+                 app.boardTheme(),
+                 app.showCoordinates())
+    , hud_(app_, boardView_.panelX(),
            static_cast<float>(App::WindowWidth) - boardView_.panelX() - 8.f)
     , myTurn_(myColor == Color::White)
     , engineDepth_(depth)
-    , initialBoard_(Board::fromStartPos())
 {
-    inCheck_ = chess::inCheck(board_, myColor_);
+    hud_.setGame(Board::fromStartPos(), {}, {});
     hud_.setInfo("Computer", myColor_, myTurn_, gameOver_);
+
+    backBtn_.setLabel("Back to Menu");
+    backBtn_.setColors(sf::Color(160, 55, 55), sf::Color(185, 65, 65),
+                       sf::Color(135, 45, 45), sf::Color(70, 45, 45),
+                       sf::Color(140, 90, 90), sf::Color(240, 240, 240),
+                       sf::Color(90, 60, 60), sf::Color(210, 120, 120),
+                       sf::Color(180, 140, 140));
+    backBtn_.setRect(sf::FloatRect(
+        sf::Vector2f(boardView_.panelX(), hud_.contentBottom()),
+        sf::Vector2f(140.f, BtnH)));
+    backBtn_.setOnClick([this] { returnToMenu(); });
+
+    autoQueenCheck_.setOnToggle([this](bool checked) {
+        app_.setAutoQueen(checked);
+    });
 
     engine_ = std::make_unique<uci::UciEngine>(std::move(enginePath));
     auto info = engine_->init();
@@ -97,7 +115,7 @@ void LocalGameScreen::selectPiece(int file, int rank)
     hl_.selectedSquare = { file, rank };
     hl_.legalMoveTargets.clear();
     Square from = squareOf(file, rank);
-    auto moves = chess::generateLegalMoves(board_);
+    auto moves = chess::generateLegalMoves(hud_.navigator().finalBoard());
     for (const auto& m : moves) {
         if (m.from == from) {
             hl_.legalMoveTargets.push_back({
@@ -110,15 +128,17 @@ void LocalGameScreen::selectPiece(int file, int rank)
 
 void LocalGameScreen::tryMove(int targetFile, int targetRank)
 {
+    const Board& live = hud_.navigator().finalBoard();
     Square from = squareOf(hl_.selectedSquare->first, hl_.selectedSquare->second);
     Square to = squareOf(targetFile, targetRank);
 
-    auto moves = chess::generateLegalMoves(board_);
+    auto moves = chess::generateLegalMoves(live);
     const chess::Move* found = nullptr;
+    std::vector<chess::Move> promos;
     for (const auto& m : moves) {
         if (m.from == from && m.to == to) {
             found = &m;
-            if (m.isPromotion()) break;
+            if (m.isPromotion()) promos.push_back(m);
         }
     }
 
@@ -129,52 +149,71 @@ void LocalGameScreen::tryMove(int targetFile, int targetRank)
     }
 
     if (found->isPromotion()) {
-        PromotionState ps;
-        ps.fromFile = hl_.selectedSquare->first;
-        ps.fromRank = hl_.selectedSquare->second;
-        ps.toFile = targetFile;
-        ps.toRank = targetRank;
-        for (const auto& m : moves) {
-            if (m.from == from && m.to == to && m.isPromotion())
-                ps.candidates.push_back(m);
+        if (auto qm = autoQueenMove(promos)) {
+            applyMove(*qm);
+            return;
         }
-        promo_ = std::move(ps);
+        buildPromotion(hl_.selectedSquare->first, hl_.selectedSquare->second,
+                       targetFile, targetRank);
         return;
     }
 
-    std::string san = chess::san::toSan(board_, *found);
-    moves_.push_back(*found);
-    sanMoves_.push_back(san);
-    board_.makeMove(*found);
-    hl_.lastMoveFrom = { static_cast<int>(chess::fileOf(found->from)),
-                         static_cast<int>(chess::rankOf(found->from)) };
-    hl_.lastMoveTo = { static_cast<int>(chess::fileOf(found->to)),
-                       static_cast<int>(chess::rankOf(found->to)) };
+    applyMove(*found);
+}
+
+void LocalGameScreen::buildPromotion(int fromFile, int fromRank, int toFile, int toRank)
+{
+    PromotionState ps;
+    ps.fromFile = fromFile;
+    ps.fromRank = fromRank;
+    ps.toFile = toFile;
+    ps.toRank = toRank;
+
+    const Board& live = hud_.navigator().finalBoard();
+    Square from = squareOf(ps.fromFile, ps.fromRank);
+    Square to = squareOf(ps.toFile, ps.toRank);
+    auto moves = chess::generateLegalMoves(live);
+    for (const auto& m : moves) {
+        if (m.from == from && m.to == to && m.isPromotion())
+            ps.candidates.push_back(m);
+    }
+    promo_ = std::move(ps);
+    promoHover_ = -1;
+}
+
+void LocalGameScreen::applyMove(const chess::Move& m)
+{
+    const auto& cfg = app_.config();
+    const float duration = static_cast<float>(cfg.getFloat("animation.duration", 0.3));
+    if (cfg.getBool("animation.enabled", true) && duration > 0.f)
+        anim_.start(m, hud_.navigator().finalBoard(), duration);
+    app_.sounds().playMove(hud_.navigator().finalBoard(), m);
+
+    std::string san = chess::san::toSan(hud_.navigator().finalBoard(), m);
+    hud_.navigator().appendMove(m, san);
     deselect();
-    hud_.addMove(san);
 
-    inCheck_ = chess::inCheck(board_, opposite(myColor_));
-    hl_.checkSquare = inCheck_
-        ? findKingSquare(board_, opposite(myColor_))
-        : std::optional<std::pair<int,int>>{};
-
-    auto state = chess::evaluateGameState(board_);
+    auto state = chess::evaluateGameState(hud_.navigator().finalBoard());
     if (state != GameState::Ongoing) {
         gameOver_ = true;
         myTurn_ = false;
         hud_.setGameOver(true);
         hud_.setInfo("Computer", myColor_, myTurn_, gameOver_);
-        app_.switchScreen(std::make_unique<GameOverScreen>(
-            app_, toResult(state, board_.sideToMove()),
-            toReason(state, board_),
-            initialBoard_, moves_, sanMoves_));
+        const auto& cfg = app_.config();
+        const float animDur = static_cast<float>(
+            cfg.getFloat("animation.duration", 0.3));
+        const bool animOn = cfg.getBool("animation.enabled", true);
+        gameOverTransition_.arm(
+            toResult(state, hud_.navigator().finalBoard().sideToMove()),
+            toReason(state, hud_.navigator().finalBoard()),
+            gameOverDelaySec(animOn, animDur));
         return;
     }
 
     myTurn_ = false;
     engineThinking_ = true;
     hud_.setStatus("Computer thinking...", 999.f);
-    engine_->position(board_.toFen());
+    engine_->position(hud_.navigator().finalBoard().toFen());
     engine_->go(engineDepth_);
     hud_.setInfo("Computer", myColor_, myTurn_, gameOver_);
 }
@@ -185,81 +224,92 @@ void LocalGameScreen::deselect()
     hl_.legalMoveTargets.clear();
 }
 
+void LocalGameScreen::syncViewHighlights()
+{
+    const Board& shown = hud_.navigator().board();
+    hl_.lastMoveFrom = hud_.navigator().lastMoveFrom();
+    hl_.lastMoveTo = hud_.navigator().lastMoveTo();
+    hl_.cursorSquare = keyCursor_;
+    Color stm = shown.sideToMove();
+    hl_.checkSquare = chess::inCheck(shown, stm)
+        ? findKingSquare(shown, stm)
+        : std::optional<std::pair<int, int>>{};
+}
+
 void LocalGameScreen::applyPromotionMove(chess::PieceType type)
 {
     if (!promo_) return;
     for (const auto& m : promo_->candidates) {
         if (m.promotion == type) {
-            std::string san = chess::san::toSan(board_, m);
-            moves_.push_back(m);
-            sanMoves_.push_back(san);
-            board_.makeMove(m);
-            hl_.lastMoveFrom = { static_cast<int>(chess::fileOf(m.from)),
-                                 static_cast<int>(chess::rankOf(m.from)) };
-            hl_.lastMoveTo = { static_cast<int>(chess::fileOf(m.to)),
-                               static_cast<int>(chess::rankOf(m.to)) };
-            hud_.addMove(san);
             promo_.reset();
-            deselect();
-
-            inCheck_ = chess::inCheck(board_, opposite(myColor_));
-            hl_.checkSquare = inCheck_
-                ? findKingSquare(board_, opposite(myColor_))
-                : std::optional<std::pair<int,int>>{};
-
-            auto state = chess::evaluateGameState(board_);
-            if (state != GameState::Ongoing) {
-                gameOver_ = true;
-                myTurn_ = false;
-                hud_.setGameOver(true);
-                hud_.setInfo("Computer", myColor_, myTurn_, gameOver_);
-                app_.switchScreen(std::make_unique<GameOverScreen>(
-                    app_, toResult(state, board_.sideToMove()),
-                    toReason(state, board_),
-                    initialBoard_, moves_, sanMoves_));
-                return;
-            }
-
-            myTurn_ = false;
-            engineThinking_ = true;
-            hud_.setStatus("Computer thinking...", 999.f);
-            engine_->position(board_.toFen());
-            engine_->go(engineDepth_);
-            hud_.setInfo("Computer", myColor_, myTurn_, gameOver_);
+            promoHover_ = -1;
+            applyMove(m);
             return;
         }
     }
     promo_.reset();
+    promoHover_ = -1;
     deselect();
 }
 
 void LocalGameScreen::cancelPromotion()
 {
     promo_.reset();
+    promoHover_ = -1;
     deselect();
+}
+
+void LocalGameScreen::clearBoardInput()
+{
+    drag_.cancel();
+    dragFrom_.reset();
+    rightPress_.reset();
+}
+
+bool LocalGameScreen::ownPieceAt(int file, int rank)
+{
+    Piece piece = hud_.navigator().finalBoard().pieceAt(squareOf(file, rank));
+    return !piece.isNone() && piece.color == myColor_;
+}
+
+sf::FloatRect LocalGameScreen::autoQueenRect() const
+{
+    auto cell = promoCell(static_cast<int>(promo_->candidates.size()) - 1);
+    float sq = boardView_.squareSize();
+    return { { cell.pos.x, cell.pos.y + cell.size + 3.f },
+             { sq * 1.6f, 22.f } };
+}
+
+std::optional<chess::PieceType> LocalGameScreen::promoTypeForKey(sf::Keyboard::Key key) const
+{
+    switch (key) {
+        case sf::Keyboard::Key::Q:
+        case sf::Keyboard::Key::Num1: return chess::PieceType::Queen;
+        case sf::Keyboard::Key::R:
+        case sf::Keyboard::Key::Num2: return chess::PieceType::Rook;
+        case sf::Keyboard::Key::B:
+        case sf::Keyboard::Key::Num3: return chess::PieceType::Bishop;
+        case sf::Keyboard::Key::N:
+        case sf::Keyboard::Key::Num4: return chess::PieceType::Knight;
+        default: return std::nullopt;
+    }
 }
 
 bool LocalGameScreen::applyEngineMove()
 {
-    auto move = engine_->tryGetBestMove(board_);
+    auto move = engine_->tryGetBestMove(hud_.navigator().finalBoard());
     if (!move) return false;
 
-    std::string san = chess::san::toSan(board_, *move);
-    moves_.push_back(*move);
-    sanMoves_.push_back(san);
-    board_.makeMove(*move);
-    hl_.lastMoveFrom = { static_cast<int>(chess::fileOf(move->from)),
-                         static_cast<int>(chess::rankOf(move->from)) };
-    hl_.lastMoveTo = { static_cast<int>(chess::fileOf(move->to)),
-                       static_cast<int>(chess::rankOf(move->to)) };
+    const auto& cfg = app_.config();
+    const float duration = static_cast<float>(cfg.getFloat("animation.duration", 0.3));
+    if (cfg.getBool("animation.enabled", true) && duration > 0.f)
+        anim_.start(*move, hud_.navigator().finalBoard(), duration);
+    app_.sounds().playMove(hud_.navigator().finalBoard(), *move);
+
+    std::string san = chess::san::toSan(hud_.navigator().finalBoard(), *move);
+    hud_.navigator().appendMove(*move, san);
     hl_.selectedSquare.reset();
     hl_.legalMoveTargets.clear();
-    hud_.addMove(san);
-
-    inCheck_ = chess::inCheck(board_, myColor_);
-    hl_.checkSquare = inCheck_
-        ? findKingSquare(board_, myColor_)
-        : std::optional<std::pair<int,int>>{};
 
     engineThinking_ = false;
     hud_.setStatus("", 0.f);
@@ -270,24 +320,34 @@ bool LocalGameScreen::applyEngineMove()
 
 void LocalGameScreen::checkGameOver()
 {
-    auto state = chess::evaluateGameState(board_);
+    auto state = chess::evaluateGameState(hud_.navigator().finalBoard());
     if (state == GameState::Ongoing) return;
 
     gameOver_ = true;
     myTurn_ = false;
     hud_.setGameOver(true);
     hud_.setInfo("Computer", myColor_, myTurn_, gameOver_);
-
-    app_.switchScreen(std::make_unique<GameOverScreen>(
-        app_, toResult(state, board_.sideToMove()),
-        toReason(state, board_),
-        initialBoard_, moves_, sanMoves_));
+    const auto& cfg = app_.config();
+    const float animDur = static_cast<float>(
+        cfg.getFloat("animation.duration", 0.3));
+    const bool animOn = cfg.getBool("animation.enabled", true);
+    gameOverTransition_.arm(
+        toResult(state, hud_.navigator().finalBoard().sideToMove()),
+        toReason(state, hud_.navigator().finalBoard()),
+        gameOverDelaySec(animOn, animDur));
 }
 
-void LocalGameScreen::returnToConnect()
+void LocalGameScreen::finishGameOver()
 {
-    if (engine_) engine_->quit();
-    app_.switchScreen(std::make_unique<ConnectScreen>(app_));
+    app_.switchScreen(std::make_unique<GameOverScreen>(
+        app_, gameOverTransition_.result(), gameOverTransition_.reason(),
+        hud_.navigator().initialBoard(), hud_.navigator().moves(),
+        hud_.navigator().sans()));
+}
+
+void LocalGameScreen::returnToMenu()
+{
+    app_.switchScreen(std::make_unique<MenuScreen>(app_));
 }
 
 PromoCell LocalGameScreen::promoCell(int index) const
@@ -308,78 +368,218 @@ void LocalGameScreen::handleEvent(const sf::Event& event)
 {
     if (const auto* kp = event.getIf<sf::Event::KeyPressed>()) {
         if (kp->code == sf::Keyboard::Key::Escape) {
+            if (showingHelp_) { showingHelp_ = false; return; }
             if (promo_) { cancelPromotion(); return; }
+            clearBoardInput();
             deselect();
             return;
         }
-        if (kp->code == sf::Keyboard::Key::Space) {
-            if (promo_) { cancelPromotion(); return; }
-            deselect();
+
+        if (promo_) {
+            if (kp->code == sf::Keyboard::Key::Space) { cancelPromotion(); return; }
+            if (auto t = promoTypeForKey(kp->code)) {
+                applyPromotionMove(*t);
+                return;
+            }
+            return;
+        }
+
+        switch (keyToAction(kp->code, kp->shift)) {
+            case KeyboardAction::Deselect:
+                clearBoardInput();
+                deselect();
+                return;
+            case KeyboardAction::Flip:
+                boardView_.toggleFlipped();
+                return;
+            case KeyboardAction::Help:
+                showingHelp_ = !showingHelp_;
+                return;
+            case KeyboardAction::PrevMove:
+                hud_.navigator().goBack();
+                clearBoardInput();
+                return;
+            case KeyboardAction::NextMove:
+                hud_.navigator().goForward();
+                clearBoardInput();
+                return;
+            case KeyboardAction::MoveCursor: {
+                auto [df, dr] = cursorDelta(kp->code);
+                keyCursor_ = moveCursorStep(keyCursor_.first, keyCursor_.second, df, dr);
+                return;
+            }
+            case KeyboardAction::Enter: {
+                if (!hud_.navigator().atEnd()) {
+                    hud_.navigator().goEnd();
+                    deselect();
+                }
+                if (gameOver_ || !myTurn_ || engineThinking_ || engineFailed_) return;
+                if (hl_.selectedSquare) {
+                    if (*hl_.selectedSquare == keyCursor_) {
+                        deselect();
+                    } else if (ownPieceAt(keyCursor_.first, keyCursor_.second)) {
+                        selectPiece(keyCursor_.first, keyCursor_.second);
+                    } else {
+                        tryMove(keyCursor_.first, keyCursor_.second);
+                    }
+                } else {
+                    if (ownPieceAt(keyCursor_.first, keyCursor_.second))
+                        selectPiece(keyCursor_.first, keyCursor_.second);
+                }
+                return;
+            }
+            case KeyboardAction::None:
+            default:
+                break;
+        }
+
+        if (hud_.navigator().handleEvent(event, {0.f, 0.f})) {
+            clearBoardInput();
             return;
         }
         return;
     }
 
-    if (const auto* mb = event.getIf<sf::Event::MouseButtonPressed>()) {
-        if (mb->button != sf::Mouse::Button::Left) return;
-        int mx = mb->position.x;
-        int my = mb->position.y;
+    sf::Vector2f local(0.f, 0.f);
+    if (const auto* mm = event.getIf<sf::Event::MouseMoved>())
+        local = app_.toLocal(mm->position);
+    else if (const auto* mb = event.getIf<sf::Event::MouseButtonPressed>())
+        local = app_.toLocal(mb->position);
+    else if (const auto* rb = event.getIf<sf::Event::MouseButtonReleased>())
+        local = app_.toLocal(rb->position);
 
-        if (!gameOver_) {
-            float px = boardView_.panelX();
-            float btnY = hud_.contentBottom();
-            auto inRect = [mx, my](float x, float y, float w, float h) {
-                return mx >= x && mx < x + w && my >= y && my < y + h;
-            };
-            if (inRect(px, btnY, 140.f, BtnH)) {
-                returnToConnect();
-                return;
-            }
-        }
-
-        if (gameOver_ || !myTurn_ || engineThinking_ || engineFailed_) return;
-
+    if (const auto* mm = event.getIf<sf::Event::MouseMoved>()) {
+        (void)mm;
+        cursor_ = local;
         if (promo_) {
-            auto pos = static_cast<sf::Vector2f>(mb->position);
+            promoHover_ = -1;
             for (int i = 0; i < static_cast<int>(promo_->candidates.size()); ++i) {
                 auto cell = promoCell(i);
-                sf::FloatRect rect(cell.pos, {cell.size, cell.size});
-                if (rect.contains(pos)) {
-                    applyPromotionMove(promo_->candidates[i].promotion);
-                    return;
+                if (sf::FloatRect(cell.pos, {cell.size, cell.size}).contains(local)) {
+                    promoHover_ = i;
+                    break;
                 }
             }
-            cancelPromotion();
+            autoQueenCheck_.setRect(autoQueenRect());
+            autoQueenCheck_.handleEvent(event, local);
+            return;
+        }
+        if (drag_.isActive()) drag_.move(local.x, local.y);
+    }
+
+    if (const auto* we = event.getIf<sf::Event::MouseWheelScrolled>()) {
+        float px = boardView_.panelX();
+        if (app_.toLocal(we->position).x >= px) {
+            hud_.handleScroll(we->delta);
+            return;
+        }
+    }
+
+    if (hud_.navigator().handleEvent(event, local)) {
+        clearBoardInput();
+        return;
+    }
+
+    if (!gameOver_ && backBtn_.handleEvent(event, local)) return;
+
+    if (const auto* mb = event.getIf<sf::Event::MouseButtonPressed>()) {
+        if (mb->button == sf::Mouse::Button::Left) {
+            if (promo_) {
+                autoQueenCheck_.setRect(autoQueenRect());
+                if (autoQueenCheck_.handleEvent(*mb, local)) return;
+                for (int i = 0; i < static_cast<int>(promo_->candidates.size()); ++i) {
+                    auto cell = promoCell(i);
+                    if (sf::FloatRect(cell.pos, {cell.size, cell.size}).contains(local)) {
+                        applyPromotionMove(promo_->candidates[i].promotion);
+                        return;
+                    }
+                }
+                cancelPromotion();
+                return;
+            }
+
+            annotations_.clear();
+            if (gameOver_ || !myTurn_ || engineThinking_ || engineFailed_) return;
+
+            if (!hud_.navigator().atEnd()) {
+                hud_.navigator().goEnd();
+                deselect();
+            }
+
+            auto square = boardView_.pixelToSquare(local);
+            if (!square) return;
+
+            keyCursor_ = *square;
+            drag_.press(local.x, local.y);
+            cursor_ = local;
+            dragFrom_ = *square;
+
+            if (ownPieceAt(square->first, square->second))
+                selectPiece(square->first, square->second);
+        } else if (mb->button == sf::Mouse::Button::Right) {
+            if (promo_) cancelPromotion();
+            clearBoardInput();
+            deselect();
+            rightPress_ = boardView_.pixelToSquare(local);
+        }
+        return;
+    }
+
+    if (const auto* rb = event.getIf<sf::Event::MouseButtonReleased>()) {
+        if (rb->button == sf::Mouse::Button::Left) {
+            bool wasDragging = drag_.release();
+            auto square = boardView_.pixelToSquare(local);
+            cursor_ = local;
+
+            if (dragFrom_) {
+                if (wasDragging) {
+                    if (square && *square != *dragFrom_
+                        && ownPieceAt(dragFrom_->first, dragFrom_->second)) {
+                        selectPiece(dragFrom_->first, dragFrom_->second);
+                        tryMove(square->first, square->second);
+                    }
+                } else if (hl_.selectedSquare) {
+                    if (square && *square == *hl_.selectedSquare) {
+                        deselect();
+                    } else if (square && ownPieceAt(square->first, square->second)) {
+                        selectPiece(square->first, square->second);
+                    } else if (square) {
+                        tryMove(square->first, square->second);
+                    } else {
+                        deselect();
+                    }
+                }
+            }
+            dragFrom_.reset();
             return;
         }
 
-        auto square = boardView_.pixelToSquare(
-            static_cast<sf::Vector2f>(mb->position));
-        if (!square) return;
-
-        auto [file, rank] = *square;
-        Piece piece = board_.pieceAt(squareOf(file, rank));
-
-        if (hl_.selectedSquare) {
-            if (file == hl_.selectedSquare->first &&
-                rank == hl_.selectedSquare->second) {
-                deselect();
-            } else if (!piece.isNone() && piece.color == myColor_) {
-                selectPiece(file, rank);
-            } else {
-                tryMove(file, rank);
+        if (rb->button == sf::Mouse::Button::Right) {
+            auto square = boardView_.pixelToSquare(local);
+            if (rightPress_) {
+                if (square && *square == *rightPress_) {
+                    annotations_.toggleCircle(square->first, square->second);
+                } else if (square) {
+                    annotations_.addArrow(rightPress_->first, rightPress_->second,
+                                          square->first, square->second);
+                }
             }
-        } else {
-            if (!piece.isNone() && piece.color == myColor_) {
-                selectPiece(file, rank);
-            }
+            rightPress_.reset();
+            return;
         }
     }
 }
 
-void LocalGameScreen::update(float /*dtSec*/)
+void LocalGameScreen::update(float dtSec)
 {
     hud_.update(0.f);
+    anim_.update(dtSec);
+
+    if (gameOverTransition_.armed()) {
+        if (gameOverTransition_.tick(dtSec))
+            finishGameOver();
+        return;
+    }
 
     if (gameOver_ || engineFailed_) return;
 
@@ -393,11 +593,24 @@ void LocalGameScreen::update(float /*dtSec*/)
 void LocalGameScreen::draw(sf::RenderWindow& window)
 {
     auto& font = app_.font();
+    const Board& shown = hud_.navigator().board();
+
+    if (!hud_.navigator().atEnd() && !annotations_.empty())
+        annotations_.clear();
 
     boardView_.drawSquares(window);
-    boardView_.drawHighlights(window, hl_, board_);
+    syncViewHighlights();
+    boardView_.drawHighlights(window, hl_, shown);
     boardView_.drawLabels(window, font);
-    boardView_.drawPieces(window, font, board_, app_);
+    boardView_.drawPieces(window, font, shown, app_, &anim_);
+    boardView_.drawAnnotations(window, annotations_.arrows(), annotations_.circles());
+
+    if (drag_.isDragging() && dragFrom_) {
+        Piece dragged = hud_.navigator().finalBoard().pieceAt(
+            squareOf(dragFrom_->first, dragFrom_->second));
+        if (!dragged.isNone() && dragged.color == myColor_)
+            boardView_.drawDraggedPiece(window, font, dragged, cursor_, app_);
+    }
 
     if (promo_) {
         for (int i = 0; i < static_cast<int>(promo_->candidates.size()); ++i) {
@@ -408,6 +621,13 @@ void LocalGameScreen::draw(sf::RenderWindow& window)
             cell.setOutlineColor(sf::Color(180, 180, 180, 180));
             cell.setOutlineThickness(1.f);
             window.draw(cell);
+
+            if (i == promoHover_) {
+                sf::RectangleShape hover({c.size, c.size});
+                hover.setPosition(c.pos);
+                hover.setFillColor(sf::Color(255, 255, 255, 30));
+                window.draw(hover);
+            }
 
             PieceType pt = promo_->candidates[i].promotion;
             float pieceSize = c.size * 0.8f;
@@ -426,7 +646,7 @@ void LocalGameScreen::draw(sf::RenderWindow& window)
                 if (letterSize < 12) letterSize = 12;
                 sf::Text letter(font, std::string(1, letters[static_cast<int>(pt)]), letterSize);
                 letter.setFillColor(sf::Color(240, 240, 240));
-                auto lb = letter.getGlobalBounds();
+                auto lb = letter.getLocalBounds();
                 letter.setPosition({
                     c.pos.x + (c.size - lb.size.x) / 2.f - lb.position.x,
                     c.pos.y + (c.size - lb.size.y) / 2.f - lb.position.y
@@ -434,13 +654,80 @@ void LocalGameScreen::draw(sf::RenderWindow& window)
                 window.draw(letter);
             }
         }
+
+        autoQueenCheck_.setLabel("Auto-queen");
+        autoQueenCheck_.setChecked(app_.autoQueen());
+        autoQueenCheck_.setRect(autoQueenRect());
+        autoQueenCheck_.draw(window, font);
     }
 
     hud_.draw(window, font);
 
-    float px = boardView_.panelX();
-    float btnY = hud_.contentBottom();
-    drawBtn(window, px, btnY, 140.f, BtnH, sf::Color(180, 60, 60), font, "Back to Menu");
+    if (!gameOver_)
+        backBtn_.draw(window, font);
+
+    if (showingHelp_) drawHelpOverlay(window);
+}
+
+void LocalGameScreen::drawHelpOverlay(sf::RenderWindow& window)
+{
+    auto& font = app_.font();
+
+    sf::RectangleShape dim(
+        {static_cast<float>(App::WindowWidth), static_cast<float>(App::WindowHeight)});
+    dim.setFillColor(sf::Color(0, 0, 0, 120));
+    window.draw(dim);
+
+    const char* lines[] = {
+        "Shortcuts",
+        "Arrows — move cursor",
+        "Enter — select / move",
+        "Space — cancel / deselect",
+        "Esc — close help / deselect",
+        "F — flip board",
+        "[ / ] — previous / next move",
+        "Home / End — go to start / end",
+        "Q R B N or 1-4 — pick promotion",
+        "? — toggle this help",
+    };
+    constexpr int Count = static_cast<int>(sizeof(lines) / sizeof(lines[0]));
+
+    constexpr unsigned int HdrSize = 17;
+    constexpr unsigned int RowSize = 14;
+    constexpr float RowH = 24.f;
+    constexpr float PadX = 22.f;
+    constexpr float PadY = 18.f;
+
+    float maxW = 0.f;
+    for (int i = 0; i < Count; ++i) {
+        sf::Text t(font, lines[i], (i == 0) ? HdrSize : RowSize);
+        maxW = std::max(maxW, t.getLocalBounds().size.x);
+    }
+
+    const float panelW = maxW + 2.f * PadX;
+    const float panelH = RowH * static_cast<float>(Count) + 2.f * PadY;
+    const float px = (static_cast<float>(App::WindowWidth) - panelW) / 2.f;
+    const float py = (static_cast<float>(App::WindowHeight) - panelH) / 2.f;
+
+    sf::RectangleShape bg({panelW, panelH});
+    bg.setPosition({px, py});
+    bg.setFillColor(sf::Color(30, 30, 30, 235));
+    bg.setOutlineColor(sf::Color(90, 90, 90));
+    bg.setOutlineThickness(1.f);
+    window.draw(bg);
+
+    float y = py + PadY;
+    for (int i = 0; i < Count; ++i) {
+        sf::Text t(font, lines[i], (i == 0) ? HdrSize : RowSize);
+        t.setFillColor(i == 0 ? sf::Color(255, 255, 255) : sf::Color(210, 210, 210));
+        auto lb = t.getLocalBounds();
+        t.setPosition({
+            px + (panelW - lb.size.x) / 2.f - lb.position.x,
+            y - lb.position.y
+        });
+        window.draw(t);
+        y += RowH;
+    }
 }
 
 } // namespace chess::client
