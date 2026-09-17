@@ -240,6 +240,7 @@ void SettingsScreen::setStatus(const std::string& text)
 
 namespace {
 constexpr float kAnimDurs[] = { 0.15f, 0.3f, 0.5f };
+constexpr const char* kAnimDurStrs[] = { "0.15", "0.3", "0.5" };
 constexpr const char* kAnimDurLabels[] = { "Fast  0.15", "Normal  0.3", "Slow  0.5" };
 constexpr int kVols[] = { 25, 60, 100 };
 constexpr const char* kVolLabels[] = { "Quiet  25", "Medium  60", "Loud  100" };
@@ -272,7 +273,7 @@ void SettingsScreen::cycleAnimDur(int dir)
     }
     idx = (idx + dir) % 3;
     if (idx < 0) idx += 3;
-    app_.config().set("animation.duration", std::to_string(kAnimDurs[idx]));
+    app_.config().set("animation.duration", kAnimDurStrs[idx]);
     app_.config().save();
     updateAnimDurLabel();
     layoutRows();
