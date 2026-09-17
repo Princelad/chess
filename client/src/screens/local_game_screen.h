@@ -10,6 +10,8 @@
 #include "widgets/checkbox.h"
 #include <chess/board.h>
 #include <chess/move.h>
+#include <chess/movegen.h>
+#include <chess/net/messages.h>
 #include <chess/types.h>
 #include <chess/uci/engine.h>
 
@@ -44,6 +46,7 @@ private:
     std::optional<chess::PieceType> promoTypeForKey(sf::Keyboard::Key key) const;
     bool applyEngineMove();
     void checkGameOver();
+    void finishGameOver();
     void returnToMenu();
     void drawHelpOverlay(sf::RenderWindow& window);
 
@@ -67,6 +70,9 @@ private:
     bool gameOver_ = false;
     bool engineThinking_ = false;
     bool engineFailed_ = false;
+    bool pendingGameOver_ = false;
+    chess::GameState pendingState_ = chess::GameState::Ongoing;
+    float pendingGameOverTimer_ = 0.f;
 
     std::unique_ptr<uci::UciEngine> engine_;
     int engineDepth_;

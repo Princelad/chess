@@ -13,6 +13,7 @@
 #include "widgets/text_field.h"
 #include <chess/board.h>
 #include <chess/move.h>
+#include <chess/net/messages.h>
 #include <chess/types.h>
 
 #include <optional>
@@ -46,6 +47,7 @@ private:
     void drawButtons(sf::RenderWindow& window);
     void drawChat(sf::RenderWindow& window);
     void drawHelpOverlay(sf::RenderWindow& window);
+    void finishGameOver();
 
     App& app_;
     Color myColor_;
@@ -66,6 +68,10 @@ private:
     bool myTurn_ = false;
     bool gameOver_ = false;
     bool drawOfferPending_ = false;
+    bool pendingGameOver_ = false;
+    chess::net::GameResult pendingResult_ = chess::net::GameResult::Abort;
+    chess::net::GameOverReason pendingReason_ = chess::net::GameOverReason::Disconnection;
+    float pendingGameOverTimer_ = 0.f;
 
     std::string opponentName_;
 

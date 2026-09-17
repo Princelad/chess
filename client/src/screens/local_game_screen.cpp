@@ -14,6 +14,7 @@ namespace chess::client {
 
 namespace {
 constexpr float BtnH = 30.f;
+constexpr float kGameOverDelay = 0.55f;
 
 net::GameOverReason detectDrawReason(const Board& board)
 {
@@ -199,11 +200,13 @@ void LocalGameScreen::applyMove(const chess::Move& m)
         myTurn_ = false;
         hud_.setGameOver(true);
         hud_.setInfo("Computer", myColor_, myTurn_, gameOver_);
-        app_.switchScreen(std::make_unique<GameOverScreen>(
-            app_, toResult(state, hud_.navigator().finalBoard().sideToMove()),
-            toReason(state, hud_.navigator().finalBoard()),
-            hud_.navigator().initialBoard(), hud_.navigator().moves(),
-            hud_.navigator().sans()));
+        pendingState_ = state;
+        const auto& cfg = app_.config();
+        const float animDur = static_cast<float>(
+            cfg.getFloat("animation.duration", 0.3));
+        const bool animOn = cfg.getBool("animation.enabled", true);
+        pendingGameOverTimer_ = std::max(animOn ? animDur : 0.f, kGameOverDelay);
+        pendingGameOver_ = true;
         return;
     }
 
@@ -324,10 +327,21 @@ void LocalGameScreen::checkGameOver()
     myTurn_ = false;
     hud_.setGameOver(true);
     hud_.setInfo("Computer", myColor_, myTurn_, gameOver_);
+    pendingState_ = state;
+    const auto& cfg = app_.config();
+    const float animDur = static_cast<float>(
+        cfg.getFloat("animation.duration", 0.3));
+    const bool animOn = cfg.getBool("animation.enabled", true);
+    pendingGameOverTimer_ = std::max(animOn ? animDur : 0.f, kGameOverDelay);
+    pendingGameOver_ = true;
+}
 
+void LocalGameScreen::finishGameOver()
+{
+    pendingGameOver_ = false;
     app_.switchScreen(std::make_unique<GameOverScreen>(
-        app_, toResult(state, hud_.navigator().finalBoard().sideToMove()),
-        toReason(state, hud_.navigator().finalBoard()),
+        app_, toResult(pendingState_, hud_.navigator().finalBoard().sideToMove()),
+        toReason(pendingState_, hud_.navigator().finalBoard()),
         hud_.navigator().initialBoard(), hud_.navigator().moves(),
         hud_.navigator().sans()));
 }
@@ -561,6 +575,13 @@ void LocalGameScreen::update(float dtSec)
 {
     hud_.update(0.f);
     anim_.update(dtSec);
+
+    if (pendingGameOver_) {
+        pendingGameOverTimer_ -= dtSec;
+        if (pendingGameOverTimer_ <= 0.f)
+            finishGameOver();
+        return;
+    }
 
     if (gameOver_ || engineFailed_) return;
 
