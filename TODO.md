@@ -555,6 +555,7 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [x] New root screen: Play online / vs Computer / Puzzles / Archive / Settings
   - [x] Unimplemented entries visible but disabled (greyed out)
   - [x] Replace linear screen flow with a back-stack (Esc = go back)
+  - [~] Residual: menu entry model + `App` back-stack transitions are untested (App owns a RenderWindow; a headless harness is deferred)
 
 - [x] **9.2 Widget layer + responsive layout**
   - [x] Factor reusable widgets from Phase 6 screens: `Button` (hover/pressed/disabled), `TextField` (focus/caret), `Panel`, `Label`
@@ -567,12 +568,14 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [x] Navigator controls `|< < > >|` + ←/→/Home/End keys; jump to any ply
   - [x] Read-only replay of historical positions from move history
   - [x] Captured-piece row + material diff per player card
+  - [~] Residual: player-card/HUD composition has no widget-level tests (needs a screen harness)
 
 - [x] **9.4 Board interaction: drag-and-drop + annotations + promotion options**
   - [x] Drag-and-drop piece movement (activation threshold; dropping off-board cancels)
   - [x] Right-click drag draws arrows; plain right-click toggles a circle
   - [x] Left-click clears user annotations; right-click also deselects
   - [x] Auto-queen setting; promotion picker dialog vs inline choice
+  - [~] Residual: drag→send/promo glue inside the game screens is untested (needs a screen harness)
 
 - [x] **9.5 Settings screen + config file**
   - [x] INI-style config persisted to `~/.config/chess/config.ini`
