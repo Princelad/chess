@@ -219,6 +219,9 @@ void SettingsScreen::resetDefaults()
     app_.config().set("animation.duration", "0.3");
     app_.config().save();
 
+    app_.sounds().setEnabled(true);
+    app_.sounds().setVolume(100);
+
     autoQueenCheck_.setChecked(true);
     coordsCheck_.setChecked(true);
     animCheck_.setChecked(true);
