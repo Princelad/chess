@@ -16,6 +16,7 @@ enum class ClientMsgType : uint8_t {
     Resign,
     Chat,
     Ping,
+    Login,
 };
 
 enum class ServerMsgType : uint8_t {
@@ -29,7 +30,25 @@ enum class ServerMsgType : uint8_t {
     Chat,
     Pong,
     Error,
+    Profile,
 };
+
+// Booleans travel as uint8_t 0/1 (never read a non-0/1 byte back).
+bool writeFlag(sf::Packet& packet, bool value)
+{
+    packet << static_cast<uint8_t>(value ? 1 : 0);
+    return static_cast<bool>(packet);
+}
+
+bool readFlag(sf::Packet& packet, bool& value)
+{
+    uint8_t flag = 0;
+    packet >> flag;
+    if (!static_cast<bool>(packet) || flag > 1)
+        return false;
+    value = flag != 0;
+    return true;
+}
 
 bool writeClient(sf::Packet& packet, const JoinMsg& msg)
 {
@@ -79,10 +98,18 @@ bool writeClient(sf::Packet& packet, PingMsg)
     return static_cast<bool>(packet);
 }
 
+bool writeClient(sf::Packet& packet, const LoginMsg& msg)
+{
+    packet << static_cast<uint8_t>(ClientMsgType::Login) << msg.name << msg.password;
+    return static_cast<bool>(packet);
+}
+
 bool writeServer(sf::Packet& packet, const WelcomeMsg& msg)
 {
     packet << static_cast<uint8_t>(ServerMsgType::Welcome)
-           << static_cast<int>(msg.color) << msg.opponent;
+           << static_cast<int>(msg.color) << msg.opponent
+           << msg.rating << msg.deviation;
+    writeFlag(packet, msg.rated);
     return static_cast<bool>(packet);
 }
 
@@ -138,6 +165,14 @@ bool writeServer(sf::Packet& packet, PongMsg)
 bool writeServer(sf::Packet& packet, const ErrorMsg& msg)
 {
     packet << static_cast<uint8_t>(ServerMsgType::Error) << msg.message;
+    return static_cast<bool>(packet);
+}
+
+bool writeServer(sf::Packet& packet, const ProfileMsg& msg)
+{
+    packet << static_cast<uint8_t>(ServerMsgType::Profile)
+           << msg.name << msg.rating << msg.deviation;
+    writeFlag(packet, msg.isGuest);
     return static_cast<bool>(packet);
 }
 
@@ -264,6 +299,12 @@ std::optional<ClientMessage> deserializeClient(sf::Packet& packet)
         }
         case ClientMsgType::Ping:
             return PingMsg{};
+        case ClientMsgType::Login: {
+            LoginMsg msg;
+            packet >> msg.name >> msg.password;
+            if (!static_cast<bool>(packet)) return std::nullopt;
+            return msg;
+        }
         default:
             return std::nullopt;
     }
@@ -285,9 +326,10 @@ std::optional<ServerMessage> deserializeServer(sf::Packet& packet)
         case ServerMsgType::Welcome: {
             WelcomeMsg msg;
             int color = 0;
-            packet >> color >> msg.opponent;
+            packet >> color >> msg.opponent >> msg.rating >> msg.deviation;
             if (!static_cast<bool>(packet)) return std::nullopt;
             if (!validColor(color)) return std::nullopt;
+            if (!readFlag(packet, msg.rated)) return std::nullopt;
             msg.color = static_cast<Color>(color);
             return msg;
         }
@@ -333,6 +375,13 @@ std::optional<ServerMessage> deserializeServer(sf::Packet& packet)
             if (!static_cast<bool>(packet)) return std::nullopt;
             return msg;
         }
+        case ServerMsgType::Profile: {
+            ProfileMsg msg;
+            packet >> msg.name >> msg.rating >> msg.deviation;
+            if (!static_cast<bool>(packet)) return std::nullopt;
+            if (!readFlag(packet, msg.isGuest)) return std::nullopt;
+            return msg;
+        }
         default:
             return std::nullopt;
     }
@@ -358,6 +407,9 @@ std::string debugString(const ClientMessage& msg)
             return "Chat{text=\"" + escape(m.text) + "\"}";
         else if constexpr (std::is_same_v<T, PingMsg>)
             return "Ping{}";
+        else if constexpr (std::is_same_v<T, LoginMsg>)
+            // Never log the password itself.
+            return "Login{name=\"" + escape(m.name) + "\", password=***}";
     }, msg);
 }
 
@@ -385,6 +437,10 @@ std::string debugString(const ServerMessage& msg)
             return "Pong{}";
         else if constexpr (std::is_same_v<T, ErrorMsg>)
             return "Error{message=\"" + escape(m.message) + "\"}";
+        else if constexpr (std::is_same_v<T, ProfileMsg>)
+            return "Profile{name=\"" + escape(m.name) + "\", rating="
+                + std::to_string(m.rating) + ", deviation=" + std::to_string(m.deviation)
+                + (m.isGuest ? ", guest}" : ", registered}");
     }, msg);
 }
 

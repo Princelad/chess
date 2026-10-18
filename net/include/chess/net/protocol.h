@@ -11,7 +11,7 @@
 namespace chess {
 namespace net {
 
-constexpr uint8_t ProtocolVersion = 1;
+constexpr uint8_t ProtocolVersion = 2;
 
 // ── Serialization ───────────────────────────────────────────────────────────
 

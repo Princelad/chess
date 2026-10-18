@@ -142,6 +142,18 @@ TEST(ProtocolRoundTrip, ClientChatEmptyText)
     EXPECT_EQ(m->text, "");
 }
 
+TEST(ProtocolRoundTrip, ClientLogin)
+{
+    ClientMessage msg = LoginMsg{"Alice", "s3cret"};
+    sf::Packet p = freshPacket(serializeClient(msg));
+    auto result = deserializeClient(p);
+    ASSERT_TRUE(result.has_value());
+    auto* m = std::get_if<LoginMsg>(&*result);
+    ASSERT_NE(m, nullptr);
+    EXPECT_EQ(m->name, "Alice");
+    EXPECT_EQ(m->password, "s3cret");
+}
+
 TEST(ProtocolRoundTrip, ServerErrorEmptyMessage)
 {
     ServerMessage msg = ErrorMsg{""};
@@ -157,7 +169,7 @@ TEST(ProtocolRoundTrip, ServerErrorEmptyMessage)
 
 TEST(ProtocolRoundTrip, ServerWelcome)
 {
-    ServerMessage msg = WelcomeMsg{Color::White, "Bob"};
+    ServerMessage msg = WelcomeMsg{Color::White, "Bob", 1650.0, 132.5, true};
     sf::Packet p = freshPacket(serializeServer(msg));
     auto result = deserializeServer(p);
     ASSERT_TRUE(result.has_value());
@@ -165,6 +177,9 @@ TEST(ProtocolRoundTrip, ServerWelcome)
     ASSERT_NE(m, nullptr);
     EXPECT_EQ(m->color, Color::White);
     EXPECT_EQ(m->opponent, "Bob");
+    EXPECT_DOUBLE_EQ(m->rating, 1650.0);
+    EXPECT_DOUBLE_EQ(m->deviation, 132.5);
+    EXPECT_TRUE(m->rated);
 }
 
 TEST(ProtocolRoundTrip, ServerWelcomeBlack)
@@ -275,6 +290,32 @@ TEST(ProtocolRoundTrip, ServerError)
     EXPECT_EQ(m->message, "illegal move");
 }
 
+TEST(ProtocolRoundTrip, ServerProfile)
+{
+    ServerMessage msg = ProfileMsg{"Alice", 1487.25, 201.75, false};
+    sf::Packet p = freshPacket(serializeServer(msg));
+    auto result = deserializeServer(p);
+    ASSERT_TRUE(result.has_value());
+    auto* m = std::get_if<ProfileMsg>(&*result);
+    ASSERT_NE(m, nullptr);
+    EXPECT_EQ(m->name, "Alice");
+    EXPECT_DOUBLE_EQ(m->rating, 1487.25);
+    EXPECT_DOUBLE_EQ(m->deviation, 201.75);
+    EXPECT_FALSE(m->isGuest);
+}
+
+TEST(ProtocolRoundTrip, ServerProfileGuest)
+{
+    ServerMessage msg = ProfileMsg{"Guest-1", 1500.0, 350.0, true};
+    sf::Packet p = freshPacket(serializeServer(msg));
+    auto result = deserializeServer(p);
+    ASSERT_TRUE(result.has_value());
+    auto* m = std::get_if<ProfileMsg>(&*result);
+    ASSERT_NE(m, nullptr);
+    EXPECT_TRUE(m->isGuest);
+    EXPECT_DOUBLE_EQ(m->rating, 1500.0);
+}
+
 // ── Garbage / truncated packets ─────────────────────────────────────────────
 
 TEST(ProtocolGarbage, EmptyPacket)
@@ -368,6 +409,40 @@ TEST(ProtocolGarbage, InvalidGameResultValue)
     EXPECT_FALSE(deserializeServer(p).has_value());
 }
 
+TEST(ProtocolGarbage, ProfileBadFlag)
+{
+    // Valid Profile header but flag byte out of range: crafted manually.
+    // Tag 10 = Profile (last server message type).
+    sf::Packet p;
+    p << static_cast<uint8_t>(ProtocolVersion)
+      << static_cast<uint8_t>(10);
+    p << std::string("Alice") << 1400.0 << 300.0;
+    p << static_cast<uint8_t>(0xFF);
+    EXPECT_FALSE(deserializeServer(p).has_value());
+}
+
+TEST(ProtocolGarbage, WelcomeBadRatedFlag)
+{
+    sf::Packet p;
+    p << static_cast<uint8_t>(ProtocolVersion)
+      << static_cast<uint8_t>(0)
+      << static_cast<int>(Color::White)
+      << std::string("Bob") << 1650.0 << 132.5;
+    p << static_cast<uint8_t>(2);
+    EXPECT_FALSE(deserializeServer(p).has_value());
+}
+
+TEST(ProtocolGarbage, Version1Rejected)
+{
+    // Protocol bump: v1 packets (e.g. old Welcome shape) must not parse.
+    sf::Packet p;
+    p << static_cast<uint8_t>(1)
+      << static_cast<uint8_t>(0)
+      << static_cast<int>(Color::White)
+      << std::string("Bob");
+    EXPECT_FALSE(deserializeServer(p).has_value());
+}
+
 TEST(ProtocolGarbage, InvalidGameOverReasonValue)
 {
     sf::Packet p;
@@ -390,6 +465,7 @@ TEST(ProtocolDebug, ClientMessages)
     EXPECT_FALSE(debugString(ClientMessage{ResignMsg{}}).empty());
     EXPECT_FALSE(debugString(ClientMessage{ChatMsg{"hi"}}).empty());
     EXPECT_FALSE(debugString(ClientMessage{PingMsg{}}).empty());
+    EXPECT_FALSE(debugString(ClientMessage{LoginMsg{"alice", "topsecret"}}).empty());
 }
 
 TEST(ProtocolDebug, ServerMessages)
@@ -403,6 +479,13 @@ TEST(ProtocolDebug, ServerMessages)
     EXPECT_FALSE(debugString(ServerMessage{ServerChatMsg{"A", "B"}}).empty());
     EXPECT_FALSE(debugString(ServerMessage{PongMsg{}}).empty());
     EXPECT_FALSE(debugString(ServerMessage{ErrorMsg{"nope"}}).empty());
+    EXPECT_FALSE(debugString(ServerMessage{ProfileMsg{"Alice", 1500, 350, false}}).empty());
+}
+
+TEST(ProtocolDebug, LoginMasksPassword)
+{
+    const std::string debug = debugString(ClientMessage{LoginMsg{"alice", "topsecret"}});
+    EXPECT_EQ(debug.find("topsecret"), std::string::npos);
 }
 
 TEST(ProtocolDebug, ClientContainsTypeName)

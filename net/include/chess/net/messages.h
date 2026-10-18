@@ -49,6 +49,12 @@ struct ChatMsg {
 
 struct PingMsg {};
 
+// Password login / transparent registration. Guests never send it.
+struct LoginMsg {
+    std::string name;
+    std::string password;
+};
+
 using ClientMessage = std::variant<
     JoinMsg,
     MoveMsg,
@@ -57,7 +63,8 @@ using ClientMessage = std::variant<
     DrawDeclineMsg,
     ResignMsg,
     ChatMsg,
-    PingMsg
+    PingMsg,
+    LoginMsg
 >;
 
 // ── Server → Client ─────────────────────────────────────────────────────────
@@ -65,6 +72,9 @@ using ClientMessage = std::variant<
 struct WelcomeMsg {
     Color color;
     std::string opponent;
+    double rating = 1500.0;  // opponent's pre-game rating
+    double deviation = 350.0;
+    bool rated = false;      // both players registered and the game counts
 };
 
 struct OpponentJoinedMsg {
@@ -96,6 +106,15 @@ struct ErrorMsg {
     std::string message;
 };
 
+// Identity/own rating; sent after login and re-sent whenever a rated game
+// changes the account's rating.
+struct ProfileMsg {
+    std::string name;
+    double rating = 1500.0;
+    double deviation = 350.0;
+    bool isGuest = true;
+};
+
 using ServerMessage = std::variant<
     WelcomeMsg,
     OpponentJoinedMsg,
@@ -106,7 +125,8 @@ using ServerMessage = std::variant<
     GameOverMsg,
     ServerChatMsg,
     PongMsg,
-    ErrorMsg
+    ErrorMsg,
+    ProfileMsg
 >;
 
 } // namespace net
