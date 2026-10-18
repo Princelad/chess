@@ -26,6 +26,7 @@ chess/
 │   ├── include/chess/   # public headers
 │   └── src/             # implementations
 ├── net/           # shared network protocol (sf::Packet)
+├── db/            # SQLite persistence: schema, auth hashing, player/game stores
 ├── server/        # headless TCP match server
 ├── client/        # SFML 3 GUI client
 │   ├── src/screens/     # screens + shared HUD
@@ -41,7 +42,7 @@ chess/
 └── AGENTS.md      # this file
 ```
 
-Library targets: `chesscore` (rules), `chessnet` (protocol), `chessuci` (UCI engine), `chessclient` (GUI). Widgets live in `chessclient`; tests link it directly.
+Library targets: `chesscore` (rules), `chessnet` (protocol), `chessdb` (SQLite persistence, system libsqlite3), `chessuci` (UCI engine), `chessclient` (GUI). Widgets live in `chessclient`; tests link it directly.
 
 ## C++17 gotchas (already bitten)
 

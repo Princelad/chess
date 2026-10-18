@@ -606,9 +606,9 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
 
 ▶ [Glicko-2 paper](http://www.glicko.net/glicko/glicko2.pdf)
 
-- [ ] **10.1 Storage layer**
-  - [ ] SQLite (system libsqlite3): players + games tables
-  - [ ] Optional password auth (salted hash); guest play stays allowed and unrated
+- [x] **10.1 Storage layer**
+  - [x] SQLite (system libsqlite3): players + games tables (`db/` → `chessdb`; guests are stored by name only inside `games`, never in `players`)
+  - [x] Optional password auth (salted hash); guest play stays allowed and unrated (store-level `authenticate`/`registerPlayer` with PBKDF2-HMAC-SHA-256; the LOGIN/profile wire flow and client UI land with 10.2's profile messages, `--db` currently opt-in on the server)
 
 - [ ] **10.2 Rated games (Glicko-2)**
   - [ ] Implement Glicko-2 per Glickman's paper; unit-test against the worked example
