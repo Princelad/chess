@@ -110,5 +110,74 @@ TEST(PlayerStore, GuestPasswordNotRequiredForAnything)
     EXPECT_FALSE(players.authenticate("Guest", ""));
 }
 
+TEST(PlayerStore, RatedWinMovesCountersAndRatings)
+{
+    Database db;
+    ASSERT_TRUE(db.open(":memory:"));
+    PlayerStore players(db);
+    const auto white = players.registerPlayer("Alice", "pw");
+    const auto black = players.registerPlayer("Bob", "pw");
+    ASSERT_TRUE(white && black);
+
+    const auto update = players.applyRatedGame(
+        white->id, black->id, chess::net::GameResult::WhiteWins);
+    ASSERT_TRUE(update.has_value());
+
+    EXPECT_EQ(update->white.wins, 1);
+    EXPECT_EQ(update->white.losses, 0);
+    EXPECT_GT(update->white.rating, 1500.0);   // rating rose
+    EXPECT_LT(update->white.ratingDeviation, 350.0); // gained confidence
+    EXPECT_LT(update->black.rating, 1500.0);
+    EXPECT_EQ(update->black.losses, 1);
+
+    // Persisted: read back both rows.
+    const auto whiteAfter = players.byName("alice");
+    const auto blackAfter = players.byName("BOB");
+    ASSERT_TRUE(whiteAfter && blackAfter);
+    EXPECT_DOUBLE_EQ(whiteAfter->rating, update->white.rating);
+    EXPECT_DOUBLE_EQ(blackAfter->rating, update->black.rating);
+    EXPECT_EQ(whiteAfter->wins, 1);
+}
+
+TEST(PlayerStore, RatedDrawCountsBoth)
+{
+    Database db;
+    ASSERT_TRUE(db.open(":memory:"));
+    PlayerStore players(db);
+    const auto white = players.registerPlayer("Alice", "pw");
+    const auto black = players.registerPlayer("Bob", "pw");
+    ASSERT_TRUE(white && black);
+
+    const auto update = players.applyRatedGame(
+        white->id, black->id, chess::net::GameResult::Draw);
+    ASSERT_TRUE(update.has_value());
+    EXPECT_EQ(update->white.draws, 1);
+    EXPECT_EQ(update->black.draws, 1);
+    // Equals with equal deviations keep 1500.
+    EXPECT_DOUBLE_EQ(update->white.rating, 1500.0);
+    EXPECT_DOUBLE_EQ(update->black.rating, 1500.0);
+}
+
+TEST(PlayerStore, AbortedResultIsNeverRated)
+{
+    Database db;
+    ASSERT_TRUE(db.open(":memory:"));
+    PlayerStore players(db);
+    const auto white = players.registerPlayer("Alice", "pw");
+    const auto black = players.registerPlayer("Bob", "pw");
+    ASSERT_TRUE(white && black);
+
+    EXPECT_FALSE(players.applyRatedGame(
+        white->id, black->id, chess::net::GameResult::Abort).has_value());
+    EXPECT_FALSE(players.applyRatedGame(42, black->id,
+        chess::net::GameResult::WhiteWins).has_value());
+    EXPECT_FALSE(players.applyRatedGame(white->id, 42,
+        chess::net::GameResult::WhiteWins).has_value());
+
+    // Untouched by the failed attempts:
+    EXPECT_DOUBLE_EQ(players.byName("Alice")->rating, 1500.0);
+    EXPECT_DOUBLE_EQ(players.byName("Bob")->rating, 1500.0);
+}
+
 } // namespace
 } // namespace chess::db

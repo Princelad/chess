@@ -5,6 +5,7 @@
 #include <string>
 
 #include <chess/db/database.h>
+#include <chess/net/messages.h>
 
 namespace chess::db {
 
@@ -22,6 +23,12 @@ struct Player {
     int draws = 0;
     std::int64_t createdAt = 0;
     std::int64_t lastSeen = 0;
+};
+
+// Post-update snapshots of the two participants of a rated game.
+struct RatedUpdate {
+    Player white;
+    Player black;
 };
 
 // SQL-backed account store over a Database.
@@ -42,6 +49,14 @@ public:
     // Verifies a login attempt against the stored salted hash and refreshes
     // last_seen on success.
     bool authenticate(const std::string& name, const std::string& password);
+
+    // Applies one completed rated game atomically: both rows are read,
+    // Glicko-2 updates them in one transaction, and wins/losses/draws counters
+    // move with the result. Only WhiteWins/BlackWins/Draw are rated.
+    // Returns post-update snapshots of both players; std::nullopt when the
+    // result is not rated or a player id does not exist.
+    std::optional<RatedUpdate> applyRatedGame(
+        std::int64_t whiteId, std::int64_t blackId, chess::net::GameResult result);
 
     const std::string& errorMessage() const { return errorMessage_; }
 

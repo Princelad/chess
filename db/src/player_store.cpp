@@ -1,6 +1,7 @@
 #include <chess/db/player_store.h>
 
 #include <chess/db/auth.h>
+#include <chess/db/glicko2.h>
 
 namespace chess::db {
 
@@ -140,6 +141,87 @@ std::optional<Player> PlayerStore::rowBy(Statement& stmt)
     player.createdAt = stmt.columnInt64(8);
     player.lastSeen = stmt.columnInt64(9);
     return player;
+}
+
+std::optional<RatedUpdate> PlayerStore::applyRatedGame(
+    std::int64_t whiteId, std::int64_t blackId, chess::net::GameResult result)
+{
+    errorMessage_.clear();
+
+    // Only decisive results and full draws are rated.
+    double whiteScore = 0.0;
+    switch (result) {
+        case chess::net::GameResult::WhiteWins: whiteScore = 1.0; break;
+        case chess::net::GameResult::Draw:      whiteScore = 0.5; break;
+        case chess::net::GameResult::BlackWins: whiteScore = 0.0; break;
+        default:
+            errorMessage_ = "game result is not rateable";
+            return std::nullopt;
+    }
+
+    // One transaction covers both reads and both writes so a game can never
+    // be half-rated when the server dies mid-update.
+    Transaction tx(db_);
+    if (!tx) {
+        errorMessage_ = db_.errorMessage();
+        return std::nullopt;
+    }
+
+    auto white = byId(whiteId);
+    auto black = byId(blackId);
+    if (!white.has_value() || !black.has_value()) {
+        errorMessage_ = white.has_value()
+            ? "black player for rated game not found"
+            : "white player for rated game not found";
+        return std::nullopt;
+    }
+
+    // Both sides read pre-period (pre-update) values, per the paper.
+    const auto whitePrime = applyGames(
+        Glicko2 {white->rating, white->ratingDeviation, white->volatility},
+        {{black->rating, black->ratingDeviation, whiteScore}});
+    const auto blackPrime = applyGames(
+        Glicko2 {black->rating, black->ratingDeviation, black->volatility},
+        {{white->rating, white->ratingDeviation, 1.0 - whiteScore}});
+
+    Statement stmt;
+    if (!stmt.prepare(db_.handle(),
+            "UPDATE players SET rating = ?, rating_deviation = ?, "
+            "volatility = ?, wins = ?, losses = ?, draws = ? WHERE id = ?")) {
+        errorMessage_ = stmt.errorMessage();
+        return std::nullopt;
+    }
+    for (Player* updated : {&*white, &*black}) {
+        const bool whiteSide = updated->id == white->id;
+        const double score = whiteSide ? whiteScore : 1.0 - whiteScore;
+        const int wins = updated->wins + (score == 1.0 ? 1 : 0);
+        const int losses = updated->losses + (score == 0.0 ? 1 : 0);
+        const int draws = updated->draws + (score == 0.5 ? 1 : 0);
+        const auto glicko = whiteSide ? whitePrime : blackPrime;
+
+        stmt.reset();
+        if (!stmt.bind(1, glicko.rating) || !stmt.bind(2, glicko.deviation)
+            || !stmt.bind(3, glicko.volatility) || !stmt.bind(4, std::int64_t(wins))
+            || !stmt.bind(5, std::int64_t(losses))
+            || !stmt.bind(6, std::int64_t(draws))
+            || !stmt.bind(7, updated->id)
+            || stmt.step() != Statement::Step::Done) {
+            errorMessage_ = stmt.errorMessage();
+            return std::nullopt;
+        }
+        updated->rating = glicko.rating;
+        updated->ratingDeviation = glicko.deviation;
+        updated->volatility = glicko.volatility;
+        updated->wins = wins;
+        updated->losses = losses;
+        updated->draws = draws;
+    }
+
+    if (!tx.commit()) {
+        errorMessage_ = db_.errorMessage();
+        return std::nullopt;
+    }
+    return RatedUpdate {*white, *black};
 }
 
 } // namespace chess::db
