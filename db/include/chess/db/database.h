@@ -20,6 +20,7 @@ public:
 
     // Prepares the (single) statement in sql. db must outlive this statement.
     bool prepare(sqlite3* db, const char* sql);
+    bool prepare(sqlite3* db, const std::string& sql) { return prepare(db, sql.c_str()); }
     void finalize();
 
     // Resets execution and clears prior bindings.

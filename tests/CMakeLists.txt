@@ -30,6 +30,9 @@ if(BUILD_TESTING)
         core/pgn_test.cpp
         db/sha256_test.cpp
         db/database_test.cpp
+        db/auth_test.cpp
+        db/player_store_test.cpp
+        db/game_store_test.cpp
         net/protocol_test.cpp
         server/matchmaker_test.cpp
         server/match_test.cpp

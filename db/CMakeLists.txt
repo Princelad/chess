@@ -1,6 +1,8 @@
 add_library(chessdb STATIC
     src/auth.cpp
     src/database.cpp
+    src/game_store.cpp
+    src/player_store.cpp
     src/sha256.cpp
 )
 
