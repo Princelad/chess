@@ -19,13 +19,16 @@
 
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace chess::client {
 
 class GameScreen : public Screen {
 public:
-    GameScreen(App& app, Color myColor, const std::string& opponentName);
+    GameScreen(App& app, Color myColor, const std::string& opponentName,
+               std::optional<std::pair<double, double>> opponentRating = {},
+               bool rated = false);
     void handleEvent(const sf::Event& event) override;
     void update(float dtSec) override;
     void draw(sf::RenderWindow& window) override;
@@ -45,6 +48,7 @@ private:
     std::optional<chess::PieceType> promoTypeForKey(sf::Keyboard::Key key) const;
     PromoCell promoCell(int index) const;
     void sendChat();
+    void refreshRatingsHud();
     void drawButtons(sf::RenderWindow& window);
     void drawChat(sf::RenderWindow& window);
     void drawHelpOverlay(sf::RenderWindow& window);
@@ -72,6 +76,8 @@ private:
     GameOverTransition gameOverTransition_;
 
     std::string opponentName_;
+    std::optional<std::pair<double, double>> opponentRating_;
+    bool rated_ = false;
 
     std::vector<std::string> chatLog_;
     TextField chatInput_;

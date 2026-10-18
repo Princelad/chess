@@ -22,6 +22,10 @@ public:
     void setMaxLength(std::size_t maxLength) { maxLength_ = maxLength; }
     void setPlaceholder(std::string placeholder) { placeholder_ = std::move(placeholder); }
 
+    // Masks typed characters as '*' (password entry). text() stays readable.
+    void setMasked(bool masked) { masked_ = masked; }
+    bool isMasked() const { return masked_; }
+
     void setEnabled(bool enabled) { enabled_ = enabled; }
     bool isEnabled() const { return enabled_; }
 
@@ -47,6 +51,7 @@ private:
     std::size_t maxLength_ = 64;
     std::string placeholder_;
     bool enabled_ = true;
+    bool masked_ = false;
     bool focused_ = false;
     bool caretVisible_ = true;
     float caretBlink_ = 0.f;

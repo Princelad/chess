@@ -57,8 +57,15 @@ void App::loadAssets()
     if (!config_.has("sound.volume")) config_.setInt("sound.volume", 100);
     if (!config_.has("sound.muted")) config_.setBool("sound.muted", false);
     if (!config_.has("animation.enabled")) config_.setBool("animation.enabled", true);
+    if (!config_.has("general.last_host")) config_.set("general.last_host", "localhost");
+    if (!config_.has("general.last_port")) config_.set("general.last_port", "5555");
+    if (!config_.has("general.last_name")) config_.set("general.last_name", "");
     if (!config_.has("animation.duration")) config_.set("animation.duration", "0.3");
     config_.save();
+
+    lastHost_ = config_.get("general.last_host", "localhost");
+    lastPort_ = config_.get("general.last_port", "5555");
+    lastName_ = config_.get("general.last_name", "");
 
     font_.emplace();
     const char* paths[] = {

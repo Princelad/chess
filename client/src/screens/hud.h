@@ -7,7 +7,9 @@
 #include <chess/types.h>
 
 #include <cstddef>
+#include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace chess::client {
@@ -25,6 +27,8 @@ public:
 
     void setInfo(const std::string& opponentName, Color myColor,
                  bool myTurn, bool gameOver);
+    void setRatings(std::optional<std::pair<double, double>> local,
+                    std::optional<std::pair<double, double>> opponent);
     void setStatus(const std::string& msg, float duration);
     void setGameOver(bool gameOver) { gameOver_ = gameOver; }
     void handleScroll(float delta) { navigator_.handleScroll(delta); }
@@ -44,6 +48,8 @@ private:
     float panelW_ = 0.f;
 
     std::string opponentName_;
+    std::optional<std::pair<double, double>> localRating_;
+    std::optional<std::pair<double, double>> opponentRating_;
     Color myColor_ = Color::White;
     bool myTurn_ = false;
     bool gameOver_ = false;

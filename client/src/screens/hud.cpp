@@ -2,6 +2,7 @@
 #include "app.h"
 
 #include <algorithm>
+#include <string>
 
 namespace chess::client {
 
@@ -23,6 +24,16 @@ constexpr float HeaderFontSize = 12;
 constexpr float CapturedPieceSize = 15.f;
 constexpr float CapturedStep = 17.f;
 constexpr int MaxCapturedShown = 16;
+
+// "1650 ± 132" suffix for a player card name line; omitted when unknown
+// (e.g. guests or unrated games).
+std::string ratingSuffix(const std::optional<std::pair<double, double>>& rating)
+{
+    if (!rating.has_value()) return "";
+    const auto value = static_cast<long long>(rating->first + 0.5);
+    const auto deviation = static_cast<long long>(rating->second + 0.5);
+    return "  (" + std::to_string(value) + " \u00b1 " + std::to_string(deviation) + ")";
+}
 }
 
 Hud::Hud(App& app, float panelX, float panelWidth)
@@ -70,6 +81,13 @@ void Hud::setInfo(const std::string& opponentName, Color myColor,
     gameOver_ = gameOver;
 }
 
+void Hud::setRatings(std::optional<std::pair<double, double>> local,
+                     std::optional<std::pair<double, double>> opponent)
+{
+    localRating_ = std::move(local);
+    opponentRating_ = std::move(opponent);
+}
+
 void Hud::setStatus(const std::string& msg, float duration)
 {
     statusMsg_ = msg;
@@ -96,11 +114,13 @@ float Hud::moveListBottom() const
 
 void Hud::draw(sf::RenderWindow& window, const sf::Font& font)
 {
-    drawPlayerCard(window, font, "vs " + opponentName_, opposite(myColor_),
+    std::string opponentText = "vs " + opponentName_
+        + ratingSuffix(opponentRating_);
+    drawPlayerCard(window, font, opponentText, opposite(myColor_),
                    OpponentNameY, OpponentCapturedY, false);
 
     std::string colorStr = myColor_ == Color::White ? "White" : "Black";
-    std::string localName = "You - " + colorStr;
+    std::string localName = "You - " + colorStr + ratingSuffix(localRating_);
     if (!gameOver_)
         localName += myTurn_ ? "  -  Your turn" : "  -  Waiting...";
     localNameLabel_.setColor(myTurn_ ? sf::Color(76, 175, 80)

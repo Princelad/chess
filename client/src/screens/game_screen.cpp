@@ -19,10 +19,14 @@ constexpr std::size_t MaxChatLog = 50;
 constexpr std::size_t MaxChatInput = 200;
 }
 
-GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName)
+GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName,
+                       std::optional<std::pair<double, double>> opponentRating,
+                       bool rated)
     : app_(app)
     , myColor_(myColor)
     , opponentName_(opponentName)
+    , opponentRating_(std::move(opponentRating))
+    , rated_(rated)
     , boardView_(static_cast<float>(App::WindowWidth),
                  static_cast<float>(App::WindowHeight),
                  myColor,
@@ -34,6 +38,7 @@ GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName)
 {
     hud_.setGame(Board::fromStartPos(), {}, {});
     hud_.setInfo(opponentName_, myColor_, myTurn_, gameOver_);
+    refreshRatingsHud();
 
     chatInput_.setMaxLength(MaxChatInput);
     chatInput_.setPlaceholder("Type a message...");
@@ -615,6 +620,11 @@ void GameScreen::update(float dtSec)
             if (chatLog_.size() > MaxChatLog)
                 chatLog_.erase(chatLog_.begin());
         }
+        else if (auto* profileMsg = std::get_if<chess::net::ProfileMsg>(&msg)) {
+            // Rated game just ended: the server re-sends our fresh profile.
+            app_.setProfile(*profileMsg);
+            refreshRatingsHud();
+        }
         else if (auto* chat = std::get_if<chess::net::ServerChatMsg>(&msg)) {
             chatLog_.push_back(chat->name + ": " + chat->text);
             if (chatLog_.size() > MaxChatLog)
@@ -644,6 +654,14 @@ void GameScreen::finishGameOver()
         app_, gameOverTransition_.result(), gameOverTransition_.reason(),
         hud_.navigator().initialBoard(), hud_.navigator().moves(),
         hud_.navigator().sans()));
+}
+
+void GameScreen::refreshRatingsHud()
+{
+    std::optional<std::pair<double, double>> local;
+    if (const auto& own = app_.profile(); own.has_value() && !own->isGuest)
+        local = std::make_pair(own->rating, own->deviation);
+    hud_.setRatings(local, opponentRating_);
 }
 
 void GameScreen::drawButtons(sf::RenderWindow& window)

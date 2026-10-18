@@ -12,13 +12,13 @@ constexpr float FieldX = StartX + 80.f;
 constexpr float FieldW = 280.f;
 constexpr float FieldH = 36.f;
 constexpr float RowGap = 56.f;
-constexpr float BtnY = 148.f + 3.f * RowGap + 10.f;
+constexpr float BtnY = 148.f + 4.f * RowGap + 10.f;
 }
 
 ConnectScreen::ConnectScreen(App& app)
     : app_(app)
 {
-    static const char* FieldLabels[FieldCount] = { "Host:", "Port:", "Name:" };
+    static const char* FieldLabels[FieldCount] = { "Host:", "Port:", "Name:", "Password:" };
     fields_[0].setText(app.lastHost());
     fields_[1].setText(app.lastPort());
     fields_[2].setText(app.lastName());
@@ -28,12 +28,16 @@ ConnectScreen::ConnectScreen(App& app)
         labels_[i].setColor(sf::Color(200, 200, 200));
         fields_[i].setMaxLength(32);
     }
+    // Password: masked input, longer allowed than names, guest by default.
+    fields_[3].setMasked(true);
+    fields_[3].setMaxLength(64);
+    fields_[3].setPlaceholder("empty = guest");
+    for (auto& field : fields_) field.setOnCommit([this] { tryConnectOrRetry(); });
     if (app.lastName().empty())
         activeField_ = 0;
     else
-        activeField_ = 2;
+        activeField_ = 3;
     fields_[activeField_].setFocused(true);
-    fields_[2].setOnCommit([this] { tryConnect(); });
 
     connectBtn_.setLabel("Connect");
     connectBtn_.setRect(sf::FloatRect(sf::Vector2f(FieldX, BtnY),
@@ -43,7 +47,7 @@ ConnectScreen::ConnectScreen(App& app)
                           sf::Color(150, 150, 150), sf::Color(255, 255, 255),
                           sf::Color(60, 140, 65), sf::Color(160, 220, 160),
                           sf::Color(220, 255, 220));
-    connectBtn_.setOnClick([this] { tryConnect(); });
+    connectBtn_.setOnClick([this] { tryConnectOrRetry(); });
 
     title_.setText("Chess");
     title_.setFontSize(36);
@@ -53,7 +57,7 @@ ConnectScreen::ConnectScreen(App& app)
     hint_.setFontSize(14);
     hint_.setColor(sf::Color(120, 120, 120));
 
-    status_.setText("Enter your name and press Enter to connect.");
+    status_.setText("Enter your name (password optional) and press Enter to connect.");
     status_.setFontSize(18);
     status_.setColor(sf::Color(180, 180, 180));
 
@@ -91,29 +95,55 @@ void ConnectScreen::cycleField(bool backward)
     fields_[activeField_].setFocused(true);
 }
 
-void ConnectScreen::tryConnect()
+void ConnectScreen::tryConnectOrRetry()
 {
-    if (name().empty() || phase_ != ConnectPhase::Idle) return;
+    if (phase_ == ConnectPhase::Idle) {
+        if (name().empty()) return;
 
-    unsigned short portNum = 0;
-    try {
-        portNum = static_cast<unsigned short>(std::stoi(fields_[1].text()));
-    } catch (...) {
-        error_.setText("Invalid port number");
+        unsigned short portNum = 0;
+        try {
+            portNum = static_cast<unsigned short>(std::stoi(fields_[1].text()));
+        } catch (...) {
+            error_.setText("Invalid port number");
+            return;
+        }
+
+        app_.setLastConnection(fields_[0].text(), fields_[1].text(), fields_[2].text());
+        app_.clearProfile();
+        error_.setText("");
+        phase_ = ConnectPhase::Connecting;
+        status_.setText("Connecting...");
+        for (auto& field : fields_) field.setEnabled(false);
+        app_.connection().connect(fields_[0].text(), portNum);
         return;
     }
 
-    app_.setLastConnection(fields_[0].text(), fields_[1].text(), fields_[2].text());
-    error_.setText("");
-    phase_ = ConnectPhase::Connecting;
-    status_.setText("Connecting...");
-    for (auto& field : fields_) field.setEnabled(false);
-    app_.connection().connect(fields_[0].text(), portNum);
+    // Login retry after a failed attempt: the socket is still connected, so
+    // just take the (possibly edited) credentials again.
+    if (phase_ == ConnectPhase::AwaitingProfile) {
+        error_.setText("");
+        if (!password().empty()) {
+            status_.setText("Logging in...");
+            app_.connection().send(chess::net::LoginMsg{name(), password()});
+        } else {
+            // Switched to guest play after an account error.
+            phase_ = ConnectPhase::WaitingForOpponent;
+            status_.setText("Waiting for opponent...");
+            for (auto& field : fields_) field.setEnabled(false);
+            app_.clearProfile();
+            app_.connection().join(name());
+        }
+    }
 }
 
 const std::string& ConnectScreen::name() const
 {
     return fields_[2].text();
+}
+
+const std::string& ConnectScreen::password() const
+{
+    return fields_[3].text();
 }
 
 void ConnectScreen::handleEvent(const sf::Event& event)
@@ -131,7 +161,10 @@ void ConnectScreen::handleEvent(const sf::Event& event)
             return;
         }
         if (kp->code == sf::Keyboard::Key::Enter) {
-            if (!name().empty() && phase_ == ConnectPhase::Idle) tryConnect();
+            if (!name().empty()
+                && (phase_ == ConnectPhase::Idle
+                    || phase_ == ConnectPhase::AwaitingProfile))
+                tryConnectOrRetry();
             return;
         }
     }
@@ -150,7 +183,8 @@ void ConnectScreen::handleEvent(const sf::Event& event)
         }
     }
 
-    if (phase_ == ConnectPhase::Idle && !name().empty())
+    if (phase_ == ConnectPhase::Idle && !name().empty()
+        || phase_ == ConnectPhase::AwaitingProfile)
         connectBtn_.handleEvent(event, local);
 }
 
@@ -165,11 +199,35 @@ void ConnectScreen::update(float dtSec)
     while (app_.connection().hasMessages()) {
         auto msg = app_.connection().nextMessage();
         if (auto* welcome = std::get_if<chess::net::WelcomeMsg>(&msg)) {
+            // Opponent rating is only meaningful for rated games; guests
+            // would otherwise see the default 1500 ± 350 as noise.
+            std::optional<std::pair<double, double>> opponentRating;
+            if (welcome->rated)
+                opponentRating = std::make_pair(welcome->rating, welcome->deviation);
             app_.switchScreen(std::make_unique<GameScreen>(
-                app_, welcome->color, welcome->opponent));
+                app_, welcome->color, welcome->opponent, opponentRating,
+                welcome->rated));
             return;
         }
+        if (auto* profileMsg = std::get_if<chess::net::ProfileMsg>(&msg)) {
+            app_.setProfile(*profileMsg);
+            if (phase_ == ConnectPhase::AwaitingProfile) {
+                phase_ = ConnectPhase::WaitingForOpponent;
+                status_.setText("Waiting for opponent...");
+                app_.connection().join(name());
+            }
+            continue;
+        }
         if (auto* err = std::get_if<chess::net::ErrorMsg>(&msg)) {
+            if (phase_ == ConnectPhase::AwaitingProfile) {
+                // Bad password / unknown name with empty password: keep the
+                // connection so the user can fix the fields and retry.
+                error_.setText(err->message);
+                status_.setText("Fix the fields and press Enter to retry.");
+                status_.setColor(sf::Color(180, 180, 180));
+                for (auto& field : fields_) field.setEnabled(true);
+                return;
+            }
             error_.setText(err->message);
             phase_ = ConnectPhase::Idle;
             status_.setText("");
@@ -189,14 +247,22 @@ void ConnectScreen::update(float dtSec)
     if (phase_ == ConnectPhase::Connecting &&
         app_.connection().state() == ConnectionState::Connected)
     {
-        phase_ = ConnectPhase::WaitingForOpponent;
-        status_.setText("Waiting for opponent...");
-        app_.connection().join(name());
+        if (!password().empty()) {
+            phase_ = ConnectPhase::AwaitingProfile;
+            status_.setText("Logging in...");
+            app_.connection().send(
+                chess::net::LoginMsg{name(), password()});
+        } else {
+            phase_ = ConnectPhase::WaitingForOpponent;
+            status_.setText("Waiting for opponent...");
+            app_.connection().join(name());
+        }
     }
 
     if (app_.connection().state() == ConnectionState::Disconnected) {
-        if (phase_ == ConnectPhase::Connecting ||
-            phase_ == ConnectPhase::WaitingForOpponent) {
+        if (phase_ == ConnectPhase::Connecting
+            || phase_ == ConnectPhase::AwaitingProfile
+            || phase_ == ConnectPhase::WaitingForOpponent) {
             error_.setText(app_.connection().error().empty()
                 ? "Connection failed" : app_.connection().error());
             phase_ = ConnectPhase::Idle;

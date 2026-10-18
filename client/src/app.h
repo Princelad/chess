@@ -7,6 +7,7 @@
 #include <vector>
 
 #include <chess/board.h>
+#include <chess/net/messages.h>
 #include <chess/types.h>
 #include "config.h"
 #include "connection.h"
@@ -48,10 +49,21 @@ public:
         lastHost_ = host;
         lastPort_ = port;
         lastName_ = name;
+        // Persisted (never the password — it is never stored client-side).
+        config_.set("general.last_host", host);
+        config_.set("general.last_port", port);
+        config_.set("general.last_name", name);
+        config_.save();
     }
     const std::string& lastHost() const { return lastHost_; }
     const std::string& lastPort() const { return lastPort_; }
     const std::string& lastName() const { return lastName_; }
+
+    // Own account profile (10.2). Kept when present so the HUD and settings
+    // can display the live rating; guests simply never have one.
+    const std::optional<chess::net::ProfileMsg>& profile() const { return profile_; }
+    void setProfile(chess::net::ProfileMsg profile) { profile_ = std::move(profile); }
+    void clearProfile() { profile_.reset(); }
 
     bool autoQueen() const { return config_.getBool("general.auto_queen", true); }
     void setAutoQueen(bool on)
@@ -115,6 +127,7 @@ private:
     std::string lastHost_ = "localhost";
     std::string lastPort_ = "5555";
     std::string lastName_;
+    std::optional<chess::net::ProfileMsg> profile_;
     sf::View view_;
     sf::Vector2u viewport_;
 };

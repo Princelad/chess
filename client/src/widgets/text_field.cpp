@@ -101,7 +101,9 @@ void TextField::draw(sf::RenderWindow& window, const sf::Font& font) const
     window.draw(box);
 
     const bool showPlaceholder = text_.empty() && !focused_;
-    const std::string displayText = showPlaceholder ? placeholder_ : text_;
+    const std::string shownText = masked_
+        ? std::string(text_.size(), '*') : text_;
+    const std::string displayText = showPlaceholder ? placeholder_ : shownText;
 
     sf::Text text(font, truncateForWidth(displayText, font, 20, rect_.size.x - 16.f), 20);
     text.setFillColor(dimmed
