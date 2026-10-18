@@ -9,6 +9,7 @@
 #include <SFML/Network/TcpListener.hpp>
 #include <SFML/Network/TcpSocket.hpp>
 
+#include <chess/db/database.h>
 #include <chess/net/protocol.h>
 
 #include "client.h"
@@ -65,6 +66,18 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
     unsigned short boundPort = listener.getLocalPort();
     if (boundPortOut) *boundPortOut = boundPort;
     LOG_INFO("Listening on " + config.host + ":" + std::to_string(boundPort));
+
+    // Persistent storage (phase 10.1). A hard failure is preferable to a
+    // silently unrated server when the operator asked for a database.
+    chess::db::Database database;
+    if (!config.dbPath.empty()) {
+        if (!database.open(config.dbPath)) {
+            LOG_ERROR("Failed to open database " + config.dbPath + ": "
+                + database.errorMessage());
+            return 0;
+        }
+        LOG_INFO("Database opened: " + config.dbPath);
+    }
 
     sf::SocketSelector selector;
     selector.add(listener);

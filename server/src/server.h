@@ -14,6 +14,10 @@ struct ServerConfig {
     int botDepth = 1;
     std::string botEnginePath = "stockfish";
     std::size_t maxBots = 4;
+    // SQLite file for accounts and archived games (phase 10.1). Empty means
+    // no persistence; the default stays off until the protocol can create
+    // accounts (10.2) and archive games (10.3).
+    std::string dbPath;
 };
 
 // Runs the server event loop on the calling thread. Blocks until stopped.

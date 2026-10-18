@@ -19,6 +19,7 @@ static void printUsage(const char* prog)
               "  --max-clients <N> Max simultaneous clients (default: 64)\n"
               "  --timeout <secs>  Idle timeout in seconds (default: 0 = disabled)\n"
               "  --log-file <path> Log to file in addition to stdout\n"
+              "  --db <path>       SQLite file for accounts/games (default: off)\n"
               "  --log-level <L>   Min log level: info, warn, error (default: info)\n"
               "  --help            Show this help\n";
 }
@@ -58,6 +59,8 @@ int main(int argc, char* argv[])
             }
         } else if (arg == "--log-file" && i + 1 < argc) {
             logFile = argv[++i];
+        } else if (arg == "--db" && i + 1 < argc) {
+            config.dbPath = argv[++i];
         } else if (arg == "--log-level" && i + 1 < argc) {
             std::string level = argv[++i];
             if (level == "warn") logLevel = LogLevel::Warn;
