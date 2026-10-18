@@ -35,9 +35,19 @@ else()
     set(CHESS_SFML_AUDIO_TARGET sfml-audio)
 endif()
 
+# Phase 10.1: persistence uses the system SQLite library (no vendored copy).
+find_package(SQLite3 QUIET)
+if(NOT SQLite3_FOUND)
+    message(FATAL_ERROR
+        "SQLite3 (system libsqlite3) not found — install the development "
+        "package (e.g. libsqlite3-dev on Debian/Ubuntu)")
+endif()
+set(CHESS_SQLITE_TARGET SQLite::SQLite3)
+
 add_subdirectory(core)
 add_subdirectory(uci)
 add_subdirectory(net)
+add_subdirectory(db)
 add_subdirectory(server)
 add_subdirectory(client)
 add_subdirectory(tests)

@@ -28,6 +28,8 @@ if(BUILD_TESTING)
         core/endgame_test.cpp
         core/uci_move_test.cpp
         core/pgn_test.cpp
+        db/sha256_test.cpp
+        db/database_test.cpp
         net/protocol_test.cpp
         server/matchmaker_test.cpp
         server/match_test.cpp
@@ -44,7 +46,7 @@ if(BUILD_TESTING)
         e2e/e2e_test.cpp
         uci/engine_test.cpp)
 
-    target_link_libraries(chess-tests PRIVATE chesscore chessnet chessclient chessserver chessuci GTest::gtest_main)
+    target_link_libraries(chess-tests PRIVATE chesscore chessnet chessclient chessserver chessuci chessdb GTest::gtest_main)
 
     include(GoogleTest)
     gtest_discover_tests(chess-tests PROPERTIES
