@@ -610,10 +610,10 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [x] SQLite (system libsqlite3): players + games tables (`db/` → `chessdb`; guests are stored by name only inside `games`, never in `players`)
   - [x] Optional password auth (salted hash); guest play stays allowed and unrated (store-level `authenticate`/`registerPlayer` with PBKDF2-HMAC-SHA-256; the LOGIN/profile wire flow and client UI land with 10.2's profile messages, `--db` currently opt-in on the server)
 
-- [ ] **10.2 Rated games (Glicko-2)**
-  - [ ] Implement Glicko-2 per Glickman's paper; unit-test against the worked example
+- [x] **10.2 Rated games (Glicko-2)**
+  - [x] Implement Glicko-2 per Glickman's paper; unit-test against the worked example (`db` → `applyGames`, worked example 1464.06/151.52 reproduced; idle periods grow RD only, capped at 350)
   - [ ] Rating classes by time control once 11.1 clocks land (single class until then)
-  - [ ] Extend profile messages with rating; update atomically on GAME_OVER
+  - [x] Extend profile messages with rating; update atomically on GAME_OVER (protocol v2: `LoginMsg`/`ProfileMsg` + rated `WelcomeMsg`; one transaction covers both players incl. W/L/D counters; aborted results are never rated; clients receive re-sent profiles)
 
 - [ ] **10.3 Game archive**
   - [ ] Persist every completed game (players, TC, SAN moves, result, date)
