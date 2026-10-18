@@ -31,6 +31,7 @@ if(BUILD_TESTING)
         db/sha256_test.cpp
         db/database_test.cpp
         db/auth_test.cpp
+        db/glicko2_test.cpp
         db/player_store_test.cpp
         db/game_store_test.cpp
         net/protocol_test.cpp
