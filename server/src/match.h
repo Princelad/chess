@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <memory>
 #include <string>
 #include <utility>
@@ -14,6 +15,13 @@ struct Client;
 class Match {
 public:
     Match(Client& white, Client& black);
+
+    // Observer notified once after GameOverMsg has been broadcast to both
+    // players (used by the server for rated updates, archive writes, ...).
+    // Failures inside the observer must not disturb the game.
+    using GameOverCallback =
+        std::function<void(const Match&, chess::net::GameResult, chess::net::GameOverReason)>;
+    void setGameOverCallback(GameOverCallback callback) { gameOverCallback_ = std::move(callback); }
 
     void handleMessage(Client& sender, const chess::net::ClientMessage& msg);
     void handleDisconnect(const Client& client);
@@ -52,4 +60,5 @@ private:
     chess::Color botColor_ = chess::Color::White;
     int botDepth_ = 1;
     bool botThinking_ = false;
+    GameOverCallback gameOverCallback_;
 };

@@ -179,6 +179,8 @@ void Match::endGame(chess::net::GameResult result, chess::net::GameOverReason re
     [[maybe_unused]] bool b = sendTo(*black_, gameOver);
     LOG_INFO("Game over: result=" + std::to_string(static_cast<int>(result))
              + " reason=" + std::to_string(static_cast<int>(reason)));
+    if (gameOverCallback_)
+        gameOverCallback_(*this, result, reason);
 }
 
 std::pair<chess::net::GameResult, chess::net::GameOverReason>

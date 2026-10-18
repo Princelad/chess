@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <memory>
+#include <optional>
 #include <string>
 
 #include <SFML/Network/TcpSocket.hpp>
@@ -18,4 +19,6 @@ struct Client {
     Match* match = nullptr;
     int badMessages = 0;
     bool isBot = false;
+    // Account id when authenticated via LoginMsg; empty for guests and bots.
+    std::optional<std::int64_t> playerId = std::nullopt;
 };

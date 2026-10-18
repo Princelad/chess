@@ -10,6 +10,7 @@
 #include <SFML/Network/TcpSocket.hpp>
 
 #include <chess/db/database.h>
+#include <chess/db/player_store.h>
 #include <chess/net/protocol.h>
 
 #include "client.h"
@@ -48,6 +49,68 @@ static ClientVec::iterator disconnectClient(
 
 namespace chess::server {
 
+// ── Auth (phase 10.2) ───────────────────────────────────────────────────────
+
+static void sendProfileTo(Client& client, const chess::db::Player& player)
+{
+    sendTo(client, chess::net::ProfileMsg{
+        player.name, player.rating, player.ratingDeviation, false});
+}
+
+static void handleLogin(Client& client, const chess::net::LoginMsg& login,
+                        chess::db::PlayerStore* players)
+{
+    if (players == nullptr) {
+        sendTo(client, chess::net::ErrorMsg{"This server has no account support"});
+        return;
+    }
+    if (login.name.empty()) {
+        sendTo(client, chess::net::ErrorMsg{"Name required"});
+        return;
+    }
+    if (login.name.size() > MaxNameLength) {
+        sendTo(client, chess::net::ErrorMsg{"Name too long"});
+        return;
+    }
+
+    auto existing = players->byName(login.name);
+    if (existing.has_value()) {
+        if (login.password.empty()) {
+            sendTo(client, chess::net::ErrorMsg{
+                "Account '" + existing->name + "' is password protected — "
+                "enter the password to log in, or pick another name for guest play"});
+            return;
+        }
+        if (!players->authenticate(login.name, login.password)) {
+            sendTo(client, chess::net::ErrorMsg{
+                "Wrong password for account '" + existing->name + "'"});
+            return;
+        }
+        client.playerId = existing->id;
+        client.name = existing->name;
+        sendProfileTo(client, *existing);
+        LOG_INFO("Client logged in: " + existing->name);
+        return;
+    }
+
+    // Unknown name + password = transparent account registration.
+    if (login.password.empty()) {
+        sendTo(client, chess::net::ErrorMsg{
+            "Enter a password to create an account with this name, "
+            "or leave it empty to play as an unrated guest"});
+        return;
+    }
+    auto created = players->registerPlayer(login.name, login.password);
+    if (!created.has_value()) {
+        sendTo(client, chess::net::ErrorMsg{players->errorMessage()});
+        return;
+    }
+    client.playerId = created->id;
+    client.name = created->name;
+    sendProfileTo(client, *created);
+    LOG_INFO("Client registered: " + created->name);
+}
+
 unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdownFlag,
                          unsigned short* boundPortOut)
 {
@@ -70,14 +133,47 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
     // Persistent storage (phase 10.1). A hard failure is preferable to a
     // silently unrated server when the operator asked for a database.
     chess::db::Database database;
+    std::optional<chess::db::PlayerStore> playerStoreOpt;
     if (!config.dbPath.empty()) {
         if (!database.open(config.dbPath)) {
             LOG_ERROR("Failed to open database " + config.dbPath + ": "
                 + database.errorMessage());
             return 0;
         }
+        playerStoreOpt.emplace(database);
         LOG_INFO("Database opened: " + config.dbPath);
     }
+    chess::db::PlayerStore* players =
+        playerStoreOpt.has_value() ? &*playerStoreOpt : nullptr;
+
+    // Rated update on game over (phase 10.2): both participants must be
+    // registered; guests and bots keep unrated games. Runs after the
+    // GameOverMsg broadcast, inside the currently alive client objects.
+    auto onGameOver = [&](const Match& match, chess::net::GameResult result,
+                          chess::net::GameOverReason reason) {
+        (void)reason;
+        Client* white = match.white();
+        Client* black = match.black();
+        if (players == nullptr || white == nullptr || black == nullptr
+            || !white->playerId.has_value() || !black->playerId.has_value())
+            return;
+        auto update = players->applyRatedGame(*white->playerId, *black->playerId, result);
+        if (!update.has_value()) {
+            LOG_WARN("Rated update failed: " + players->errorMessage());
+            return;
+        }
+        LOG_INFO("Rated " + update->white.name + " -> "
+            + std::to_string(static_cast<int>(update->white.rating))
+            + " / " + update->black.name + " -> "
+            + std::to_string(static_cast<int>(update->black.rating)));
+        sendProfileTo(*white, update->white);
+        sendProfileTo(*black, update->black);
+    };
+
+    // Pairing helper (phase 10.2): creates the match, wires the rated hook
+    // and broadcasts the richer WelcomeMsg (opponent rating + rated flag)
+    // made from fresh rows; guests fall back to the default 1500 ± 350.
+    // Defined after the match container declarations below.
 
     sf::SocketSelector selector;
     selector.add(listener);
@@ -86,6 +182,39 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
     MatchVec matches;
     Matchmaker matchmaker;
     std::size_t botNameCounter = 0;
+
+    // Pairing helper (phase 10.2): creates the match, wires the rated hook
+    // and broadcasts the richer WelcomeMsg (opponent rating + rated flag)
+    // made from fresh rows; guests fall back to the default 1500 ± 350.
+    auto startMatch = [&](Client& first, Client& second) -> Match* {
+        first.state = ClientState::InMatch;
+        second.state = ClientState::InMatch;
+        auto match = std::make_unique<Match>(first, second);
+        match->setGameOverCallback(onGameOver);
+        first.match = match.get();
+        second.match = match.get();
+
+        const bool rated = players != nullptr
+            && first.playerId.has_value() && second.playerId.has_value();
+        auto opponentRow = [&](const Client& c) -> std::pair<double, double> {
+            if (players != nullptr && c.playerId.has_value()) {
+                auto row = players->byId(*c.playerId);
+                if (row.has_value())
+                    return {row->rating, row->ratingDeviation};
+            }
+            return {1500.0, 350.0};
+        };
+        const auto [firstRating, firstDeviation] = opponentRow(first);
+        const auto [secondRating, secondDeviation] = opponentRow(second);
+
+        sendTo(first, chess::net::WelcomeMsg{
+            chess::Color::White, second.name, secondRating, secondDeviation, rated});
+        sendTo(second, chess::net::WelcomeMsg{
+            chess::Color::Black, first.name, firstRating, firstDeviation, rated});
+        Match* rawMatch = match.get();
+        matches.push_back(std::move(match));
+        return rawMatch;
+    };
 
     while (!shutdownFlag.load(std::memory_order_relaxed)) {
         bool hasThinkingBot = false;
@@ -148,31 +277,28 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
 
                         switch (client.state) {
                         case ClientState::Connected:
-                            if (auto* join = std::get_if<chess::net::JoinMsg>(&*msg)) {
-                                if (!client.name.empty()) {
-                                    sendTo(client, chess::net::ErrorMsg{"Already joined"});
-                                    break;
+                            if (auto* login = std::get_if<chess::net::LoginMsg>(&*msg)) {
+                                handleLogin(client, *login, players);
+                            } else if (auto* join = std::get_if<chess::net::JoinMsg>(&*msg)) {
+                                if (!client.playerId.has_value()) {
+                                    // Guest join: name comes from the payload.
+                                    if (join->name.empty()) {
+                                        sendTo(client, chess::net::ErrorMsg{"Name required"});
+                                        break;
+                                    }
+                                    if (join->name.size() > MaxNameLength) {
+                                        sendTo(client, chess::net::ErrorMsg{"Name too long"});
+                                        break;
+                                    }
+                                    client.name = join->name;
                                 }
-                                if (join->name.empty()) {
-                                    sendTo(client, chess::net::ErrorMsg{"Name required"});
-                                    break;
-                                }
-                                if (join->name.size() > MaxNameLength) {
-                                    sendTo(client, chess::net::ErrorMsg{"Name too long"});
-                                    break;
-                                }
-                                client.name = join->name;
+                                // Authenticated clients keep the (canonical)
+                                // account name set during LoginMsg; allowing
+                                // re-joining after a finished game.
                                 client.state = ClientState::Queued;
                                 auto pair = matchmaker.enqueue(client);
                                 if (pair.has_value()) {
-                                    pair->first->state = ClientState::InMatch;
-                                    pair->second->state = ClientState::InMatch;
-                                    auto match = std::make_unique<Match>(*pair->first, *pair->second);
-                                    pair->first->match = match.get();
-                                    pair->second->match = match.get();
-                                    sendTo(*pair->first, chess::net::WelcomeMsg{chess::Color::White, pair->second->name});
-                                    sendTo(*pair->second, chess::net::WelcomeMsg{chess::Color::Black, pair->first->name});
-                                    matches.push_back(std::move(match));
+                                    startMatch(*pair->first, *pair->second);
                                 } else if (config.botsEnabled) {
                                     auto botCount = std::count_if(clients.begin(), clients.end(),
                                         [](const auto& c) { return c->isBot; });
@@ -187,17 +313,9 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
 
                                         auto botPair = matchmaker.enqueue(*botPtr);
                                         if (botPair.has_value()) {
-                                            botPair->first->state = ClientState::InMatch;
-                                            botPair->second->state = ClientState::InMatch;
-                                            auto match = std::make_unique<Match>(*botPair->first, *botPair->second);
-                                            botPair->first->match = match.get();
-                                            botPair->second->match = match.get();
-                                            sendTo(*botPair->first, chess::net::WelcomeMsg{chess::Color::White, botPair->second->name});
-                                            sendTo(*botPair->second, chess::net::WelcomeMsg{chess::Color::Black, botPair->first->name});
-
+                                            auto match = startMatch(*botPair->first, *botPair->second);
                                             chess::Color botColor = botPair->first->isBot ? chess::Color::White : chess::Color::Black;
                                             match->startBot(botColor, config.botDepth, config.botEnginePath);
-                                            matches.push_back(std::move(match));
                                         }
                                     }
                                 }
