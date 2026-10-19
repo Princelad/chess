@@ -38,7 +38,7 @@ phase, PATCH for bugfixes/hotfixes landed within a phase.
 | 7 — Integration & polish | `v1.0.0` | First release |
 | 8 — Engine integration (UCI) | `v1.1.0` | Play + analyze with an external engine |
 | 9 — Client UI/UX overhaul | `v1.2.0` | Menu shell, widget layer, move navigator |
-| 10 — Persistence & ratings | `v1.3.0` | Accounts, Glicko-2, game archive |
+| 10 — Persistence & ratings | `v1.3.0` | Accounts, Glicko-2, game archive, leaderboard |
 | 11 — Multiplayer QoL | `v1.4.0` | Clocks, rematch, reconnect/resume, premove, themes |
 | 12 — Variants & community | `v1.5.0` | Chess960, puzzles, tournaments, spectators |
 | 13 — Release engineering | `v1.6.0` | CI, packaging, portability |
@@ -602,7 +602,7 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
 
 **Goal:** identity, ratings, and saved games survive server restarts.
 
-**Exit version:** `v1.3.0` — accounts, rated games, browsable archive
+**Exit version:** `v1.3.0` — accounts, rated games, browsable archive, leaderboard
 
 ▶ [Glicko-2 paper](http://www.glicko.net/glicko/glicko2.pdf)
 
@@ -621,9 +621,9 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [x] PGN generation from archive (reuses the 8.4 PGN writer) (`client/src/archive_pgn.h` → toPgn; Copy PGN via clipboard)
   - [x] Client "my games" list screen; open → replay viewer (reuses 9.3 navigator) (`HistoryScreen` over `Archive{Request,Get/List,Game}` messages; mine filter for logged-in accounts; `AnalysisScreen` as viewer)
 
-- [ ] **10.4 Leaderboard**
-  - [ ] Server top-N query by rating
-  - [ ] Client leaderboard screen
+- [x] **10.4 Leaderboard**
+  - [x] Server top-N query by rating (`PlayerStore::topPlayers(limit, minGames = 1)`: rating DESC, name ASC tie-break; only accounts with ≥1 finished rated game rank, so factory-1500 rows stay hidden. Wire: `LeaderboardRequestMsg{limit}` → `LeaderboardListMsg{players}`, protocol v2 append-only tags; answered in every connection state beside the archive handlers; default 50 / clamped to the 100-row wire guard; no `--db` → `ErrorMsg` "This server has no leaderboard")
+  - [x] Client leaderboard screen (`client/src/screens/leaderboard_screen.{h,cpp}`: read-only list panel, scroll + Esc/OK, own-row "(you)" highlight for logged-in accounts; entered from the ConnectScreen "Leaderboard" button — the connect flow's `archiveBrowse_` flag became `BrowseTarget {None, Archive, Leaderboard}` sharing the renamed `ConnectingBrowse` phase. Drive-by: archive server clamp 200→100 so replies never exceed the `ArchiveListMsg` wire guard)
 
 ---
 
