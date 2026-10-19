@@ -612,7 +612,8 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
 
 - [x] **10.2 Rated games (Glicko-2)**
   - [x] Implement Glicko-2 per Glickman's paper; unit-test against the worked example (`db` → `applyGames`, worked example 1464.06/151.52 reproduced; idle periods grow RD only, capped at 350)
-  - [ ] Rating classes by time control once 11.1 clocks land (single class until then)
+  - [x] Rating classes by time control (`db/rating_class.h` classification: bullet/blitz/rapid/classical; single "unlimited" class active until 11.1 clocks give games a TC, then wire per-class ratings)
+  - [x] Idle-period deviation growth (Glicko-2 no-game periods) (`PlayerStore::applyIdleGrowth`; server applies at login, daily periods since `players.last_rated_at` — schema rev 2, capped at RD 350)
   - [x] Extend profile messages with rating; update atomically on GAME_OVER (protocol v2: `LoginMsg`/`ProfileMsg` + rated `WelcomeMsg`; one transaction covers both players incl. W/L/D counters; aborted results are never rated; clients receive re-sent profiles)
 
 - [x] **10.3 Game archive**
