@@ -1,5 +1,6 @@
 #include "connect_screen.h"
 #include "game_screen.h"
+#include "history_screen.h"
 
 #include <chess/net/messages.h>
 
@@ -49,6 +50,14 @@ ConnectScreen::ConnectScreen(App& app)
                           sf::Color(220, 255, 220));
     connectBtn_.setOnClick([this] { tryConnectOrRetry(); });
 
+    archiveBtn_.setLabel("Match archive");
+    archiveBtn_.setColors(sf::Color(60, 90, 160), sf::Color(75, 105, 180),
+                          sf::Color(52, 80, 140), sf::Color(45, 60, 90),
+                          sf::Color(150, 150, 150), sf::Color(255, 255, 255),
+                          sf::Color(52, 78, 135), sf::Color(160, 190, 240),
+                          sf::Color(210, 230, 255));
+    archiveBtn_.setOnClick([this] { startArchiveBrowse(); });
+
     title_.setText("Chess");
     title_.setFontSize(36);
     title_.setColor(sf::Color(255, 255, 255));
@@ -80,6 +89,9 @@ void ConnectScreen::layoutWidgets()
     }
     connectBtn_.setRect(sf::FloatRect(sf::Vector2f(FieldX, BtnY),
                                       sf::Vector2f(200.f, 40.f)));
+    // Side button: browse the server's game archive without queueing.
+    archiveBtn_.setRect(sf::FloatRect(sf::Vector2f(FieldX + 210.f, BtnY),
+                                      sf::Vector2f(170.f, 40.f)));
 }
 
 void ConnectScreen::cycleField(bool backward)
@@ -125,6 +137,9 @@ void ConnectScreen::tryConnectOrRetry()
         if (!password().empty()) {
             status_.setText("Logging in...");
             app_.connection().send(chess::net::LoginMsg{name(), password()});
+        } else if (archiveBrowse_) {
+            // Switched to guest-mode archive browsing after an error.
+            openArchive();
         } else {
             // Switched to guest play after an account error.
             phase_ = ConnectPhase::WaitingForOpponent;
@@ -144,6 +159,39 @@ const std::string& ConnectScreen::name() const
 const std::string& ConnectScreen::password() const
 {
     return fields_[3].text();
+}
+
+void ConnectScreen::openArchive()
+{
+    const bool mine = app_.profile().has_value()
+        && !app_.profile()->isGuest;
+    // Hand over to the archive browser; this screen gets destroyed by the
+    // switch (Idle-state entry point only).
+    app_.switchScreen(std::make_unique<HistoryScreen>(app_, mine));
+}
+
+// Archives: connect WITHOUT joining a queue; the archive list filters
+// itself when this connection is (or will be) a logged-in account.
+void ConnectScreen::startArchiveBrowse()
+{
+    if (name().empty() || phase_ != ConnectPhase::Idle) return;
+
+    unsigned short portNum = 0;
+    try {
+        portNum = static_cast<unsigned short>(std::stoi(fields_[1].text()));
+    } catch (...) {
+        error_.setText("Invalid port number");
+        return;
+    }
+
+    app_.setLastConnection(fields_[0].text(), fields_[1].text(), fields_[2].text());
+    app_.clearProfile();
+    error_.setText("");
+    archiveBrowse_ = true;
+    phase_ = ConnectPhase::ConnectingArchive;
+    status_.setText("Connecting...");
+    for (auto& field : fields_) field.setEnabled(false);
+    app_.connection().connect(fields_[0].text(), portNum);
 }
 
 void ConnectScreen::handleEvent(const sf::Event& event)
@@ -186,6 +234,8 @@ void ConnectScreen::handleEvent(const sf::Event& event)
     if (phase_ == ConnectPhase::Idle && !name().empty()
         || phase_ == ConnectPhase::AwaitingProfile)
         connectBtn_.handleEvent(event, local);
+    if (phase_ == ConnectPhase::Idle && !name().empty())
+        archiveBtn_.handleEvent(event, local);
 }
 
 void ConnectScreen::update(float dtSec)
@@ -212,9 +262,13 @@ void ConnectScreen::update(float dtSec)
         if (auto* profileMsg = std::get_if<chess::net::ProfileMsg>(&msg)) {
             app_.setProfile(*profileMsg);
             if (phase_ == ConnectPhase::AwaitingProfile) {
-                phase_ = ConnectPhase::WaitingForOpponent;
-                status_.setText("Waiting for opponent...");
-                app_.connection().join(name());
+                if (archiveBrowse_) {
+                    openArchive();
+                } else {
+                    phase_ = ConnectPhase::WaitingForOpponent;
+                    status_.setText("Waiting for opponent...");
+                    app_.connection().join(name());
+                }
             }
             continue;
         }
@@ -258,9 +312,23 @@ void ConnectScreen::update(float dtSec)
             app_.connection().join(name());
         }
     }
+    else if (phase_ == ConnectPhase::ConnectingArchive &&
+        app_.connection().state() == ConnectionState::Connected)
+    {
+        // Archives need the profile only for the "my games" filter.
+        if (!password().empty()) {
+            phase_ = ConnectPhase::AwaitingProfile;
+            status_.setText("Logging in...");
+            app_.connection().send(
+                chess::net::LoginMsg{name(), password()});
+        } else {
+            openArchive();
+        }
+    }
 
     if (app_.connection().state() == ConnectionState::Disconnected) {
         if (phase_ == ConnectPhase::Connecting
+            || phase_ == ConnectPhase::ConnectingArchive
             || phase_ == ConnectPhase::AwaitingProfile
             || phase_ == ConnectPhase::WaitingForOpponent) {
             error_.setText(app_.connection().error().empty()
@@ -283,6 +351,8 @@ void ConnectScreen::draw(sf::RenderWindow& window)
 
     if (phase_ != ConnectPhase::WaitingForOpponent && !name().empty())
         connectBtn_.draw(window, font);
+    if (phase_ == ConnectPhase::Idle && !name().empty())
+        archiveBtn_.draw(window, font);
 
     float statusY = BtnY + 44.f;
     if (!error_.text().empty()) {

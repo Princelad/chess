@@ -25,6 +25,7 @@ public:
     void draw(sf::RenderWindow& window) override;
 
 private:
+    void activateArchive();
     void activateRematch();
     void activateAnalyze();
     void cycleFocus();
@@ -38,6 +39,7 @@ private:
     std::vector<std::string> sanMoves_;
 
     Button rematchBtn_;
+    Button archiveBtn_;
     Button analyzeBtn_;
     Label resultLabel_;
     Label reasonLabel_;

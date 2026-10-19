@@ -1,5 +1,6 @@
 #include "game_over_screen.h"
 #include "analysis_screen.h"
+#include "history_screen.h"
 #include "menu_screen.h"
 #include "widgets/layout.h"
 
@@ -9,7 +10,8 @@ namespace {
 constexpr float BtnW = 200.f;
 constexpr float BtnH = 44.f;
 constexpr float BtnY = 300.f;
-constexpr float AnalyzeBtnY = 360.f;
+constexpr float ArchiveBtnY = 360.f;
+constexpr float AnalyzeBtnY = 420.f;
 }
 
 GameOverScreen::GameOverScreen(App& app,
@@ -88,6 +90,17 @@ GameOverScreen::GameOverScreen(App& app,
                           sf::Color(160, 160, 160));
     analyzeBtn_.setOnClick([this] { activateAnalyze(); });
 
+    archiveBtn_.setLabel("Match archive");
+    archiveBtn_.setColors(sf::Color(60, 90, 160), sf::Color(75, 105, 180),
+                          sf::Color(52, 80, 140), sf::Color(45, 60, 90),
+                          sf::Color(120, 130, 150), sf::Color(240, 240, 240),
+                          sf::Color(52, 78, 135), sf::Color(160, 190, 240),
+                          sf::Color(210, 230, 255));
+    archiveBtn_.setOnClick([this] { activateArchive(); });
+    // Browsing needs the live socket of the just-finished game.
+    archiveBtn_.setEnabled(
+        app_.connection().state() == ConnectionState::Connected);
+
     layoutWidgets();
 
     rematchBtn_.setFocused(true);
@@ -114,6 +127,10 @@ void GameOverScreen::layoutWidgets()
         sf::FloatRect(sf::Vector2f(0.f, BtnY),
                       sf::Vector2f(App::WindowWidth, BtnH)), btnSize));
 
+    archiveBtn_.setRect(layout::centerIn(
+        sf::FloatRect(sf::Vector2f(0.f, ArchiveBtnY),
+                      sf::Vector2f(App::WindowWidth, BtnH)), btnSize));
+
     if (!moves_.empty()) {
         analyzeBtn_.setRect(layout::centerIn(
             sf::FloatRect(sf::Vector2f(0.f, AnalyzeBtnY),
@@ -123,8 +140,7 @@ void GameOverScreen::layoutWidgets()
     }
 
     const float hintY = !moves_.empty() ? AnalyzeBtnY + BtnH + 16.f
-                                        : BtnY + BtnH + 16.f;
-    auto hb = hint_.bounds(app_.font());
+                                        : BtnY + BtnH + 16.f;    auto hb = hint_.bounds(app_.font());
     hint_.setPosition({
         (App::WindowWidth - hb.size.x) / 2.f - hb.position.x, hintY
     });
@@ -144,12 +160,22 @@ void GameOverScreen::activateAnalyze()
         app_, initialBoard_, moves_, sanMoves_, resultText_));
 }
 
+void GameOverScreen::activateArchive()
+{
+    if (app_.connection().state() != ConnectionState::Connected) return;
+    const bool mine = app_.profile().has_value()
+        && !app_.profile()->isGuest;
+    // Pushed so Esc from the archive drops back to this game-over screen.
+    app_.pushScreen(std::make_unique<HistoryScreen>(app_, mine));
+}
+
 void GameOverScreen::cycleFocus()
 {
     if (moves_.empty()) return;
-    focus_ = 1 - focus_;
+    focus_ = (focus_ + 1) % 3;
     rematchBtn_.setFocused(focus_ == 0);
-    analyzeBtn_.setFocused(focus_ == 1);
+    archiveBtn_.setFocused(focus_ == 1);
+    analyzeBtn_.setFocused(focus_ == 2);
 }
 
 void GameOverScreen::handleEvent(const sf::Event& event)
@@ -174,6 +200,7 @@ void GameOverScreen::handleEvent(const sf::Event& event)
         local = app_.toLocal(rb->position);
 
     if (rematchBtn_.handleEvent(event, local)) return;
+    if (archiveBtn_.handleEvent(event, local)) return;
     if (moves_.empty()) return;
     if (analyzeBtn_.handleEvent(event, local)) return;
 }
@@ -190,6 +217,7 @@ void GameOverScreen::draw(sf::RenderWindow& window)
 
     if (rematchBtn_.isEnabled())
         rematchBtn_.draw(window, font);
+    archiveBtn_.draw(window, font);
     if (!moves_.empty())
         analyzeBtn_.draw(window, font);
 

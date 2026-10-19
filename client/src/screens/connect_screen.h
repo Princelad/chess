@@ -12,7 +12,7 @@
 
 namespace chess::client {
 
-enum class ConnectPhase { Idle, Connecting, AwaitingProfile, WaitingForOpponent };
+enum class ConnectPhase { Idle, Connecting, ConnectingArchive, AwaitingProfile, WaitingForOpponent };
 
 class ConnectScreen : public Screen {
 public:
@@ -25,6 +25,8 @@ private:
     static constexpr std::size_t FieldCount = 4;
 
     void tryConnectOrRetry();
+    void startArchiveBrowse();
+    void openArchive();
     void cycleField(bool backward);
     void layoutWidgets();
     const std::string& name() const;
@@ -37,10 +39,12 @@ private:
     std::array<Label, FieldCount> labels_;
     std::size_t activeField_ = 0;
     Button connectBtn_;
+    Button archiveBtn_;
     Label title_;
     Label hint_;
     Label status_;
     Label error_;
+    bool archiveBrowse_ = false;
 };
 
 } // namespace chess::client
