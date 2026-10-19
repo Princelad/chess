@@ -138,6 +138,12 @@ std::optional<Player> PlayerStore::rowBy(Statement& stmt)
         return std::nullopt; // no such row
 
     Player player;
+    scanRow(stmt, player);
+    return player;
+}
+
+void PlayerStore::scanRow(const Statement& stmt, Player& player)
+{
     player.id = stmt.columnInt64(0);
     player.name = stmt.columnText(1);
     player.rating = stmt.columnDouble(2);
@@ -149,7 +155,32 @@ std::optional<Player> PlayerStore::rowBy(Statement& stmt)
     player.createdAt = stmt.columnInt64(8);
     player.lastSeen = stmt.columnInt64(9);
     player.lastRatedAt = stmt.columnInt64(10);
-    return player;
+}
+
+std::vector<Player> PlayerStore::topPlayers(int limit, int minGames)
+{
+    errorMessage_.clear();
+    std::vector<Player> players;
+    if (limit <= 0)
+        return players;
+    Statement stmt;
+    if (!stmt.prepare(db_.handle(),
+            std::string(SelectColumns)
+            + " WHERE wins + losses + draws >= ? "
+              "ORDER BY rating DESC, name ASC LIMIT ?")
+        || !stmt.bind(1, std::int64_t(minGames))
+        || !stmt.bind(2, std::int64_t(limit))) {
+        errorMessage_ = stmt.errorMessage();
+        return players;
+    }
+    while (stmt.step() == Statement::Step::Ready) {
+        Player player;
+        scanRow(stmt, player);
+        players.push_back(std::move(player));
+    }
+    if (!stmt.errorMessage().empty())
+        errorMessage_ = stmt.errorMessage();
+    return players;
 }
 
 std::optional<RatedUpdate> PlayerStore::applyRatedGame(

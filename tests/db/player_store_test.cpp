@@ -270,5 +270,92 @@ TEST(PlayerStore, IdleGrowthCapsAtThreeFiftyAndHandlesEdges)
     EXPECT_EQ(players.errorMessage(), "player not found");
 }
 
+TEST(PlayerStore, TopPlayersOrdersByRatingThenName)
+{
+    Database db;
+    ASSERT_TRUE(db.open(":memory:"));
+    PlayerStore players(db);
+    const auto alice = players.registerPlayer("Alice", "pw");
+    const auto bob = players.registerPlayer("Bob", "pw");
+    const auto carol = players.registerPlayer("Carol", "pw");
+    const auto dave = players.registerPlayer("Dave", "pw");
+    ASSERT_TRUE(alice && bob && carol && dave);
+
+    // Symmetric setups (both wins are 1500/350 vs 1500/350) leave Alice and
+    // Dave with identical ratings above 1500, Bob and Carol identical below —
+    // so the name tie-break alone decides the row order.
+    ASSERT_TRUE(players.applyRatedGame(
+        alice->id, bob->id, chess::net::GameResult::WhiteWins).has_value());
+    ASSERT_TRUE(players.applyRatedGame(
+        dave->id, carol->id, chess::net::GameResult::WhiteWins).has_value());
+
+    const auto top = players.topPlayers(10);
+    ASSERT_EQ(top.size(), 4u);
+    // Winners: shared rating, alphabetical order.
+    EXPECT_EQ(top[0].name, "Alice");
+    EXPECT_EQ(top[1].name, "Dave");
+    // Losers: shared rating, alphabetical order.
+    EXPECT_EQ(top[2].name, "Bob");
+    EXPECT_EQ(top[3].name, "Carol");
+    EXPECT_DOUBLE_EQ(top[0].rating, players.byName("Dave")->rating); // tied
+    EXPECT_GT(top[0].rating, top[2].rating);
+    EXPECT_EQ(top[0].wins, 1);
+    EXPECT_EQ(top[2].losses, 1);
+}
+
+TEST(PlayerStore, TopPlayersSkipsFreshAccountsButZeroMinGamesShowsAll)
+{
+    Database db;
+    ASSERT_TRUE(db.open(":memory:"));
+    PlayerStore players(db);
+    const auto alice = players.registerPlayer("Unplayed", "pw");
+    ASSERT_TRUE(alice.has_value());
+
+    // Never played a rated game: excluded from the default leaderboard.
+    EXPECT_TRUE(players.topPlayers(10).empty());
+
+    // minGames = 0 (or lower) lists every registered account.
+    const auto all = players.topPlayers(10, 0);
+    ASSERT_EQ(all.size(), 1u);
+    EXPECT_EQ(all[0].name, "Unplayed");
+
+    // minGames = 2 also excludes accounts with exactly one rated game.
+    const auto bob = players.registerPlayer("Bob", "pw");
+    ASSERT_TRUE(bob.has_value());
+    ASSERT_TRUE(players.applyRatedGame(
+        alice->id, bob->id, chess::net::GameResult::WhiteWins).has_value());
+    EXPECT_TRUE(players.topPlayers(10, 2).empty());
+    EXPECT_EQ(players.topPlayers(10, 1).size(), 2u);
+}
+
+TEST(PlayerStore, TopPlayersLimitClampsAndEmptyStore)
+{
+    Database db;
+    ASSERT_TRUE(db.open(":memory:"));
+    PlayerStore players(db);
+
+    // Empty store: no error, empty list.
+    EXPECT_TRUE(players.topPlayers(50).empty());
+    EXPECT_TRUE(players.errorMessage().empty());
+
+    const auto alice = players.registerPlayer("Alice", "pw");
+    const auto bob = players.registerPlayer("Bob", "pw");
+    const auto carol = players.registerPlayer("Carol", "pw");
+    ASSERT_TRUE(alice && bob && carol);
+    ASSERT_TRUE(players.applyRatedGame(
+        alice->id, bob->id, chess::net::GameResult::WhiteWins).has_value());
+    ASSERT_TRUE(players.applyRatedGame(
+        carol->id, bob->id, chess::net::GameResult::WhiteWins).has_value());
+
+    // Alice beats Bob and Dave beats Carol: symmetric games -> Alice/Dave tie
+    // above 1500 (name ASC keeps Alice first), Bob/Carol tie below.
+    EXPECT_EQ(players.topPlayers(2).size(), 2u);
+    const auto single = players.topPlayers(1);
+    ASSERT_EQ(single.size(), 1u);
+    EXPECT_EQ(single[0].name, "Alice");
+    EXPECT_TRUE(players.topPlayers(0).empty());
+    EXPECT_TRUE(players.topPlayers(-3).empty());
+}
+
 } // namespace
 } // namespace chess::db

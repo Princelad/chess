@@ -7,6 +7,8 @@
 #include <chess/db/database.h>
 #include <chess/net/messages.h>
 
+#include <vector>
+
 namespace chess::db {
 
 // A registered account. The rating columns already carry the Glicko-2
@@ -69,10 +71,19 @@ public:
     // RD already sits at the cap.
     std::optional<Player> applyIdleGrowth(std::int64_t playerId, std::int64_t now);
 
+    // Top-N accounts by rating for the leaderboard (10.4). Only accounts that
+    // finished at least minGames rated games are listed — fresh accounts sit
+    // at the factory 1500 ± 350 and would bury real players otherwise.
+    // Ordered by rating descending, name ascending (deterministic tie-break);
+    // limit <= 0 yields an empty list. The single "unlimited" rating class is
+    // served here; per-time-control boards wait for 11.1 clocks.
+    std::vector<Player> topPlayers(int limit, int minGames = 1);
+
     const std::string& errorMessage() const { return errorMessage_; }
 
 private:
     std::optional<Player> rowBy(Statement& stmt);
+    static void scanRow(const Statement& stmt, Player& player);
 
     Database& db_;
     std::string errorMessage_;
