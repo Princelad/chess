@@ -33,6 +33,7 @@ if(BUILD_TESTING)
         db/auth_test.cpp
         db/glicko2_test.cpp
         db/player_store_test.cpp
+        db/rating_class_test.cpp
         db/game_store_test.cpp
         net/protocol_test.cpp
         server/matchmaker_test.cpp
