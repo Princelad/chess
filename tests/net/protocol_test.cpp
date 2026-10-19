@@ -154,6 +154,77 @@ TEST(ProtocolRoundTrip, ClientLogin)
     EXPECT_EQ(m->password, "s3cret");
 }
 
+TEST(ProtocolRoundTrip, ClientArchiveRequest)
+{
+    ClientMessage msg = ArchiveRequestMsg{25, true};
+    sf::Packet p = freshPacket(serializeClient(msg));
+    auto result = deserializeClient(p);
+    ASSERT_TRUE(result.has_value());
+    auto* m = std::get_if<ArchiveRequestMsg>(&*result);
+    ASSERT_NE(m, nullptr);
+    EXPECT_EQ(m->limit, 25);
+    EXPECT_TRUE(m->mineOnly);
+}
+
+TEST(ProtocolRoundTrip, ServerArchiveListEmpty)
+{
+    ServerMessage msg = ArchiveListMsg{};
+    sf::Packet p = freshPacket(serializeServer(msg));
+    auto result = deserializeServer(p);
+    ASSERT_TRUE(result.has_value());
+    auto* m = std::get_if<ArchiveListMsg>(&*result);
+    ASSERT_NE(m, nullptr);
+    EXPECT_TRUE(m->games.empty());
+}
+
+TEST(ProtocolRoundTrip, ServerArchiveListEntries)
+{
+    ArchiveEntryMsg a{7, "Ada", "Bob", static_cast<int>(GameResult::WhiteWins),
+                      1729000000, true};
+    ArchiveEntryMsg b{9, "Eve", "Mallory", static_cast<int>(GameResult::Draw),
+                      1729000500, false};
+    ServerMessage msg = ArchiveListMsg{{a, b}};
+    sf::Packet p = freshPacket(serializeServer(msg));
+    auto result = deserializeServer(p);
+    ASSERT_TRUE(result.has_value());
+    auto* m = std::get_if<ArchiveListMsg>(&*result);
+    ASSERT_NE(m, nullptr);
+    ASSERT_EQ(m->games.size(), 2u);
+    EXPECT_EQ(m->games[0].id, 7);
+    EXPECT_EQ(m->games[0].whiteName, "Ada");
+    EXPECT_EQ(m->games[0].blackName, "Bob");
+    EXPECT_EQ(m->games[0].result, static_cast<int>(GameResult::WhiteWins));
+    EXPECT_EQ(m->games[0].playedAt, 1729000000);
+    EXPECT_TRUE(m->games[0].rated);
+    EXPECT_EQ(m->games[1].id, 9);
+    EXPECT_EQ(m->games[1].result, static_cast<int>(GameResult::Draw));
+    EXPECT_FALSE(m->games[1].rated);
+}
+
+TEST(ProtocolRoundTrip, ServerArchiveGame)
+{
+    ServerMessage msg = ArchiveGameMsg{
+        42, "Ada", "Bob",
+        static_cast<int>(GameResult::BlackWins),
+        static_cast<int>(GameOverReason::Checkmate),
+        "3+2", "", "e4 e5 Nf3 Nc6 Bb5 a6", 1729000100, true};
+    sf::Packet p = freshPacket(serializeServer(msg));
+    auto result = deserializeServer(p);
+    ASSERT_TRUE(result.has_value());
+    auto* m = std::get_if<ArchiveGameMsg>(&*result);
+    ASSERT_NE(m, nullptr);
+    EXPECT_EQ(m->id, 42);
+    EXPECT_EQ(m->whiteName, "Ada");
+    EXPECT_EQ(m->blackName, "Bob");
+    EXPECT_EQ(m->result, static_cast<int>(GameResult::BlackWins));
+    EXPECT_EQ(m->reason, static_cast<int>(GameOverReason::Checkmate));
+    EXPECT_EQ(m->timeControl, "3+2");
+    EXPECT_EQ(m->startFen, "");
+    EXPECT_EQ(m->sanMoves, "e4 e5 Nf3 Nc6 Bb5 a6");
+    EXPECT_EQ(m->playedAt, 1729000100);
+    EXPECT_TRUE(m->rated);
+}
+
 TEST(ProtocolRoundTrip, ServerErrorEmptyMessage)
 {
     ServerMessage msg = ErrorMsg{""};
@@ -443,6 +514,52 @@ TEST(ProtocolGarbage, Version1Rejected)
     EXPECT_FALSE(deserializeServer(p).has_value());
 }
 
+TEST(ProtocolGarbage, ArchiveListCountTooLarge)
+{
+    // Declared entry count beyond the cap must be refused without reading.
+    sf::Packet p;
+    p << static_cast<uint8_t>(ProtocolVersion)
+      << static_cast<uint8_t>(11); // ArchiveList tag
+    p << static_cast<std::int32_t>(1 << 20);
+    EXPECT_FALSE(deserializeServer(p).has_value());
+}
+
+TEST(ProtocolGarbage, ArchiveListNegativeCount)
+{
+    sf::Packet p;
+    p << static_cast<uint8_t>(ProtocolVersion)
+      << static_cast<uint8_t>(11);
+    p << static_cast<std::int32_t>(-1);
+    EXPECT_FALSE(deserializeServer(p).has_value());
+}
+
+TEST(ProtocolGarbage, ArchiveListBadResultValue)
+{
+    sf::Packet p;
+    p << static_cast<uint8_t>(ProtocolVersion)
+      << static_cast<uint8_t>(11);
+    p << static_cast<std::int32_t>(1);
+    p << static_cast<std::int64_t>(1) << std::string("Ada")
+      << std::string("Bob") << static_cast<int>(99)
+      << static_cast<std::int64_t>(0);
+    p << static_cast<uint8_t>(0);
+    EXPECT_FALSE(deserializeServer(p).has_value());
+}
+
+TEST(ProtocolGarbage, ArchiveGameBadReasonValue)
+{
+    sf::Packet p;
+    p << static_cast<uint8_t>(ProtocolVersion)
+      << static_cast<uint8_t>(12); // ArchiveGame tag
+    p << static_cast<std::int64_t>(1) << std::string("Ada")
+      << std::string("Bob") << static_cast<int>(1)
+      << static_cast<int>(77)
+      << std::string("") << std::string("") << std::string("e4 e5")
+      << static_cast<std::int64_t>(0);
+    p << static_cast<uint8_t>(0);
+    EXPECT_FALSE(deserializeServer(p).has_value());
+}
+
 TEST(ProtocolGarbage, InvalidGameOverReasonValue)
 {
     sf::Packet p;
@@ -466,6 +583,7 @@ TEST(ProtocolDebug, ClientMessages)
     EXPECT_FALSE(debugString(ClientMessage{ChatMsg{"hi"}}).empty());
     EXPECT_FALSE(debugString(ClientMessage{PingMsg{}}).empty());
     EXPECT_FALSE(debugString(ClientMessage{LoginMsg{"alice", "topsecret"}}).empty());
+    EXPECT_FALSE(debugString(ClientMessage{ArchiveRequestMsg{50, false}}).empty());
 }
 
 TEST(ProtocolDebug, ServerMessages)
@@ -480,6 +598,10 @@ TEST(ProtocolDebug, ServerMessages)
     EXPECT_FALSE(debugString(ServerMessage{PongMsg{}}).empty());
     EXPECT_FALSE(debugString(ServerMessage{ErrorMsg{"nope"}}).empty());
     EXPECT_FALSE(debugString(ServerMessage{ProfileMsg{"Alice", 1500, 350, false}}).empty());
+    EXPECT_FALSE(debugString(ServerMessage{ArchiveListMsg{}}).empty());
+    EXPECT_FALSE(debugString(ServerMessage{ArchiveGameMsg{
+        1, "Ada", "Bob", static_cast<int>(GameResult::Draw),
+        static_cast<int>(GameOverReason::AgreedDraw), "", "", "e4 e5", 0, false}}).empty());
 }
 
 TEST(ProtocolDebug, LoginMasksPassword)

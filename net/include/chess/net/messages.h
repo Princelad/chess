@@ -1,7 +1,9 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <variant>
+#include <vector>
 
 #include <chess/types.h>
 
@@ -55,6 +57,14 @@ struct LoginMsg {
     std::string password;
 };
 
+// Game-archive request: the latest completed games, optionally restricted to
+// one's own account (mineOnly applies to logged-in players; a guest gets the
+// global list server-side). limit 0 = server default; values above 200 clamp.
+struct ArchiveRequestMsg {
+    int limit = 50;
+    bool mineOnly = false;
+};
+
 using ClientMessage = std::variant<
     JoinMsg,
     MoveMsg,
@@ -64,7 +74,8 @@ using ClientMessage = std::variant<
     ResignMsg,
     ChatMsg,
     PingMsg,
-    LoginMsg
+    LoginMsg,
+    ArchiveRequestMsg
 >;
 
 // ── Server → Client ─────────────────────────────────────────────────────────
@@ -115,6 +126,36 @@ struct ProfileMsg {
     bool isGuest = true;
 };
 
+// One row of the game archive: enough for a list, not the moves themselves.
+struct ArchiveEntryMsg {
+    std::int64_t id = 0;
+    std::string whiteName;
+    std::string blackName;
+    int result = 0;      // chess::net::GameResult, range-checked on read
+    std::int64_t playedAt = 0;
+    bool rated = false;
+};
+
+// The list requested with ArchiveRequestMsg. Entries are ordered newest first.
+struct ArchiveListMsg {
+    std::vector<ArchiveEntryMsg> games;
+};
+
+// A single archived game with everything needed for replay/PGN export
+// (the SAN list is the move source; reconstruction chains san::fromSan).
+struct ArchiveGameMsg {
+    std::int64_t id = 0;
+    std::string whiteName;
+    std::string blackName;
+    int result = 0;         // chess::net::GameResult, range-checked on read
+    int reason = 0;         // chess::net::GameOverReason, range-checked on read
+    std::string timeControl;
+    std::string startFen;
+    std::string sanMoves;
+    std::int64_t playedAt = 0;
+    bool rated = false;
+};
+
 using ServerMessage = std::variant<
     WelcomeMsg,
     OpponentJoinedMsg,
@@ -126,7 +167,9 @@ using ServerMessage = std::variant<
     ServerChatMsg,
     PongMsg,
     ErrorMsg,
-    ProfileMsg
+    ProfileMsg,
+    ArchiveListMsg,
+    ArchiveGameMsg
 >;
 
 } // namespace net

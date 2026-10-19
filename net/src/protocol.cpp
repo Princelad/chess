@@ -1,5 +1,6 @@
 #include <chess/net/protocol.h>
 
+#include <algorithm>
 #include <type_traits>
 
 namespace chess {
@@ -17,6 +18,7 @@ enum class ClientMsgType : uint8_t {
     Chat,
     Ping,
     Login,
+    ArchiveRequest,
 };
 
 enum class ServerMsgType : uint8_t {
@@ -31,7 +33,13 @@ enum class ServerMsgType : uint8_t {
     Pong,
     Error,
     Profile,
+    ArchiveList,
+    ArchiveGame,
 };
+
+// Refuses absurd archive counts on deserialize: a corrupt or hostile packet
+// must not allocate an unbounded vector before any content check.
+constexpr int32_t MaxArchiveEntries = 100;
 
 // Booleans travel as uint8_t 0/1 (never read a non-0/1 byte back).
 bool writeFlag(sf::Packet& packet, bool value)
@@ -104,6 +112,14 @@ bool writeClient(sf::Packet& packet, const LoginMsg& msg)
     return static_cast<bool>(packet);
 }
 
+bool writeClient(sf::Packet& packet, const ArchiveRequestMsg& msg)
+{
+    packet << static_cast<uint8_t>(ClientMsgType::ArchiveRequest)
+           << static_cast<int32_t>(msg.limit);
+    writeFlag(packet, msg.mineOnly);
+    return static_cast<bool>(packet);
+}
+
 bool writeServer(sf::Packet& packet, const WelcomeMsg& msg)
 {
     packet << static_cast<uint8_t>(ServerMsgType::Welcome)
@@ -173,6 +189,37 @@ bool writeServer(sf::Packet& packet, const ProfileMsg& msg)
     packet << static_cast<uint8_t>(ServerMsgType::Profile)
            << msg.name << msg.rating << msg.deviation;
     writeFlag(packet, msg.isGuest);
+    return static_cast<bool>(packet);
+}
+
+bool writeEntry(sf::Packet& packet, const ArchiveEntryMsg& entry)
+{
+    packet << static_cast<int64_t>(entry.id)
+           << entry.whiteName << entry.blackName
+           << entry.result
+           << static_cast<int64_t>(entry.playedAt);
+    writeFlag(packet, entry.rated);
+    return static_cast<bool>(packet);
+}
+
+bool writeServer(sf::Packet& packet, const ArchiveListMsg& msg)
+{
+    packet << static_cast<uint8_t>(ServerMsgType::ArchiveList)
+           << static_cast<int32_t>(msg.games.size());
+    for (const auto& entry : msg.games)
+        writeEntry(packet, entry);
+    return static_cast<bool>(packet);
+}
+
+bool writeServer(sf::Packet& packet, const ArchiveGameMsg& msg)
+{
+    packet << static_cast<uint8_t>(ServerMsgType::ArchiveGame)
+           << static_cast<int64_t>(msg.id)
+           << msg.whiteName << msg.blackName
+           << msg.result << msg.reason
+           << msg.timeControl << msg.startFen << msg.sanMoves
+           << static_cast<int64_t>(msg.playedAt);
+    writeFlag(packet, msg.rated);
     return static_cast<bool>(packet);
 }
 
@@ -305,6 +352,15 @@ std::optional<ClientMessage> deserializeClient(sf::Packet& packet)
             if (!static_cast<bool>(packet)) return std::nullopt;
             return msg;
         }
+        case ClientMsgType::ArchiveRequest: {
+            ArchiveRequestMsg msg;
+            int32_t limit = 0;
+            packet >> limit;
+            if (!static_cast<bool>(packet)) return std::nullopt;
+            if (!readFlag(packet, msg.mineOnly)) return std::nullopt;
+            msg.limit = limit;
+            return msg;
+        }
         default:
             return std::nullopt;
     }
@@ -382,6 +438,36 @@ std::optional<ServerMessage> deserializeServer(sf::Packet& packet)
             if (!readFlag(packet, msg.isGuest)) return std::nullopt;
             return msg;
         }
+        case ServerMsgType::ArchiveList: {
+            ArchiveListMsg msg;
+            int32_t count = 0;
+            packet >> count;
+            if (!static_cast<bool>(packet) || count < 0 || count > MaxArchiveEntries)
+                return std::nullopt;
+            msg.games.reserve(static_cast<std::size_t>(count));
+            for (int32_t i = 0; i < count; ++i) {
+                ArchiveEntryMsg entry;
+                packet >> entry.id >> entry.whiteName >> entry.blackName
+                       >> entry.result >> entry.playedAt;
+                if (!static_cast<bool>(packet)) return std::nullopt;
+                if (!validResult(entry.result)) return std::nullopt;
+                if (!readFlag(packet, entry.rated)) return std::nullopt;
+                msg.games.push_back(std::move(entry));
+            }
+            return msg;
+        }
+        case ServerMsgType::ArchiveGame: {
+            ArchiveGameMsg msg;
+            packet >> msg.id >> msg.whiteName >> msg.blackName
+                   >> msg.result >> msg.reason
+                   >> msg.timeControl >> msg.startFen >> msg.sanMoves
+                   >> msg.playedAt;
+            if (!static_cast<bool>(packet)) return std::nullopt;
+            if (!validResult(msg.result) || !validReason(msg.reason))
+                return std::nullopt;
+            if (!readFlag(packet, msg.rated)) return std::nullopt;
+            return msg;
+        }
         default:
             return std::nullopt;
     }
@@ -410,6 +496,9 @@ std::string debugString(const ClientMessage& msg)
         else if constexpr (std::is_same_v<T, LoginMsg>)
             // Never log the password itself.
             return "Login{name=\"" + escape(m.name) + "\", password=***}";
+        else if constexpr (std::is_same_v<T, ArchiveRequestMsg>)
+            return "ArchiveRequest{limit=" + std::to_string(m.limit)
+                + (m.mineOnly ? ", mine}" : ", all}");
     }, msg);
 }
 
@@ -441,6 +530,15 @@ std::string debugString(const ServerMessage& msg)
             return "Profile{name=\"" + escape(m.name) + "\", rating="
                 + std::to_string(m.rating) + ", deviation=" + std::to_string(m.deviation)
                 + (m.isGuest ? ", guest}" : ", registered}");
+        else if constexpr (std::is_same_v<T, ArchiveListMsg>)
+            return "ArchiveList{games=" + std::to_string(m.games.size()) + "}";
+        else if constexpr (std::is_same_v<T, ArchiveGameMsg>)
+            return "ArchiveGame{id=" + std::to_string(m.id) + ", White=\""
+                + escape(m.whiteName) + "\", Black=\"" + escape(m.blackName)
+                + "\", " + std::string(resultStr(static_cast<GameResult>(m.result)))
+                + ", " + std::string(reasonStr(static_cast<GameOverReason>(m.reason)))
+                + ", plies=" + std::to_string(m.sanMoves.empty()
+                    ? 0 : std::count(m.sanMoves.begin(), m.sanMoves.end(), ' ') + 1) + "}";
     }, msg);
 }
 
