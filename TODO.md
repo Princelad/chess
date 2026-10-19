@@ -615,10 +615,10 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [ ] Rating classes by time control once 11.1 clocks land (single class until then)
   - [x] Extend profile messages with rating; update atomically on GAME_OVER (protocol v2: `LoginMsg`/`ProfileMsg` + rated `WelcomeMsg`; one transaction covers both players incl. W/L/D counters; aborted results are never rated; clients receive re-sent profiles)
 
-- [ ] **10.3 Game archive**
-  - [ ] Persist every completed game (players, TC, SAN moves, result, date)
-  - [ ] PGN generation from archive (reuses the 8.4 PGN writer)
-  - [ ] Client "my games" list screen; open → replay viewer (reuses 9.3 navigator)
+- [x] **10.3 Game archive**
+  - [x] Persist every completed game (players, TC, SAN moves, result, date) (`Match::sanHistory_` + game-over hook; any game with ≥1 move, guests keep NULL id columns)
+  - [x] PGN generation from archive (reuses the 8.4 PGN writer) (`client/src/archive_pgn.h` → toPgn; Copy PGN via clipboard)
+  - [x] Client "my games" list screen; open → replay viewer (reuses 9.3 navigator) (`HistoryScreen` over `Archive{Request,Get/List,Game}` messages; mine filter for logged-in accounts; `AnalysisScreen` as viewer)
 
 - [ ] **10.4 Leaderboard**
   - [ ] Server top-N query by rating
