@@ -179,5 +179,96 @@ TEST(PlayerStore, AbortedResultIsNeverRated)
     EXPECT_DOUBLE_EQ(players.byName("Bob")->rating, 1500.0);
 }
 
+TEST(PlayerStore, RatedGameStampsLastRatedAt)
+{
+    Database db;
+    ASSERT_TRUE(db.open(":memory:"));
+    PlayerStore players(db);
+    const auto white = players.registerPlayer("Ada", "pw");
+    const auto black = players.registerPlayer("Bob", "pw");
+    ASSERT_TRUE(white && black);
+
+    EXPECT_EQ(white->lastRatedAt, 0); // idle growth no-ops for fresh accounts
+    const auto update = players.applyRatedGame(
+        white->id, black->id, chess::net::GameResult::WhiteWins);
+    ASSERT_TRUE(update.has_value());
+    const auto now = nowSeconds();
+    EXPECT_LE(update->white.lastRatedAt, now);
+    EXPECT_GE(update->white.lastRatedAt, now - 5);
+    EXPECT_EQ(players.byId(white->id)->lastRatedAt, update->white.lastRatedAt);
+}
+
+TEST(PlayerStore, IdleGrowthGrowsDeviationOnly)
+{
+    Database db;
+    ASSERT_TRUE(db.open(":memory:"));
+    PlayerStore players(db);
+    const auto white = players.registerPlayer("Ada", "pw");
+    const auto black = players.registerPlayer("Bob", "pw");
+    ASSERT_TRUE(white && black);
+
+    const auto update = players.applyRatedGame(
+        white->id, black->id, chess::net::GameResult::WhiteWins);
+    ASSERT_TRUE(update.has_value());
+    const double ratedRd = update->white.ratingDeviation;
+    ASSERT_LT(ratedRd, 350.0); // one rated period moved RD off the cap
+
+    // Wind the clock back 30 days and grow again on "arrival".
+    const int64_t goneBack = update->white.lastRatedAt - 30 * 86400;
+    EXPECT_TRUE(db.exec("UPDATE players SET last_rated_at = "
+        + std::to_string(goneBack) + " WHERE id = "
+        + std::to_string(white->id)));
+    const auto now = static_cast<std::int64_t>(update->white.lastRatedAt) + 300;
+
+    const auto fresh = players.applyIdleGrowth(white->id, now);
+    ASSERT_TRUE(fresh.has_value());
+    EXPECT_GT(fresh->ratingDeviation, ratedRd);   // uncertainty grew
+    EXPECT_EQ(fresh->rating, update->white.rating); // rating untouched
+    EXPECT_EQ(fresh->volatility, update->white.volatility);
+    EXPECT_LT(fresh->ratingDeviation, 350.0);     // 30 steps from ratedRd
+
+    // Persistence: the store itself now serves the grown row.
+    EXPECT_DOUBLE_EQ(players.byId(white->id)->ratingDeviation,
+                     fresh->ratingDeviation);
+}
+
+TEST(PlayerStore, IdleGrowthCapsAtThreeFiftyAndHandlesEdges)
+{
+    Database db;
+    ASSERT_TRUE(db.open(":memory:"));
+    PlayerStore players(db);
+    const auto white = players.registerPlayer("Ada", "pw");
+    const auto black = players.registerPlayer("Bob", "pw");
+    ASSERT_TRUE(white && black);
+
+    // Never rated: growth is a no-op regardless of elapsed time.
+    const auto now = nowSeconds();
+    auto fresh = players.applyIdleGrowth(white->id, now + 1000 * 86400);
+    ASSERT_TRUE(fresh.has_value());
+    EXPECT_EQ(fresh->lastRatedAt, 0);
+    EXPECT_DOUBLE_EQ(fresh->ratingDeviation, 350.0);
+
+    // Rated once, long idle: RD caps at 350 (never overshoots).
+    const auto rated = players.applyRatedGame(
+        white->id, black->id, chess::net::GameResult::WhiteWins);
+    ASSERT_TRUE(rated.has_value());
+    const auto ancient = rated->white.lastRatedAt - 5000 * 86400;
+    EXPECT_TRUE(db.exec("UPDATE players SET last_rated_at = "
+        + std::to_string(ancient) + " WHERE id = " + std::to_string(white->id)));
+    fresh = players.applyIdleGrowth(white->id, now);
+    ASSERT_TRUE(fresh.has_value());
+    EXPECT_DOUBLE_EQ(fresh->ratingDeviation, 350.0);
+
+    // Sub-period elapsed (less than a full day): untouched.
+    EXPECT_TRUE(players.applyIdleGrowth(
+        rated->black.id, rated->black.lastRatedAt + 3600).has_value());
+    EXPECT_DOUBLE_EQ(players.byId(rated->black.id)->ratingDeviation,
+                     rated->black.ratingDeviation);
+
+    // Unknown id reports failure.
+    EXPECT_FALSE(players.applyIdleGrowth(424242, now).has_value());
+    EXPECT_EQ(players.errorMessage(), "player not found");
+}
+
 } // namespace
 } // namespace chess::db

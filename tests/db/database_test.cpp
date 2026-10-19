@@ -1,4 +1,5 @@
 #include <chess/db/database.h>
+#include <chess/db/player_store.h>
 
 #include <filesystem>
 #include <random>
@@ -118,7 +119,46 @@ TEST(Database, SchemaVersionStamp)
     Statement stmt;
     ASSERT_TRUE(stmt.prepare(db.handle(), "PRAGMA user_version"));
     ASSERT_EQ(stmt.step(), Statement::Step::Ready);
-    EXPECT_EQ(stmt.columnInt(0), 1);
+    EXPECT_EQ(stmt.columnInt(0), 2);
+}
+
+TEST(Database, MigrationAddsLastRatedColumn)
+{
+    // Simulate a revision-1 database (pre-10.2 layout), then reopen: the
+    // migration must add the column without touching existing rows.
+    const auto path = tempPath("migrate");
+    {
+        Database db;
+        ASSERT_TRUE(db.open(path.string()));
+        PlayerStore players(db);
+        ASSERT_TRUE(players.registerPlayer("Ada", "pw").has_value());
+    }
+    // Revision-1 shape: rebuild the players table without last_rated_at and
+    // downgrade the stamp so the next open() re-runs the migration.
+    {
+        Database db;
+        ASSERT_TRUE(db.open(path.string()));
+        ASSERT_TRUE(db.exec("CREATE TABLE players_old AS SELECT id, name, "
+            "password_hash, rating, rating_deviation, volatility, wins, "
+            "losses, draws, created_at, last_seen FROM players"));
+        ASSERT_TRUE(db.exec("DROP TABLE players"));
+        ASSERT_TRUE(db.exec("ALTER TABLE players_old RENAME TO players"));
+        ASSERT_TRUE(db.exec("PRAGMA user_version = 1"));
+    }
+    {
+        Database db;
+        ASSERT_TRUE(db.open(path.string()));
+        Statement stmt;
+        ASSERT_TRUE(stmt.prepare(db.handle(), "PRAGMA user_version"));
+        ASSERT_EQ(stmt.step(), Statement::Step::Ready);
+        EXPECT_EQ(stmt.columnInt(0), 2);
+
+        PlayerStore players(db);
+        const auto ada = players.byName("Ada");
+        ASSERT_TRUE(ada.has_value());
+        EXPECT_EQ(ada->lastRatedAt, 0); // revision-1 rows start un-rated
+    }
+    std::filesystem::remove(path);
 }
 
 } // namespace

@@ -5,11 +5,12 @@
 namespace chess::db {
 namespace {
 
-// Schema revision 1 (phase 10.1): accounts and completed games. The rating
-// columns carry the Glicko-2 defaults from the start; phase 10.2 will write
-// them, and time_control/start_fen stay empty until 11.1 clocks / 12.1
-// variants exist. Bump SchemaVersion and migrate when the layout changes.
-constexpr int SchemaVersion = 1;
+// Schema revision 2 (phase 10.2): accounts and completed games, with
+// last_rated_at for idle-period deviation growth. Players created before
+// revision 2 get the column added by the migration below (default 0 =
+// never rated). Bump SchemaVersion and extend the migration chain when the
+// layout changes.
+constexpr int SchemaVersion = 2;
 
 const char* SchemaSql =
     "CREATE TABLE IF NOT EXISTS players (\n"
@@ -215,15 +216,33 @@ bool Database::open(const std::string& path)
         return false;
     }
 
-    if (readUserVersion() == 0 && !writeUserVersion(SchemaVersion)) {
+    // Migration chain: revision 1 databases (existing user files) gain the
+    // last_rated_at column via ALTER; fresh databases just get stamped.
+    const int version = readUserVersion();
+    if (version > SchemaVersion) {
+        errorMessage_ = "database schema revision " + std::to_string(version)
+            + " is newer than this build";
+        close();
+        return false;
+    }
+    if (version < 2) {
+        if (!exec("ALTER TABLE players ADD COLUMN "
+                  "last_rated_at INTEGER NOT NULL DEFAULT 0")) {
+            std::string message = errorMessage_;
+            close();
+            errorMessage_ = message;
+            return false;
+        }
+    }
+
+    if (!writeUserVersion(SchemaVersion)) {
         std::string message = errorMessage_;
         close();
         errorMessage_ = message;
         return false;
     }
 
-    return true;
-}
+    return true;}
 
 void Database::close()
 {

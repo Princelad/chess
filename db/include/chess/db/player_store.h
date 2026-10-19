@@ -23,6 +23,9 @@ struct Player {
     int draws = 0;
     std::int64_t createdAt = 0;
     std::int64_t lastSeen = 0;
+    // Unix time of the last rated game (0 = never rated), feeding idle-period
+    // deviation growth on the next login.
+    std::int64_t lastRatedAt = 0;
 };
 
 // Post-update snapshots of the two participants of a rated game.
@@ -57,6 +60,14 @@ public:
     // result is not rated or a player id does not exist.
     std::optional<RatedUpdate> applyRatedGame(
         std::int64_t whiteId, std::int64_t blackId, chess::net::GameResult result);
+
+    // Applies Glicko-2 idle-period deviation growth (10.2): one growth step
+    // per full rating period (day) since last_rated_at, capped at 100 periods
+    // and an RD of 350. Rating and volatility are untouched. Returns the
+    // fresh row (whether or not anything grew); std::nullopt when the id is
+    // unknown or a statement fails. Players never rated grow nothing — their
+    // RD already sits at the cap.
+    std::optional<Player> applyIdleGrowth(std::int64_t playerId, std::int64_t now);
 
     const std::string& errorMessage() const { return errorMessage_; }
 

@@ -9,7 +9,15 @@ namespace {
 
 constexpr const char* SelectColumns =
     "SELECT id, name, rating, rating_deviation, volatility, "
-    "wins, losses, draws, created_at, last_seen FROM players";
+    "wins, losses, draws, created_at, last_seen, last_rated_at FROM players";
+
+// One idle rating period = one day (Glicko-2 periods are arbitrary; daily is
+// the usual server convention). Glickman's no-game period grows RD by
+// sqrt(φ² + σ²) each period ≈ 0.07 RD points with σ = 0.06, so a very long
+// absence is the honest way back to the 350 cap: allow ~13 years of idle
+// periods per login pass, with an early exit at the cap.
+constexpr std::int64_t RatingPeriodSec = 86400;
+constexpr int MaxIdlePeriods = 5000;
 
 } // namespace
 
@@ -140,6 +148,7 @@ std::optional<Player> PlayerStore::rowBy(Statement& stmt)
     player.draws = stmt.columnInt(7);
     player.createdAt = stmt.columnInt64(8);
     player.lastSeen = stmt.columnInt64(9);
+    player.lastRatedAt = stmt.columnInt64(10);
     return player;
 }
 
@@ -187,10 +196,12 @@ std::optional<RatedUpdate> PlayerStore::applyRatedGame(
     Statement stmt;
     if (!stmt.prepare(db_.handle(),
             "UPDATE players SET rating = ?, rating_deviation = ?, "
-            "volatility = ?, wins = ?, losses = ?, draws = ? WHERE id = ?")) {
+            "volatility = ?, wins = ?, losses = ?, draws = ?, "
+            "last_rated_at = ? WHERE id = ?")) {
         errorMessage_ = stmt.errorMessage();
         return std::nullopt;
     }
+    const std::int64_t now = nowSeconds();
     for (Player* updated : {&*white, &*black}) {
         const bool whiteSide = updated->id == white->id;
         const double score = whiteSide ? whiteScore : 1.0 - whiteScore;
@@ -204,7 +215,8 @@ std::optional<RatedUpdate> PlayerStore::applyRatedGame(
             || !stmt.bind(3, glicko.volatility) || !stmt.bind(4, std::int64_t(wins))
             || !stmt.bind(5, std::int64_t(losses))
             || !stmt.bind(6, std::int64_t(draws))
-            || !stmt.bind(7, updated->id)
+            || !stmt.bind(7, now)
+            || !stmt.bind(8, updated->id)
             || stmt.step() != Statement::Step::Done) {
             errorMessage_ = stmt.errorMessage();
             return std::nullopt;
@@ -215,6 +227,7 @@ std::optional<RatedUpdate> PlayerStore::applyRatedGame(
         updated->wins = wins;
         updated->losses = losses;
         updated->draws = draws;
+        updated->lastRatedAt = now;
     }
 
     if (!tx.commit()) {
@@ -222,6 +235,57 @@ std::optional<RatedUpdate> PlayerStore::applyRatedGame(
         return std::nullopt;
     }
     return RatedUpdate {*white, *black};
+}
+
+std::optional<Player> PlayerStore::applyIdleGrowth(
+    std::int64_t playerId, std::int64_t now)
+{
+    errorMessage_.clear();
+    auto player = byId(playerId);
+    if (!player.has_value()) {
+        errorMessage_ = "player not found";
+        return std::nullopt;
+    }
+
+    // Never-rated players already sit at the RD cap: growth is a no-op, not
+    // an error (their "last period" is undefined until a first rated game).
+    if (player->lastRatedAt <= 0)
+        return player;
+
+    std::int64_t elapsed = now - player->lastRatedAt;
+    if (elapsed <= 0)
+        return player;
+
+    int periods = static_cast<int>(elapsed / RatingPeriodSec);
+    if (periods <= 0)
+        return player;
+    if (periods > MaxIdlePeriods)
+        periods = MaxIdlePeriods;
+
+    Glicko2 glicko {player->rating, player->ratingDeviation, player->volatility};
+    const double before = glicko.deviation;
+    // Every idle step already converges to the 350 cap; the break keeps an
+    // idle decade from spinning 100 pointless iterations.
+    for (int i = 0; i < periods && glicko.deviation < 350.0; ++i)
+        glicko = applyGames(glicko, {});
+    if (glicko.deviation == before)
+        return player;
+
+    Statement stmt;
+    if (!stmt.prepare(db_.handle(),
+            "UPDATE players SET rating = ?, rating_deviation = ?, "
+            "volatility = ? WHERE id = ?")
+        || !stmt.bind(1, glicko.rating) || !stmt.bind(2, glicko.deviation)
+        || !stmt.bind(3, glicko.volatility) || !stmt.bind(4, playerId)
+        || stmt.step() != Statement::Step::Done) {
+        errorMessage_ = stmt.errorMessage();
+        return std::nullopt;
+    }
+
+    player->rating = glicko.rating;
+    player->ratingDeviation = glicko.deviation;
+    player->volatility = glicko.volatility;
+    return player;
 }
 
 } // namespace chess::db
