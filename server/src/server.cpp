@@ -138,6 +138,26 @@ static std::vector<chess::net::ArchiveEntryMsg> toArchiveEntries(
     return entries;
 }
 
+// Leaderboard rows → wire entries (10.4): name, rating and the rated-game
+// counters; rank is the entry's position in the list.
+static std::vector<chess::net::LeaderboardEntryMsg> toLeaderboardEntries(
+    const std::vector<chess::db::Player>& players)
+{
+    std::vector<chess::net::LeaderboardEntryMsg> entries;
+    entries.reserve(players.size());
+    for (const auto& player : players) {
+        chess::net::LeaderboardEntryMsg entry;
+        entry.name = player.name;
+        entry.rating = player.rating;
+        entry.deviation = player.ratingDeviation;
+        entry.wins = player.wins;
+        entry.losses = player.losses;
+        entry.draws = player.draws;
+        entries.push_back(std::move(entry));
+    }
+    return entries;
+}
+
 unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdownFlag,
                          unsigned short* boundPortOut){
     auto ipOpt = sf::IpAddress::fromString(config.host);
@@ -333,11 +353,16 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
                         LOG_INFO("Received: " + chess::net::debugString(*msg));
 
                         // Archive browsing is answered in every state (it
-                        // never disturbs queues or running matches).
+                        // never disturbs queues or running matches). Same
+                        // for the leaderboard (10.4), another read-only
+                        // store query answered from any connection state.
                         if (auto* archiveReq =
                                 std::get_if<chess::net::ArchiveRequestMsg>(&*msg)) {
                             constexpr int DefaultArchiveLimit = 50;
-                            constexpr int MaxArchiveLimit = 200;
+                            // Matches the MaxArchiveEntries wire guard: a
+                            // larger clamp would make the server send lists
+                            // the client deserializer rejects as hostile.
+                            constexpr int MaxArchiveLimit = 100;
                             int limit = archiveReq->limit <= 0
                                 ? DefaultArchiveLimit : archiveReq->limit;
                             limit = std::min(limit, MaxArchiveLimit);
@@ -350,6 +375,23 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
                                     list.games = toArchiveEntries(games->latest(limit));
                             }
                             sendTo(client, list);
+                        }
+                        else if (auto* leaderboardReq = std::get_if<
+                                     chess::net::LeaderboardRequestMsg>(&*msg)) {
+                            constexpr int DefaultLeaderboardLimit = 50;
+                            constexpr int MaxLeaderboardLimit = 100;
+                            int limit = leaderboardReq->limit <= 0
+                                ? DefaultLeaderboardLimit : leaderboardReq->limit;
+                            limit = std::min(limit, MaxLeaderboardLimit);
+                            if (players == nullptr)
+                                sendTo(client, chess::net::ErrorMsg{
+                                    "This server has no leaderboard"});
+                            else {
+                                chess::net::LeaderboardListMsg list;
+                                list.players =
+                                    toLeaderboardEntries(players->topPlayers(limit));
+                                sendTo(client, list);
+                            }
                         }
                         else if (auto* archiveGet =
                                 std::get_if<chess::net::ArchiveGetMsg>(&*msg)) {

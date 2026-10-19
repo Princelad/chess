@@ -624,3 +624,22 @@ TEST_F(E2eTest, ReconnectAfterDisconnect)
         }));
     }
 }
+
+// ── Leaderboard on a server without a database ──────────────────────────────
+
+TEST_F(E2eTest, LeaderboardWithoutDbIsAnError)
+{
+    sf::TcpSocket sock = connectClient();
+    sendMsg(sock, chess::net::LeaderboardRequestMsg{10});
+
+    bool gotError = false;
+    ASSERT_TRUE(pollUntil([&]() {
+        if (gotError) return true;
+        auto m = tryRecv(sock);
+        if (m && std::get_if<chess::net::ErrorMsg>(&*m)) {
+            gotError = true;
+            return true;
+        }
+        return false;
+    }));
+}

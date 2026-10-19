@@ -327,4 +327,98 @@ TEST_F(RatedE2eTest, ArchivePersistsAndServesCompletedGames)
     EXPECT_EQ(bobList->games[0].blackName, "Bob");
 }
 
+TEST_F(RatedE2eTest, LeaderboardListsRatedAccountsInAnyState)
+{
+    // Fool's mate won by black: Ada (black) beats Bob (white).
+    auto white = connectClient();
+    auto black = connectClient();
+    sendMsg(white, chess::net::LoginMsg{"Bob", "pw"});
+    sendMsg(black, chess::net::LoginMsg{"Ada", "pw"});
+    ASSERT_TRUE(await<chess::net::ProfileMsg>(white).has_value());
+    ASSERT_TRUE(await<chess::net::ProfileMsg>(black).has_value());
+    sendMsg(white, chess::net::JoinMsg{"Ada"});
+    sendMsg(black, chess::net::JoinMsg{"Bob"});
+    ASSERT_TRUE(await<chess::net::WelcomeMsg>(white).has_value());
+    ASSERT_TRUE(await<chess::net::WelcomeMsg>(black).has_value());
+    ASSERT_TRUE(playMove(white, "f3"));
+    ASSERT_TRUE(playMove(black, "e5"));
+    ASSERT_TRUE(playMove(white, "g4"));
+    ASSERT_TRUE(playMove(black, "Qh4#"));
+    ASSERT_TRUE(await<chess::net::GameOverMsg>(white).has_value());
+    ASSERT_TRUE(await<chess::net::GameOverMsg>(black).has_value());
+
+    // A fresh connection in the pre-login Connected state gets the board —
+    // the handler answers in any connection state. Ada (winner) first.
+    auto observer = connectClient();
+    sendMsg(observer, chess::net::LeaderboardRequestMsg{10});
+    auto list = await<chess::net::LeaderboardListMsg>(observer);
+    ASSERT_TRUE(list.has_value());
+    ASSERT_EQ(list->players.size(), 2u);
+    EXPECT_EQ(list->players[0].name, "Ada");
+    EXPECT_GT(list->players[0].rating, 1500.0);
+    EXPECT_EQ(list->players[0].wins, 1);
+    EXPECT_EQ(list->players[0].losses, 0);
+    EXPECT_EQ(list->players[1].name, "Bob");
+    EXPECT_LT(list->players[1].rating, 1500.0);
+    EXPECT_EQ(list->players[1].losses, 1);
+
+    // Queued players get the answer too (the request never disturbs the
+    // queue): a guest join then a leaderboard request.
+    auto queued = connectClient();
+    sendMsg(queued, chess::net::JoinMsg{"IdleGuest"});
+    sendMsg(queued, chess::net::LeaderboardRequestMsg{10});
+    auto queuedList = await<chess::net::LeaderboardListMsg>(queued);
+    ASSERT_TRUE(queuedList.has_value());
+    EXPECT_EQ(queuedList->players.size(), 2u);
+
+    // Limit 0 falls back to a real answer (server default), not an error.
+    sendMsg(observer, chess::net::LeaderboardRequestMsg{0});
+    auto defaulted = await<chess::net::LeaderboardListMsg>(observer);
+    ASSERT_TRUE(defaulted.has_value());
+    EXPECT_EQ(defaulted->players.size(), 2u);
+}
+
+TEST_F(RatedE2eTest, LeaderboardHidesGuestOnlySourcesAndFreshAccounts)
+{
+    // No rated games yet: even with accounts registered, the leaderboard is
+    // empty (fresh factory rows never rank).
+    auto first = connectClient();
+    sendMsg(first, chess::net::LoginMsg{"Ada", "pw"});
+    ASSERT_TRUE(await<chess::net::ProfileMsg>(first).has_value());
+    sendMsg(first, chess::net::LeaderboardRequestMsg{10});
+    auto empty = await<chess::net::LeaderboardListMsg>(first);
+    ASSERT_TRUE(empty.has_value());
+    EXPECT_TRUE(empty->players.empty());
+}
+
+TEST_F(RatedE2eTest, ArchiveRequestBeyondClampStillDeserializes)
+{
+    // The archive server clamp (100) must match the ListMsg wire guard so an
+    // over-large request never produces a list the client rejects. One rated
+    // game feeds the archive: 1. f3 e5, then white resigns.
+    auto white = connectClient();
+    auto black = connectClient();
+    sendMsg(white, chess::net::LoginMsg{"Ada", "pw"});
+    sendMsg(black, chess::net::LoginMsg{"Bob", "pw"});
+    ASSERT_TRUE(await<chess::net::ProfileMsg>(white).has_value());
+    ASSERT_TRUE(await<chess::net::ProfileMsg>(black).has_value());
+    sendMsg(white, chess::net::JoinMsg{"Ada"});
+    sendMsg(black, chess::net::JoinMsg{"Bob"});
+    ASSERT_TRUE(await<chess::net::WelcomeMsg>(white).has_value());
+    ASSERT_TRUE(await<chess::net::WelcomeMsg>(black).has_value());
+    ASSERT_TRUE(playMove(white, "f3"));
+    ASSERT_TRUE(playMove(black, "e5"));
+    sendMsg(white, chess::net::ResignMsg{});
+    ASSERT_TRUE(await<chess::net::GameOverMsg>(white).has_value());
+    ASSERT_TRUE(await<chess::net::GameOverMsg>(black).has_value());
+
+    auto observer = connectClient();
+    sendMsg(observer, chess::net::ArchiveRequestMsg{500, false});
+    auto list = await<chess::net::ArchiveListMsg>(observer);
+    ASSERT_TRUE(list.has_value());
+    ASSERT_EQ(list->games.size(), 1u);
+    EXPECT_EQ(list->games[0].whiteName, "Ada");
+    EXPECT_TRUE(list->games[0].rated);
+}
+
 } // namespace
