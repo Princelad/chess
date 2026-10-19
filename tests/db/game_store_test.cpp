@@ -119,6 +119,47 @@ TEST(GameStore, LatestOrdersNewestFirst)
     std::filesystem::remove(path);
 }
 
+TEST(GameStore, LatestForPlayerFiltersBothColors)
+{
+    const auto path = tempPath("forplayer");
+    {
+        Database db;
+        ASSERT_TRUE(db.open(path.string()));
+        PlayerStore players(db);
+        auto ada = players.registerPlayer("Ada", "pw");
+        auto bob = players.registerPlayer("Bob", "pw");
+        ASSERT_TRUE(ada && bob);
+
+        GameStore games(db);
+        auto asWhite = makeGame("Ada", "Bob");
+        asWhite.whiteId = ada->id;
+        asWhite.blackId = bob->id;
+        auto asBlack = makeGame("Bob", "Ada");
+        asBlack.whiteId = bob->id;
+        asBlack.blackId = ada->id;
+        auto other = makeGame("Eve", "Mallory");
+        ASSERT_TRUE(games.insert(other).has_value());
+        ASSERT_TRUE(games.insert(asWhite).has_value());
+        ASSERT_TRUE(games.insert(asBlack).has_value());
+    }
+    Database db;
+    ASSERT_TRUE(db.open(path.string()));
+    PlayerStore players(db);
+    GameStore games(db);
+    const auto ada = players.byName("ada");
+    ASSERT_TRUE(ada.has_value());
+
+    auto hers = games.latestForPlayer(ada->id, 10);
+    ASSERT_EQ(hers.size(), 2u);
+    // Newest first: the game where she played black is stored later.
+    EXPECT_EQ(hers[0].whiteName, "Bob");
+    EXPECT_EQ(hers[1].whiteName, "Ada");
+
+    EXPECT_TRUE(games.latestForPlayer(424242, 10).empty());
+    EXPECT_TRUE(games.latestForPlayer(ada->id, 0).empty());
+    std::filesystem::remove(path);
+}
+
 TEST(GameStore, MissingRowsReportedCleanly)
 {
     Database db;

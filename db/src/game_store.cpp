@@ -91,6 +91,31 @@ std::vector<Game> GameStore::latest(int limit)
     return games;
 }
 
+std::vector<Game> GameStore::latestForPlayer(std::int64_t playerId, int limit)
+{
+    errorMessage_.clear();
+    std::vector<Game> games;
+    if (playerId <= 0 || limit <= 0)
+        return games;
+    Statement stmt;
+    if (!stmt.prepare(db_.handle(),
+            std::string(SelectColumns)
+            + " WHERE white_id = ? OR black_id = ? ORDER BY id DESC LIMIT ?")
+        || !stmt.bind(1, playerId) || !stmt.bind(2, playerId)
+        || !stmt.bind(3, std::int64_t(limit))) {
+        errorMessage_ = stmt.errorMessage();
+        return games;
+    }
+    while (stmt.step() == Statement::Step::Ready) {
+        Game game;
+        scanRow(stmt, game);
+        games.push_back(std::move(game));
+    }
+    if (!stmt.errorMessage().empty())
+        errorMessage_ = stmt.errorMessage();
+    return games;
+}
+
 void GameStore::scanRow(const Statement& stmt, Game& game)
 {
     game.id = stmt.columnInt64(0);

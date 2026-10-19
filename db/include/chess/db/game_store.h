@@ -41,6 +41,10 @@ public:
     // The limit most recently completed games, newest first.
     std::vector<Game> latest(int limit);
 
+    // latest(), restricted to games played by one account (as white or
+    // black). Guests have no id and thus no per-player view.
+    std::vector<Game> latestForPlayer(std::int64_t playerId, int limit);
+
     const std::string& errorMessage() const { return errorMessage_; }
 
 private:

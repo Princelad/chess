@@ -39,6 +39,8 @@ const char* SchemaSql =
     "    played_at INTEGER NOT NULL\n"
     ");\n"
     "CREATE INDEX IF NOT EXISTS idx_games_played_at ON games (played_at);\n"
+    "CREATE INDEX IF NOT EXISTS idx_games_white ON games (white_id);\n"
+    "CREATE INDEX IF NOT EXISTS idx_games_black ON games (black_id);\n"
     "CREATE INDEX IF NOT EXISTS idx_players_rating ON players (rating);\n";
 
 } // namespace
