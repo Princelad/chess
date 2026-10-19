@@ -186,6 +186,28 @@ TEST(ProtocolGarbage, ClientArchiveGetNegativeId)
     EXPECT_FALSE(deserializeClient(p).has_value());
 }
 
+TEST(ProtocolRoundTrip, ClientLeaderboardRequest)
+{
+    ClientMessage msg = LeaderboardRequestMsg{25};
+    sf::Packet p = freshPacket(serializeClient(msg));
+    auto result = deserializeClient(p);
+    ASSERT_TRUE(result.has_value());
+    auto* m = std::get_if<LeaderboardRequestMsg>(&*result);
+    ASSERT_NE(m, nullptr);
+    EXPECT_EQ(m->limit, 25);
+}
+
+TEST(ProtocolRoundTrip, ClientLeaderboardRequestDefault)
+{
+    ClientMessage msg = LeaderboardRequestMsg{};
+    sf::Packet p = freshPacket(serializeClient(msg));
+    auto result = deserializeClient(p);
+    ASSERT_TRUE(result.has_value());
+    auto* m = std::get_if<LeaderboardRequestMsg>(&*result);
+    ASSERT_NE(m, nullptr);
+    EXPECT_EQ(m->limit, 50);
+}
+
 TEST(ProtocolRoundTrip, ServerArchiveListEmpty)
 {
     ServerMessage msg = ArchiveListMsg{};
@@ -395,6 +417,81 @@ TEST(ProtocolRoundTrip, ServerProfile)
     EXPECT_FALSE(m->isGuest);
 }
 
+TEST(ProtocolRoundTrip, ServerLeaderboardListEmpty)
+{
+    ServerMessage msg = LeaderboardListMsg{};
+    sf::Packet p = freshPacket(serializeServer(msg));
+    auto result = deserializeServer(p);
+    ASSERT_TRUE(result.has_value());
+    auto* m = std::get_if<LeaderboardListMsg>(&*result);
+    ASSERT_NE(m, nullptr);
+    EXPECT_TRUE(m->players.empty());
+}
+
+TEST(ProtocolRoundTrip, ServerLeaderboardListEntries)
+{
+    LeaderboardEntryMsg a{"Ada", 1731.5, 82.25, 12, 3, 2};
+    LeaderboardEntryMsg b{"Bob", 1213.0, 154.75, 1, 9, 0};
+    ServerMessage msg = LeaderboardListMsg{{a, b}};
+    sf::Packet p = freshPacket(serializeServer(msg));
+    auto result = deserializeServer(p);
+    ASSERT_TRUE(result.has_value());
+    auto* m = std::get_if<LeaderboardListMsg>(&*result);
+    ASSERT_NE(m, nullptr);
+    ASSERT_EQ(m->players.size(), 2u);
+    EXPECT_EQ(m->players[0].name, "Ada");
+    EXPECT_DOUBLE_EQ(m->players[0].rating, 1731.5);
+    EXPECT_DOUBLE_EQ(m->players[0].deviation, 82.25);
+    EXPECT_EQ(m->players[0].wins, 12);
+    EXPECT_EQ(m->players[0].losses, 3);
+    EXPECT_EQ(m->players[0].draws, 2);
+    EXPECT_EQ(m->players[1].name, "Bob");
+    EXPECT_DOUBLE_EQ(m->players[1].rating, 1213.0);
+    EXPECT_EQ(m->players[1].losses, 9);
+}
+
+TEST(ProtocolGarbage, LeaderboardListCountTooLarge)
+{
+    sf::Packet p;
+    p << static_cast<uint8_t>(ProtocolVersion)
+      << static_cast<uint8_t>(13); // LeaderboardList tag
+    p << static_cast<std::int32_t>(1 << 20);
+    EXPECT_FALSE(deserializeServer(p).has_value());
+}
+
+TEST(ProtocolGarbage, LeaderboardListNegativeCount)
+{
+    sf::Packet p;
+    p << static_cast<uint8_t>(ProtocolVersion)
+      << static_cast<uint8_t>(13);
+    p << static_cast<std::int32_t>(-1);
+    EXPECT_FALSE(deserializeServer(p).has_value());
+}
+
+TEST(ProtocolGarbage, LeaderboardListNegativeCounter)
+{
+    sf::Packet p;
+    p << static_cast<uint8_t>(ProtocolVersion)
+      << static_cast<uint8_t>(13);
+    p << static_cast<std::int32_t>(1);
+    p << std::string("Ada") << 1500.0 << 350.0
+      << static_cast<std::int32_t>(-1)
+      << static_cast<std::int32_t>(0)
+      << static_cast<std::int32_t>(0);
+    EXPECT_FALSE(deserializeServer(p).has_value());
+}
+
+TEST(ProtocolGarbage, LeaderboardListTruncatedEntry)
+{
+    sf::Packet p;
+    p << static_cast<uint8_t>(ProtocolVersion)
+      << static_cast<uint8_t>(13);
+    p << static_cast<std::int32_t>(1);
+    p << std::string("Ada") << 1500.0 << 350.0
+      << static_cast<std::int32_t>(1); // cut off before losses/draws
+    EXPECT_FALSE(deserializeServer(p).has_value());
+}
+
 TEST(ProtocolRoundTrip, ServerProfileGuest)
 {
     ServerMessage msg = ProfileMsg{"Guest-1", 1500.0, 350.0, true};
@@ -503,7 +600,7 @@ TEST(ProtocolGarbage, InvalidGameResultValue)
 TEST(ProtocolGarbage, ProfileBadFlag)
 {
     // Valid Profile header but flag byte out of range: crafted manually.
-    // Tag 10 = Profile (last server message type).
+    // Tag 10 = Profile.
     sf::Packet p;
     p << static_cast<uint8_t>(ProtocolVersion)
       << static_cast<uint8_t>(10);
@@ -605,6 +702,7 @@ TEST(ProtocolDebug, ClientMessages)
     EXPECT_FALSE(debugString(ClientMessage{LoginMsg{"alice", "topsecret"}}).empty());
     EXPECT_FALSE(debugString(ClientMessage{ArchiveRequestMsg{50, false}}).empty());
     EXPECT_FALSE(debugString(ClientMessage{ArchiveGetMsg{3}}).empty());
+    EXPECT_FALSE(debugString(ClientMessage{LeaderboardRequestMsg{64}}).empty());
 }
 
 TEST(ProtocolDebug, ServerMessages)
@@ -623,6 +721,7 @@ TEST(ProtocolDebug, ServerMessages)
     EXPECT_FALSE(debugString(ServerMessage{ArchiveGameMsg{
         1, "Ada", "Bob", static_cast<int>(GameResult::Draw),
         static_cast<int>(GameOverReason::AgreedDraw), "", "", "e4 e5", 0, false}}).empty());
+    EXPECT_FALSE(debugString(ServerMessage{LeaderboardListMsg{}}).empty());
 }
 
 TEST(ProtocolDebug, LoginMasksPassword)

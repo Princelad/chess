@@ -20,6 +20,7 @@ enum class ClientMsgType : uint8_t {
     Login,
     ArchiveRequest,
     ArchiveGet,
+    LeaderboardRequest,
 };
 
 enum class ServerMsgType : uint8_t {
@@ -36,11 +37,16 @@ enum class ServerMsgType : uint8_t {
     Profile,
     ArchiveList,
     ArchiveGame,
+    LeaderboardList,
 };
 
 // Refuses absurd archive counts on deserialize: a corrupt or hostile packet
 // must not allocate an unbounded vector before any content check.
 constexpr int32_t MaxArchiveEntries = 100;
+
+// Same guard for leaderboard rows (server clamps its replies to the same
+// maximum, so a genuine reply can never trip this).
+constexpr int32_t MaxLeaderboardEntries = 100;
 
 // Booleans travel as uint8_t 0/1 (never read a non-0/1 byte back).
 bool writeFlag(sf::Packet& packet, bool value)
@@ -125,6 +131,13 @@ bool writeClient(sf::Packet& packet, const ArchiveGetMsg& msg)
 {
     packet << static_cast<uint8_t>(ClientMsgType::ArchiveGet)
            << static_cast<int64_t>(msg.id);
+    return static_cast<bool>(packet);
+}
+
+bool writeClient(sf::Packet& packet, const LeaderboardRequestMsg& msg)
+{
+    packet << static_cast<uint8_t>(ClientMsgType::LeaderboardRequest)
+           << static_cast<int32_t>(msg.limit);
     return static_cast<bool>(packet);
 }
 
@@ -228,6 +241,24 @@ bool writeServer(sf::Packet& packet, const ArchiveGameMsg& msg)
            << msg.timeControl << msg.startFen << msg.sanMoves
            << static_cast<int64_t>(msg.playedAt);
     writeFlag(packet, msg.rated);
+    return static_cast<bool>(packet);
+}
+
+bool writeLeaderboardEntry(sf::Packet& packet, const LeaderboardEntryMsg& entry)
+{
+    packet << entry.name << entry.rating << entry.deviation
+           << static_cast<int32_t>(entry.wins)
+           << static_cast<int32_t>(entry.losses)
+           << static_cast<int32_t>(entry.draws);
+    return static_cast<bool>(packet);
+}
+
+bool writeServer(sf::Packet& packet, const LeaderboardListMsg& msg)
+{
+    packet << static_cast<uint8_t>(ServerMsgType::LeaderboardList)
+           << static_cast<int32_t>(msg.players.size());
+    for (const auto& entry : msg.players)
+        writeLeaderboardEntry(packet, entry);
     return static_cast<bool>(packet);
 }
 
@@ -375,6 +406,14 @@ std::optional<ClientMessage> deserializeClient(sf::Packet& packet)
             if (!static_cast<bool>(packet) || msg.id < 0) return std::nullopt;
             return msg;
         }
+        case ClientMsgType::LeaderboardRequest: {
+            LeaderboardRequestMsg msg;
+            int32_t limit = 0;
+            packet >> limit;
+            if (!static_cast<bool>(packet)) return std::nullopt;
+            msg.limit = limit;
+            return msg;
+        }
         default:
             return std::nullopt;
     }
@@ -482,6 +521,27 @@ std::optional<ServerMessage> deserializeServer(sf::Packet& packet)
             if (!readFlag(packet, msg.rated)) return std::nullopt;
             return msg;
         }
+        case ServerMsgType::LeaderboardList: {
+            LeaderboardListMsg msg;
+            int32_t count = 0;
+            packet >> count;
+            if (!static_cast<bool>(packet) || count < 0
+                || count > MaxLeaderboardEntries)
+                return std::nullopt;
+            msg.players.reserve(static_cast<std::size_t>(count));
+            for (int32_t i = 0; i < count; ++i) {
+                LeaderboardEntryMsg entry;
+                packet >> entry.name >> entry.rating >> entry.deviation
+                       >> entry.wins >> entry.losses >> entry.draws;
+                if (!static_cast<bool>(packet)) return std::nullopt;
+                // Counters are never negative in the players table; any other
+                // value means a corrupt or hostile packet.
+                if (entry.wins < 0 || entry.losses < 0 || entry.draws < 0)
+                    return std::nullopt;
+                msg.players.push_back(std::move(entry));
+            }
+            return msg;
+        }
         default:
             return std::nullopt;
     }
@@ -515,6 +575,8 @@ std::string debugString(const ClientMessage& msg)
                 + (m.mineOnly ? ", mine}" : ", all}");
         else if constexpr (std::is_same_v<T, ArchiveGetMsg>)
             return "ArchiveGet{id=" + std::to_string(m.id) + "}";
+        else if constexpr (std::is_same_v<T, LeaderboardRequestMsg>)
+            return "LeaderboardRequest{limit=" + std::to_string(m.limit) + "}";
     }, msg);
 }
 
@@ -555,6 +617,8 @@ std::string debugString(const ServerMessage& msg)
                 + ", " + std::string(reasonStr(static_cast<GameOverReason>(m.reason)))
                 + ", plies=" + std::to_string(m.sanMoves.empty()
                     ? 0 : std::count(m.sanMoves.begin(), m.sanMoves.end(), ' ') + 1) + "}";
+        else if constexpr (std::is_same_v<T, LeaderboardListMsg>)
+            return "LeaderboardList{players=" + std::to_string(m.players.size()) + "}";
     }, msg);
 }
 

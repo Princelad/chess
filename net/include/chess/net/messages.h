@@ -71,6 +71,13 @@ struct ArchiveGetMsg {
     std::int64_t id = 0;
 };
 
+// Leaderboard request (10.4): top-N registered accounts by rating. limit 0 or
+// negative = server default; the server clamps to its wire maximum. Answered
+// in any connection state, like the archive messages.
+struct LeaderboardRequestMsg {
+    int limit = 50;
+};
+
 using ClientMessage = std::variant<
     JoinMsg,
     MoveMsg,
@@ -82,7 +89,8 @@ using ClientMessage = std::variant<
     PingMsg,
     LoginMsg,
     ArchiveRequestMsg,
-    ArchiveGetMsg
+    ArchiveGetMsg,
+    LeaderboardRequestMsg
 >;
 
 // ── Server → Client ─────────────────────────────────────────────────────────
@@ -163,6 +171,23 @@ struct ArchiveGameMsg {
     bool rated = false;
 };
 
+// One row of the leaderboard (10.4): a registered account as stored in the
+// players table. Rank is the entry's position in LeaderboardListMsg.players
+// (highest rating first). Only accounts with finished rated games appear.
+struct LeaderboardEntryMsg {
+    std::string name;
+    double rating = 1500.0;
+    double deviation = 350.0;
+    int wins = 0;
+    int losses = 0;
+    int draws = 0;
+};
+
+// The list requested with LeaderboardRequestMsg, highest rating first.
+struct LeaderboardListMsg {
+    std::vector<LeaderboardEntryMsg> players;
+};
+
 using ServerMessage = std::variant<
     WelcomeMsg,
     OpponentJoinedMsg,
@@ -176,7 +201,8 @@ using ServerMessage = std::variant<
     ErrorMsg,
     ProfileMsg,
     ArchiveListMsg,
-    ArchiveGameMsg
+    ArchiveGameMsg,
+    LeaderboardListMsg
 >;
 
 } // namespace net
