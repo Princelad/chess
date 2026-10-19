@@ -71,10 +71,20 @@ protected:
 
     std::optional<chess::net::ServerMessage> tryRecv(sf::TcpSocket& sock)
     {
+        // The one-packet-per-call version loses the rare TCP packets that
+        // arrive fragmented (bytes are consumed and dropped on timeout
+        // under load). Ride through Partial so a later receive completes it.
         sf::Packet packet;
-        if (sock.receive(packet) != sf::Socket::Status::Done)
+        while (true) {
+            auto status = sock.receive(packet);
+            if (status == sf::Socket::Status::Done)
+                return chess::net::deserializeServer(packet);
+            if (status == sf::Socket::Status::Partial) {
+                std::this_thread::sleep_for(1ms);
+                continue;
+            }
             return std::nullopt;
-        return chess::net::deserializeServer(packet);
+        }
     }
 
     // Polls sock until it sees the wanted message type; ignores others.
