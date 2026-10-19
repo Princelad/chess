@@ -65,6 +65,12 @@ struct ArchiveRequestMsg {
     bool mineOnly = false;
 };
 
+// Fetch one completed game by archive id; answered with ArchiveGameMsg or
+// an ErrorMsg when the id is unknown.
+struct ArchiveGetMsg {
+    std::int64_t id = 0;
+};
+
 using ClientMessage = std::variant<
     JoinMsg,
     MoveMsg,
@@ -75,7 +81,8 @@ using ClientMessage = std::variant<
     ChatMsg,
     PingMsg,
     LoginMsg,
-    ArchiveRequestMsg
+    ArchiveRequestMsg,
+    ArchiveGetMsg
 >;
 
 // ── Server → Client ─────────────────────────────────────────────────────────

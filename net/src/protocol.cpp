@@ -19,6 +19,7 @@ enum class ClientMsgType : uint8_t {
     Ping,
     Login,
     ArchiveRequest,
+    ArchiveGet,
 };
 
 enum class ServerMsgType : uint8_t {
@@ -117,6 +118,13 @@ bool writeClient(sf::Packet& packet, const ArchiveRequestMsg& msg)
     packet << static_cast<uint8_t>(ClientMsgType::ArchiveRequest)
            << static_cast<int32_t>(msg.limit);
     writeFlag(packet, msg.mineOnly);
+    return static_cast<bool>(packet);
+}
+
+bool writeClient(sf::Packet& packet, const ArchiveGetMsg& msg)
+{
+    packet << static_cast<uint8_t>(ClientMsgType::ArchiveGet)
+           << static_cast<int64_t>(msg.id);
     return static_cast<bool>(packet);
 }
 
@@ -361,6 +369,12 @@ std::optional<ClientMessage> deserializeClient(sf::Packet& packet)
             msg.limit = limit;
             return msg;
         }
+        case ClientMsgType::ArchiveGet: {
+            ArchiveGetMsg msg;
+            packet >> msg.id;
+            if (!static_cast<bool>(packet) || msg.id < 0) return std::nullopt;
+            return msg;
+        }
         default:
             return std::nullopt;
     }
@@ -499,6 +513,8 @@ std::string debugString(const ClientMessage& msg)
         else if constexpr (std::is_same_v<T, ArchiveRequestMsg>)
             return "ArchiveRequest{limit=" + std::to_string(m.limit)
                 + (m.mineOnly ? ", mine}" : ", all}");
+        else if constexpr (std::is_same_v<T, ArchiveGetMsg>)
+            return "ArchiveGet{id=" + std::to_string(m.id) + "}";
     }, msg);
 }
 

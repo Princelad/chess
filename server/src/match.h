@@ -4,6 +4,7 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include <chess/board.h>
 #include <chess/movegen.h>
@@ -30,6 +31,10 @@ public:
     Client* white() const;
     Client* black() const;
     Client* opponent(const Client& client) const;
+
+    // Canonical SAN moves played so far, in order. Empty until the first
+    // move is accepted; used by the game-over hook for the archive row.
+    const std::vector<std::string>& sanHistory() const { return sanHistory_; }
 
     void startBot(chess::Color color, int depth, std::string enginePath);
     void stopBot();
@@ -60,5 +65,6 @@ private:
     chess::Color botColor_ = chess::Color::White;
     int botDepth_ = 1;
     bool botThinking_ = false;
+    std::vector<std::string> sanHistory_;
     GameOverCallback gameOverCallback_;
 };

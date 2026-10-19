@@ -75,6 +75,7 @@ bool Match::handleMoveSAN(Client& sender, const std::string& san)
 
     std::string canonical = chess::san::toSan(board_, *move);
     board_.makeMove(*move);
+    sanHistory_.push_back(canonical);
 
     chess::net::ServerMoveMsg serverMove{canonical};
     sendTo(*white_, serverMove);

@@ -2,7 +2,9 @@
 
 #include <algorithm>
 #include <chrono>
+#include <ctime>
 #include <memory>
+#include <utility>
 #include <vector>
 
 #include <SFML/Network/SocketSelector.hpp>
@@ -10,6 +12,7 @@
 #include <SFML/Network/TcpSocket.hpp>
 
 #include <chess/db/database.h>
+#include <chess/db/game_store.h>
 #include <chess/db/player_store.h>
 #include <chess/net/protocol.h>
 
@@ -111,9 +114,27 @@ static void handleLogin(Client& client, const chess::net::LoginMsg& login,
     LOG_INFO("Client registered: " + created->name);
 }
 
-unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdownFlag,
-                         unsigned short* boundPortOut)
+// Archive rows → wire entries (rated flag = both participants registered).
+static std::vector<chess::net::ArchiveEntryMsg> toArchiveEntries(
+    const std::vector<chess::db::Game>& games)
 {
+    std::vector<chess::net::ArchiveEntryMsg> entries;
+    entries.reserve(games.size());
+    for (const auto& game : games) {
+        chess::net::ArchiveEntryMsg entry;
+        entry.id = game.id;
+        entry.whiteName = game.whiteName;
+        entry.blackName = game.blackName;
+        entry.result = game.result;
+        entry.playedAt = game.playedAt;
+        entry.rated = game.whiteId.has_value() && game.blackId.has_value();
+        entries.push_back(std::move(entry));
+    }
+    return entries;
+}
+
+unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdownFlag,
+                         unsigned short* boundPortOut){
     auto ipOpt = sf::IpAddress::fromString(config.host);
     if (!ipOpt.has_value()) {
         LOG_ERROR("Invalid address: " + config.host);
@@ -134,6 +155,7 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
     // silently unrated server when the operator asked for a database.
     chess::db::Database database;
     std::optional<chess::db::PlayerStore> playerStoreOpt;
+    std::optional<chess::db::GameStore> gameStoreOpt;
     if (!config.dbPath.empty()) {
         if (!database.open(config.dbPath)) {
             LOG_ERROR("Failed to open database " + config.dbPath + ": "
@@ -141,19 +163,49 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
             return 0;
         }
         playerStoreOpt.emplace(database);
+        gameStoreOpt.emplace(database);
         LOG_INFO("Database opened: " + config.dbPath);
     }
     chess::db::PlayerStore* players =
         playerStoreOpt.has_value() ? &*playerStoreOpt : nullptr;
+    chess::db::GameStore* games =
+        gameStoreOpt.has_value() ? &*gameStoreOpt : nullptr;
 
     // Rated update on game over (phase 10.2): both participants must be
     // registered; guests and bots keep unrated games. Runs after the
     // GameOverMsg broadcast, inside the currently alive client objects.
     auto onGameOver = [&](const Match& match, chess::net::GameResult result,
                           chess::net::GameOverReason reason) {
-        (void)reason;
         Client* white = match.white();
         Client* black = match.black();
+
+        // Archive (10.3): any game with at least one accepted move is
+        // persisted — rated or not, guests get no players-row linkage.
+        if (games != nullptr && white != nullptr && black != nullptr
+            && !match.sanHistory().empty()) {
+            chess::db::Game row;
+            row.whiteId = white->playerId;
+            row.blackId = black->playerId;
+            row.whiteName = white->name;
+            row.blackName = black->name;
+            row.result = static_cast<int>(result);
+            row.reason = static_cast<int>(reason);
+            std::string sanJoined;
+            for (const auto& san : match.sanHistory()) {
+                if (!sanJoined.empty()) sanJoined += ' ';
+                sanJoined += san;
+            }
+            row.sanMoves = std::move(sanJoined);
+            row.playedAt = std::time(nullptr);
+            if (!games->insert(row).has_value())
+                LOG_WARN("Failed to archive game: " + games->errorMessage());
+            else
+                LOG_INFO("Game archived (plies=" + std::to_string(match.sanHistory().size()) + ")");
+        }
+
+        // Rated update (phase 10.2): both participants must be registered;
+        // guests and bots keep unrated games. Runs after the GameOverMsg
+        // broadcast, inside the currently alive client objects.
         if (players == nullptr || white == nullptr || black == nullptr
             || !white->playerId.has_value() || !black->playerId.has_value())
             return;
@@ -275,7 +327,53 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
                     if (msg.has_value()) {
                         LOG_INFO("Received: " + chess::net::debugString(*msg));
 
-                        switch (client.state) {
+                        // Archive browsing is answered in every state (it
+                        // never disturbs queues or running matches).
+                        if (auto* archiveReq =
+                                std::get_if<chess::net::ArchiveRequestMsg>(&*msg)) {
+                            constexpr int DefaultArchiveLimit = 50;
+                            constexpr int MaxArchiveLimit = 200;
+                            int limit = archiveReq->limit <= 0
+                                ? DefaultArchiveLimit : archiveReq->limit;
+                            limit = std::min(limit, MaxArchiveLimit);
+                            chess::net::ArchiveListMsg list;
+                            if (games != nullptr) {
+                                if (archiveReq->mineOnly && client.playerId.has_value())
+                                    list.games = toArchiveEntries(
+                                        games->latestForPlayer(*client.playerId, limit));
+                                else
+                                    list.games = toArchiveEntries(games->latest(limit));
+                            }
+                            sendTo(client, list);
+                        }
+                        else if (auto* archiveGet =
+                                std::get_if<chess::net::ArchiveGetMsg>(&*msg)) {
+                            if (games == nullptr) {
+                                sendTo(client, chess::net::ErrorMsg{
+                                    "This server has no game archive"});
+                            } else {
+                                auto row = games->byId(archiveGet->id);
+                                if (!row.has_value()) {
+                                    sendTo(client, chess::net::ErrorMsg{
+                                        "Game not found in the archive"});
+                                } else {
+                                    chess::net::ArchiveGameMsg record;
+                                    record.id = row->id;
+                                    record.whiteName = row->whiteName;
+                                    record.blackName = row->blackName;
+                                    record.result = row->result;
+                                    record.reason = row->reason;
+                                    record.timeControl = row->timeControl;
+                                    record.startFen = row->startFen;
+                                    record.sanMoves = row->sanMoves;
+                                    record.playedAt = row->playedAt;
+                                    record.rated =
+                                        row->whiteId.has_value() && row->blackId.has_value();
+                                    sendTo(client, record);
+                                }
+                            }
+                        }
+                        else switch (client.state) {
                         case ClientState::Connected:
                             if (auto* login = std::get_if<chess::net::LoginMsg>(&*msg)) {
                                 handleLogin(client, *login, players);

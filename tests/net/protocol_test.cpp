@@ -166,6 +166,26 @@ TEST(ProtocolRoundTrip, ClientArchiveRequest)
     EXPECT_TRUE(m->mineOnly);
 }
 
+TEST(ProtocolRoundTrip, ClientArchiveGet)
+{
+    ClientMessage msg = ArchiveGetMsg{17};
+    sf::Packet p = freshPacket(serializeClient(msg));
+    auto result = deserializeClient(p);
+    ASSERT_TRUE(result.has_value());
+    auto* m = std::get_if<ArchiveGetMsg>(&*result);
+    ASSERT_NE(m, nullptr);
+    EXPECT_EQ(m->id, 17);
+}
+
+TEST(ProtocolGarbage, ClientArchiveGetNegativeId)
+{
+    sf::Packet p;
+    p << static_cast<uint8_t>(ProtocolVersion)
+      << static_cast<uint8_t>(10); // ArchiveGet tag
+    p << static_cast<std::int64_t>(-5);
+    EXPECT_FALSE(deserializeClient(p).has_value());
+}
+
 TEST(ProtocolRoundTrip, ServerArchiveListEmpty)
 {
     ServerMessage msg = ArchiveListMsg{};
@@ -584,6 +604,7 @@ TEST(ProtocolDebug, ClientMessages)
     EXPECT_FALSE(debugString(ClientMessage{PingMsg{}}).empty());
     EXPECT_FALSE(debugString(ClientMessage{LoginMsg{"alice", "topsecret"}}).empty());
     EXPECT_FALSE(debugString(ClientMessage{ArchiveRequestMsg{50, false}}).empty());
+    EXPECT_FALSE(debugString(ClientMessage{ArchiveGetMsg{3}}).empty());
 }
 
 TEST(ProtocolDebug, ServerMessages)

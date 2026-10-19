@@ -208,6 +208,86 @@ TEST_F(RatedE2eTest, GuestGameIsUnrated)
     sendMsg(white, chess::net::ResignMsg{});
     ASSERT_TRUE(await<chess::net::GameOverMsg>(white).has_value());
     ASSERT_TRUE(await<chess::net::GameOverMsg>(black).has_value());
+
+    // One move was played? The guests never moved, so resigning immediately
+    // from the start position leaves sanHistory() empty archive-wise: NO row.
+    auto archivist = connectClient();
+    sendMsg(archivist, chess::net::ArchiveRequestMsg{50, false});
+    auto list = await<chess::net::ArchiveListMsg>(archivist);
+    ASSERT_TRUE(list.has_value());
+    EXPECT_TRUE(list->games.empty());
+}
+
+TEST_F(RatedE2eTest, ArchivePersistsAndServesCompletedGames)
+{
+    auto white = connectClient();
+    auto black = connectClient();
+
+    sendMsg(white, chess::net::LoginMsg{"Ada", "pw"});
+    sendMsg(black, chess::net::LoginMsg{"Bob", "pw"});
+    ASSERT_TRUE(await<chess::net::ProfileMsg>(white).has_value());
+    ASSERT_TRUE(await<chess::net::ProfileMsg>(black).has_value());
+
+    sendMsg(white, chess::net::JoinMsg{"Ada"});
+    sendMsg(black, chess::net::JoinMsg{"Bob"});
+    ASSERT_TRUE(await<chess::net::WelcomeMsg>(white).has_value());
+    ASSERT_TRUE(await<chess::net::WelcomeMsg>(black).has_value());
+
+    // Fool's mate: 1. f3 e5 2. g4 Qh4#
+    sendMsg(white, chess::net::MoveMsg{"f3"});
+    sendMsg(black, chess::net::MoveMsg{"e5"});
+    sendMsg(white, chess::net::MoveMsg{"g4"});
+    sendMsg(black, chess::net::MoveMsg{"Qh4#"});
+    ASSERT_TRUE(await<chess::net::GameOverMsg>(white).has_value());
+    ASSERT_TRUE(await<chess::net::GameOverMsg>(black).has_value());
+
+    // Per-player list view as Ada (was white).
+    auto archivist = connectClient();
+    sendMsg(archivist, chess::net::LoginMsg{"Ada", "pw"});
+    ASSERT_TRUE(await<chess::net::ProfileMsg>(archivist).has_value());
+    sendMsg(archivist, chess::net::ArchiveRequestMsg{50, true});
+    auto mine = await<chess::net::ArchiveListMsg>(archivist);
+    ASSERT_TRUE(mine.has_value());
+    ASSERT_EQ(mine->games.size(), 1u);
+    EXPECT_EQ(mine->games[0].whiteName, "Ada");
+    EXPECT_EQ(mine->games[0].blackName, "Bob");
+    EXPECT_TRUE(mine->games[0].rated);
+    EXPECT_EQ(mine->games[0].result, static_cast<int>(chess::net::GameResult::BlackWins));
+
+    // Guest view: mineOnly degrades to the global list.
+    auto before = connectClient();
+    sendMsg(before, chess::net::ArchiveRequestMsg{10, true});
+    auto global = await<chess::net::ArchiveListMsg>(before);
+    ASSERT_TRUE(global.has_value());
+    ASSERT_EQ(global->games.size(), 1u);
+
+    // Record fetch by id.
+    sendMsg(before, chess::net::ArchiveGetMsg{global->games[0].id});
+    auto record = await<chess::net::ArchiveGameMsg>(before);
+    ASSERT_TRUE(record.has_value());
+    EXPECT_EQ(record->id, global->games[0].id);
+    EXPECT_EQ(record->whiteName, "Ada");
+    EXPECT_EQ(record->blackName, "Bob");
+    EXPECT_EQ(record->result, static_cast<int>(chess::net::GameResult::BlackWins));
+    EXPECT_EQ(record->reason, static_cast<int>(chess::net::GameOverReason::Checkmate));
+    EXPECT_EQ(record->sanMoves, "f3 e5 g4 Qh4#");
+    EXPECT_TRUE(record->rated);
+    EXPECT_GT(record->playedAt, 0);
+
+    // Unknown id and unknown-name players are cleanly reported.
+    sendMsg(before, chess::net::ArchiveGetMsg{987654});
+    auto missing = await<chess::net::ErrorMsg>(before);
+    ASSERT_TRUE(missing.has_value());
+
+    // Bob's own list also sees the game from the other side.
+    auto bobSock = connectClient();
+    sendMsg(bobSock, chess::net::LoginMsg{"Bob", "pw"});
+    ASSERT_TRUE(await<chess::net::ProfileMsg>(bobSock).has_value());
+    sendMsg(bobSock, chess::net::ArchiveRequestMsg{50, true});
+    auto bobList = await<chess::net::ArchiveListMsg>(bobSock);
+    ASSERT_TRUE(bobList.has_value());
+    ASSERT_EQ(bobList->games.size(), 1u);
+    EXPECT_EQ(bobList->games[0].blackName, "Bob");
 }
 
 } // namespace
