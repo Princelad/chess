@@ -1,6 +1,7 @@
 #include "connect_screen.h"
 #include "game_screen.h"
 #include "history_screen.h"
+#include "leaderboard_screen.h"
 
 #include <chess/net/messages.h>
 
@@ -56,7 +57,15 @@ ConnectScreen::ConnectScreen(App& app)
                           sf::Color(150, 150, 150), sf::Color(255, 255, 255),
                           sf::Color(52, 78, 135), sf::Color(160, 190, 240),
                           sf::Color(210, 230, 255));
-    archiveBtn_.setOnClick([this] { startArchiveBrowse(); });
+    archiveBtn_.setOnClick([this] { startBrowse(BrowseTarget::Archive); });
+
+    leaderboardBtn_.setLabel("Leaderboard");
+    leaderboardBtn_.setColors(sf::Color(46, 62, 58), sf::Color(58, 78, 72),
+                              sf::Color(52, 70, 64), sf::Color(40, 55, 52),
+                              sf::Color(150, 150, 150), sf::Color(240, 250, 240),
+                              sf::Color(70, 110, 90), sf::Color(140, 200, 170),
+                              sf::Color(180, 235, 205));
+    leaderboardBtn_.setOnClick([this] { startBrowse(BrowseTarget::Leaderboard); });
 
     title_.setText("Chess");
     title_.setFontSize(36);
@@ -77,8 +86,10 @@ void ConnectScreen::layoutWidgets()
 {
     title_.setPosition({50.f, 50.f});
     hint_.setPosition({50.f, 590.f});
-    status_.setPosition({StartX, BtnY + 44.f});
-    error_.setPosition({StartX, BtnY + 44.f});
+    // Below both button rows (Connect + archive on row one, leaderboard
+    // on row two) so statuses never render underneath a button.
+    status_.setPosition({StartX, BtnY + 104.f});
+    error_.setPosition({StartX, BtnY + 104.f});
 
     float y = StartY;
     for (int i = 0; i < static_cast<int>(FieldCount); ++i) {
@@ -92,6 +103,9 @@ void ConnectScreen::layoutWidgets()
     // Side button: browse the server's game archive without queueing.
     archiveBtn_.setRect(sf::FloatRect(sf::Vector2f(FieldX + 210.f, BtnY),
                                       sf::Vector2f(170.f, 40.f)));
+    // Row two: leaderboard browsing, same connect-without-queueing flow.
+    leaderboardBtn_.setRect(sf::FloatRect(sf::Vector2f(FieldX, BtnY + 50.f),
+                                          sf::Vector2f(200.f, 40.f)));
 }
 
 void ConnectScreen::cycleField(bool backward)
@@ -137,9 +151,9 @@ void ConnectScreen::tryConnectOrRetry()
         if (!password().empty()) {
             status_.setText("Logging in...");
             app_.connection().send(chess::net::LoginMsg{name(), password()});
-        } else if (archiveBrowse_) {
-            // Switched to guest-mode archive browsing after an error.
-            openArchive();
+        } else if (browseTarget_ != BrowseTarget::None) {
+            // Switched to guest-mode browsing after an error.
+            openBrowseTarget();
         } else {
             // Switched to guest play after an account error.
             phase_ = ConnectPhase::WaitingForOpponent;
@@ -161,18 +175,22 @@ const std::string& ConnectScreen::password() const
     return fields_[3].text();
 }
 
-void ConnectScreen::openArchive()
+void ConnectScreen::openBrowseTarget()
 {
     const bool mine = app_.profile().has_value()
         && !app_.profile()->isGuest;
-    // Hand over to the archive browser; this screen gets destroyed by the
+    // Hand over to the browse target; this screen gets destroyed by the
     // switch (Idle-state entry point only).
-    app_.switchScreen(std::make_unique<HistoryScreen>(app_, mine));
+    if (browseTarget_ == BrowseTarget::Leaderboard)
+        app_.switchScreen(std::make_unique<LeaderboardScreen>(app_));
+    else
+        app_.switchScreen(std::make_unique<HistoryScreen>(app_, mine));
 }
 
-// Archives: connect WITHOUT joining a queue; the archive list filters
-// itself when this connection is (or will be) a logged-in account.
-void ConnectScreen::startArchiveBrowse()
+// Browsing: connect WITHOUT joining a queue; the archive list filters
+// itself when this connection is (or will be) a logged-in account, the
+// leaderboard is the global top-N either way.
+void ConnectScreen::startBrowse(BrowseTarget target)
 {
     if (name().empty() || phase_ != ConnectPhase::Idle) return;
 
@@ -187,8 +205,8 @@ void ConnectScreen::startArchiveBrowse()
     app_.setLastConnection(fields_[0].text(), fields_[1].text(), fields_[2].text());
     app_.clearProfile();
     error_.setText("");
-    archiveBrowse_ = true;
-    phase_ = ConnectPhase::ConnectingArchive;
+    browseTarget_ = target;
+    phase_ = ConnectPhase::ConnectingBrowse;
     status_.setText("Connecting...");
     for (auto& field : fields_) field.setEnabled(false);
     app_.connection().connect(fields_[0].text(), portNum);
@@ -234,8 +252,10 @@ void ConnectScreen::handleEvent(const sf::Event& event)
     if (phase_ == ConnectPhase::Idle && !name().empty()
         || phase_ == ConnectPhase::AwaitingProfile)
         connectBtn_.handleEvent(event, local);
-    if (phase_ == ConnectPhase::Idle && !name().empty())
+    if (phase_ == ConnectPhase::Idle && !name().empty()) {
         archiveBtn_.handleEvent(event, local);
+        leaderboardBtn_.handleEvent(event, local);
+    }
 }
 
 void ConnectScreen::update(float dtSec)
@@ -262,8 +282,8 @@ void ConnectScreen::update(float dtSec)
         if (auto* profileMsg = std::get_if<chess::net::ProfileMsg>(&msg)) {
             app_.setProfile(*profileMsg);
             if (phase_ == ConnectPhase::AwaitingProfile) {
-                if (archiveBrowse_) {
-                    openArchive();
+                if (browseTarget_ != BrowseTarget::None) {
+                    openBrowseTarget();
                 } else {
                     phase_ = ConnectPhase::WaitingForOpponent;
                     status_.setText("Waiting for opponent...");
@@ -312,23 +332,24 @@ void ConnectScreen::update(float dtSec)
             app_.connection().join(name());
         }
     }
-    else if (phase_ == ConnectPhase::ConnectingArchive &&
+    else if (phase_ == ConnectPhase::ConnectingBrowse &&
         app_.connection().state() == ConnectionState::Connected)
     {
-        // Archives need the profile only for the "my games" filter.
+        // Archives need the profile only for the "my games" filter, the
+        // leaderboard not at all; the login still refreshes last_seen/RD.
         if (!password().empty()) {
             phase_ = ConnectPhase::AwaitingProfile;
             status_.setText("Logging in...");
             app_.connection().send(
                 chess::net::LoginMsg{name(), password()});
         } else {
-            openArchive();
+            openBrowseTarget();
         }
     }
 
     if (app_.connection().state() == ConnectionState::Disconnected) {
         if (phase_ == ConnectPhase::Connecting
-            || phase_ == ConnectPhase::ConnectingArchive
+            || phase_ == ConnectPhase::ConnectingBrowse
             || phase_ == ConnectPhase::AwaitingProfile
             || phase_ == ConnectPhase::WaitingForOpponent) {
             error_.setText(app_.connection().error().empty()
@@ -351,10 +372,12 @@ void ConnectScreen::draw(sf::RenderWindow& window)
 
     if (phase_ != ConnectPhase::WaitingForOpponent && !name().empty())
         connectBtn_.draw(window, font);
-    if (phase_ == ConnectPhase::Idle && !name().empty())
+    if (phase_ == ConnectPhase::Idle && !name().empty()) {
         archiveBtn_.draw(window, font);
+        leaderboardBtn_.draw(window, font);
+    }
 
-    float statusY = BtnY + 44.f;
+    float statusY = BtnY + 104.f;
     if (!error_.text().empty()) {
         error_.setPosition({StartX, statusY});
         error_.draw(window, font);

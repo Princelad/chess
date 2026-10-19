@@ -12,7 +12,13 @@
 
 namespace chess::client {
 
-enum class ConnectPhase { Idle, Connecting, ConnectingArchive, AwaitingProfile, WaitingForOpponent };
+enum class ConnectPhase {
+    Idle, Connecting, ConnectingBrowse, AwaitingProfile, WaitingForOpponent
+};
+
+// Read-only server browsing targets reachable without joining a queue
+// (10.3 archive, 10.4 leaderboard); both connect and then switch screens.
+enum class BrowseTarget { None, Archive, Leaderboard };
 
 class ConnectScreen : public Screen {
 public:
@@ -25,8 +31,8 @@ private:
     static constexpr std::size_t FieldCount = 4;
 
     void tryConnectOrRetry();
-    void startArchiveBrowse();
-    void openArchive();
+    void startBrowse(BrowseTarget target);
+    void openBrowseTarget();
     void cycleField(bool backward);
     void layoutWidgets();
     const std::string& name() const;
@@ -40,11 +46,12 @@ private:
     std::size_t activeField_ = 0;
     Button connectBtn_;
     Button archiveBtn_;
+    Button leaderboardBtn_;
     Label title_;
     Label hint_;
     Label status_;
     Label error_;
-    bool archiveBrowse_ = false;
+    BrowseTarget browseTarget_ = BrowseTarget::None;
 };
 
 } // namespace chess::client
