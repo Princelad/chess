@@ -91,6 +91,11 @@ static void handleLogin(Client& client, const chess::net::LoginMsg& login,
         }
         client.playerId = existing->id;
         client.name = existing->name;
+        // Glicko-2 idle periods grow RD since the last rated game; the
+        // profile is sent from the freshly grown row.
+        auto fresh = players->applyIdleGrowth(existing->id, chess::db::nowSeconds());
+        if (fresh.has_value())
+            existing = *fresh;
         sendProfileTo(client, *existing);
         LOG_INFO("Client logged in: " + existing->name);
         return;
