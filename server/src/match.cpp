@@ -67,6 +67,17 @@ void Match::handleMove(Client& sender, const chess::net::MoveMsg& msg)
 
 bool Match::handleMoveSAN(Client& sender, const std::string& san)
 {
+    // Turn authority: the sender must be the side to move. Without this, a
+    // client (or two racing packets drained out of socket order by the
+    // select loop) could apply a move for either side out of turn.
+    const bool whiteToMove = board_.sideToMove() == chess::Color::White;
+    const bool senderIsWhite = white_ == &sender;
+    const bool senderIsBlack = black_ == &sender;
+    if ((whiteToMove && !senderIsWhite) || (!whiteToMove && !senderIsBlack)) {
+        sendTo(sender, chess::net::ErrorMsg{"Not your turn"});
+        return false;
+    }
+
     auto move = chess::san::fromSan(board_, san);
     if (!move.has_value() || !chess::isLegalMove(board_, *move)) {
         sendTo(sender, chess::net::ErrorMsg{"Illegal move"});

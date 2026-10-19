@@ -6,6 +6,7 @@
 #include <chrono>
 #include <filesystem>
 #include <thread>
+#include <variant>
 
 #include <SFML/Network/TcpSocket.hpp>
 
@@ -67,6 +68,31 @@ protected:
         sf::Packet packet;
         chess::net::serialize(packet, msg);
         ASSERT_EQ(sock.send(packet), sf::Socket::Status::Done);
+    }
+
+    // Sends one SAN move and waits until the server echoes it back to the
+    // sender. This synchronizes play with server processing: the next move
+    // is never sent before the previous one was applied, so the select
+    // loop's cross-socket drain order cannot reorder move applications.
+    // The sender's socket may still hold the previous move's own stale
+    // echo, so non-matching ServerMoveMsg entries are skipped; ErrorMsg
+    // (e.g. out of turn) fails fast.
+    bool playMove(sf::TcpSocket& sender, const std::string& san)
+    {
+        sendMsg(sender, chess::net::MoveMsg{san});
+        const auto deadline = std::chrono::steady_clock::now() + TestTimeout;
+        while (std::chrono::steady_clock::now() < deadline) {
+            if (auto msg = tryRecv(sender)) {
+                if (auto* move = std::get_if<chess::net::ServerMoveMsg>(&*msg)) {
+                    if (move->san == san)
+                        return true;
+                }
+                else if (std::holds_alternative<chess::net::ErrorMsg>(*msg))
+                    return false;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        return false;
     }
 
     std::optional<chess::net::ServerMessage> tryRecv(sf::TcpSocket& sock)
@@ -243,11 +269,12 @@ TEST_F(RatedE2eTest, ArchivePersistsAndServesCompletedGames)
     ASSERT_TRUE(await<chess::net::WelcomeMsg>(white).has_value());
     ASSERT_TRUE(await<chess::net::WelcomeMsg>(black).has_value());
 
-    // Fool's mate: 1. f3 e5 2. g4 Qh4#
-    sendMsg(white, chess::net::MoveMsg{"f3"});
-    sendMsg(black, chess::net::MoveMsg{"e5"});
-    sendMsg(white, chess::net::MoveMsg{"g4"});
-    sendMsg(black, chess::net::MoveMsg{"Qh4#"});
+    // Fool's mate: 1. f3 e5 2. g4 Qh4# — each move awaits its echo so the
+    // server has applied it before the next one is sent.
+    ASSERT_TRUE(playMove(white, "f3"));
+    ASSERT_TRUE(playMove(black, "e5"));
+    ASSERT_TRUE(playMove(white, "g4"));
+    ASSERT_TRUE(playMove(black, "Qh4#"));
     ASSERT_TRUE(await<chess::net::GameOverMsg>(white).has_value());
     ASSERT_TRUE(await<chess::net::GameOverMsg>(black).has_value());
 
