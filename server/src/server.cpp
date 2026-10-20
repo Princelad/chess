@@ -75,6 +75,79 @@ static void sendProfileTo(Client& client, const chess::db::Player& player)
         player.name, player.rating, player.ratingDeviation, false});
 }
 
+// ── Token resume (11.2) ─────────────────────────────────────────────────────
+
+// Full resync for a rejoining seat: everything Replay needs to rebuild —
+// seat identity, final board via the SAN chain, fresh clock figures —
+// sampled at a single timestamp.
+static void sendResumeState(Client& rejoiner, const Match& match,
+                            chess::Color myColor, std::int64_t nowMs)
+{
+    const auto mine = match.seat(myColor);
+    const auto other = match.seat(
+        myColor == chess::Color::White ? chess::Color::Black : chess::Color::White);
+    chess::net::ResumeStateMsg msg;
+    msg.color = myColor;
+    msg.opponent = other.name;
+    msg.rating = other.rating;
+    msg.deviation = other.deviation;
+    msg.rated = mine.playerId.has_value() && other.playerId.has_value();
+    msg.timeControl = match.timeControl();
+    msg.fen = match.currentFen();
+    msg.sans = match.sanHistory();
+    auto clocks = match.clockSnapshotMs(nowMs);
+    msg.whiteRemainingMs = clocks.first;
+    msg.blackRemainingMs = clocks.second;
+    sendTo(rejoiner, msg);
+}
+
+// Refreshes the rejoiner's account profile from storage: rated results may
+// have landed while the seat was away, and the client caches the old figure.
+static void sendFreshProfile(Client& rejoiner, const Match& match,
+                             chess::Color seatColor, chess::db::PlayerStore* players)
+{
+    const auto seat = match.seat(seatColor);
+    if (players == nullptr || !seat.playerId.has_value()) return;
+    auto row = players->byId(*seat.playerId);
+    if (row.has_value())
+        sendProfileTo(rejoiner, *row);
+}
+
+// Routes ResumeMsg{token} into the match that owns that seat token.
+static void handleResume(Client& newcomer, const chess::net::ResumeMsg& msg,
+                         MatchVec& matches, chess::db::PlayerStore* players)
+{
+    for (auto& match : matches) {
+        chess::Color rebound = chess::Color::White;
+        auto outcome = match->resume(msg.token, newcomer, rebound);
+        if (outcome == Match::ResumeOutcome::NoSeat)
+            continue; // tokens are unique per seat; keep searching
+        if (outcome == Match::ResumeOutcome::AlreadyConnected) {
+            sendTo(newcomer, chess::net::ErrorMsg{"That seat is already connected"});
+            return;
+        }
+
+        const auto nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count();
+        sendResumeState(newcomer, *match, rebound, nowMs);
+        sendFreshProfile(newcomer, *match, rebound, players);
+
+        if (outcome == Match::ResumeOutcome::ReboundOver) {
+            // The game ended while the seat was away: replay the outcome so
+            // the client still lands on its result screen.
+            auto over = match->lastGameOver();
+            if (over)
+                sendTo(newcomer, *over);
+        } else {
+            // Live game: seated again for the message routing.
+            newcomer.state = ClientState::InMatch;
+            newcomer.match = match.get();
+        }
+        return;
+    }
+    sendTo(newcomer, chess::net::ErrorMsg{"No game to resume — session expired"});
+}
+
 static void handleLogin(Client& client, const chess::net::LoginMsg& login,
                         chess::db::PlayerStore* players)
 {
@@ -213,21 +286,22 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
 
     // Rated update on game over (phase 10.2): both participants must be
     // registered; guests and bots keep unrated games. Runs after the
-    // GameOverMsg broadcast, inside the currently alive client objects.
+    // GameOverMsg broadcast to present seats, while seats are still attached.
     auto onGameOver = [&](const Match& match, chess::net::GameResult result,
                           chess::net::GameOverReason reason) {
-        Client* white = match.white();
-        Client* black = match.black();
+        // Seat snapshots (11.2), not live connections: a departed player
+        // still owns their half of the record and the rated update.
+        const auto white = match.seat(chess::Color::White);
+        const auto black = match.seat(chess::Color::Black);
 
         // Archive (10.3): any game with at least one accepted move is
         // persisted — rated or not, guests get no players-row linkage.
-        if (games != nullptr && white != nullptr && black != nullptr
-            && !match.sanHistory().empty()) {
+        if (games != nullptr && !match.sanHistory().empty()) {
             chess::db::Game row;
-            row.whiteId = white->playerId;
-            row.blackId = black->playerId;
-            row.whiteName = white->name;
-            row.blackName = black->name;
+            row.whiteId = white.playerId;
+            row.blackId = black.playerId;
+            row.whiteName = white.name;
+            row.blackName = black.name;
             row.result = static_cast<int>(result);
             row.reason = static_cast<int>(reason);
             row.timeControl = match.timeControl();
@@ -245,12 +319,11 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
         }
 
         // Rated update (phase 10.2): both participants must be registered;
-        // guests and bots keep unrated games. Runs after the GameOverMsg
-        // broadcast, inside the currently alive client objects.
-        if (players == nullptr || white == nullptr || black == nullptr
-            || !white->playerId.has_value() || !black->playerId.has_value())
+        // guests and bots keep unrated games.
+        if (players == nullptr || !white.playerId.has_value()
+            || !black.playerId.has_value())
             return;
-        auto update = players->applyRatedGame(*white->playerId, *black->playerId, result);
+        auto update = players->applyRatedGame(*white.playerId, *black.playerId, result);
         if (!update.has_value()) {
             LOG_WARN("Rated update failed: " + players->errorMessage());
             return;
@@ -259,8 +332,10 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
             + std::to_string(static_cast<int>(update->white.rating))
             + " / " + update->black.name + " -> "
             + std::to_string(static_cast<int>(update->black.rating)));
-        sendProfileTo(*white, update->white);
-        sendProfileTo(*black, update->black);
+        // Profiles reach whoever is still here; departed seats see the fresh
+        // row the next time they log in.
+        if (match.white()) sendProfileTo(*match.white(), update->white);
+        if (match.black()) sendProfileTo(*match.black(), update->black);
     };
 
     // Pairing helper (phase 10.2): creates the match, wires the rated hook
@@ -282,7 +357,8 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
     auto startMatch = [&](Client& first, Client& second) -> Match* {
         first.state = ClientState::InMatch;
         second.state = ClientState::InMatch;
-        auto match = std::make_unique<Match>(first, second, first.timeControl);
+        auto match = std::make_unique<Match>(first, second, first.timeControl,
+                                             config.reconnectGraceMs);
         match->setGameOverCallback(onGameOver);
         first.match = match.get();
         second.match = match.get();
@@ -299,13 +375,16 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
         };
         const auto [firstRating, firstDeviation] = opponentRow(first);
         const auto [secondRating, secondDeviation] = opponentRow(second);
+        // Stamps the resolved pairing figures onto the seats: welcome and
+        // later resume resyncs then agree on the same numbers.
+        match->seedRatings({firstRating, firstDeviation}, {secondRating, secondDeviation});
 
         sendTo(first, chess::net::WelcomeMsg{
             chess::Color::White, second.name, secondRating, secondDeviation, rated,
-            first.timeControl});
+            first.timeControl, match->resumeToken(chess::Color::White)});
         sendTo(second, chess::net::WelcomeMsg{
             chess::Color::Black, first.name, firstRating, firstDeviation, rated,
-            first.timeControl});
+            first.timeControl, match->resumeToken(chess::Color::Black)});
         Match* rawMatch = match.get();
         matches.push_back(std::move(match));
         return rawMatch;
@@ -319,20 +398,24 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
                 continue;
             if (m->isBotTurn())
                 hasThinkingBot = true;
-            if (m->clockRuns())
+            if (m->clockRuns() || m->reconnecting())
                 hasRunningClock = true;
         }
-        // The loop samples clocks on each pass, so shrink the select wait
-        // when any time control is running: flags fire within ~100ms.
+        // The loop samples clocks and reconnect grace deadlines on each pass,
+        // so shrink the select wait whenever either is running: flags and
+        // grace expiries fire within ~100ms.
         auto waitTime = hasThinkingBot ? std::chrono::milliseconds(50)
             : hasRunningClock ? std::chrono::milliseconds(100)
             : std::chrono::seconds(1);
-        // pollClock runs every pass even when the wait expired with no
-        // events — a flag may fall for a player simply sitting still.
+        // The polls run every pass even when the wait expired with no
+        // events — a flag may fall (or a grace lapse) for a player simply
+        // sitting still.
         const auto nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now().time_since_epoch()).count();
-        for (auto& match : matches)
+        for (auto& match : matches) {
             match->pollClock(nowMs);
+            match->pollReconnect(nowMs);
+        }
 
         if (!selector.wait(waitTime))
             continue;
@@ -514,6 +597,12 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
                                         }
                                     }
                                 }
+                            } else if (std::get_if<chess::net::ResumeMsg>(&*msg)) {
+                                // Token rejoin (11.2) — checked before the
+                                // generic "Join first" fallback below.
+                                handleResume(client,
+                                    std::get<chess::net::ResumeMsg>(*msg),
+                                    matches, players);
                             } else {
                                 sendTo(client, chess::net::ErrorMsg{"Join first"});
                             }
@@ -564,10 +653,8 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
             if (match->isActive()) {
                 match->pollBotMove();
             } else {
-                if (match->white() && !match->white()->isBot) { match->white()->state = ClientState::Connected; match->white()->match = nullptr; }
-                if (match->black() && !match->black()->isBot) { match->black()->state = ClientState::Connected; match->black()->match = nullptr; }
-                if (match->white() && match->white()->isBot) { match->white()->state = ClientState::Connected; match->white()->match = nullptr; }
-                if (match->black() && match->black()->isBot) { match->black()->state = ClientState::Connected; match->black()->match = nullptr; }
+                // Finished matches endGame-detached their seats already;
+                // they linger only for the token-resume retention window.
                 match->stopBot();
             }
         }
@@ -584,7 +671,7 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
 
         matches.erase(
             std::remove_if(matches.begin(), matches.end(),
-                [](const auto& m) { return !m->isActive(); }),
+                [&](const auto& m) { return m->retentionEnded(nowMs); }),
             matches.end());
     }
 

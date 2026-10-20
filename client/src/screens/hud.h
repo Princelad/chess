@@ -35,6 +35,10 @@ public:
     // `sideRemainingMs` (11.1). Unlimited games feed 0, which disables the
     // display until the first clocked sync arrives.
     void syncClocks(Color sideToMove, std::int64_t sideRemainingMs);
+    // Full-resync shape for a token resume (11.2): both figures sampled at
+    // one instant plus the side that is on the move.
+    void syncClocks(std::int64_t whiteRemainingMs, std::int64_t blackRemainingMs,
+                    Color sideToMove);
     void setStatus(const std::string& msg, float duration);
     void setGameOver(bool gameOver) { gameOver_ = gameOver; }
     void handleScroll(float delta) { navigator_.handleScroll(delta); }

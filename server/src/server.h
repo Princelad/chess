@@ -18,6 +18,11 @@ struct ServerConfig {
     // no persistence; the default stays off until the protocol can create
     // accounts (10.2) and archive games (10.3).
     std::string dbPath;
+    // Reconnect grace (11.2): how long a match stays alive after a player
+    // drops, awaiting their `ResumeMsg{token}` on a fresh connection. Also
+    // the retention window for finished matches (late resume replays the
+    // final state + outcome).
+    long long reconnectGraceMs = 30000;
 };
 
 // Runs the server event loop on the calling thread. Blocks until stopped.

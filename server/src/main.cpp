@@ -18,6 +18,8 @@ static void printUsage(const char* prog)
               "  --host <addr>     Bind address (default: 0.0.0.0)\n"
               "  --max-clients <N> Max simultaneous clients (default: 64)\n"
               "  --timeout <secs>  Idle timeout in seconds (default: 0 = disabled)\n"
+              "  --grace-ms <ms>   Reconnect grace for dropped players (11.2,\n"
+              "                    default: 30000)\n"
               "  --log-file <path> Log to file in addition to stdout\n"
               "  --db <path>       SQLite file for accounts/games (default: off)\n"
               "  --log-level <L>   Min log level: info, warn, error (default: info)\n"
@@ -55,6 +57,12 @@ int main(int argc, char* argv[])
             config.timeout = std::atoll(argv[++i]);
             if (config.timeout < 0) {
                 LOG_ERROR("Timeout must be non-negative");
+                return 1;
+            }
+        } else if (arg == "--grace-ms" && i + 1 < argc) {
+            config.reconnectGraceMs = std::atoll(argv[++i]);
+            if (config.reconnectGraceMs < 0) {
+                LOG_ERROR("Grace must be non-negative");
                 return 1;
             }
         } else if (arg == "--log-file" && i + 1 < argc) {

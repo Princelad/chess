@@ -408,6 +408,161 @@ TEST(ProtocolRoundTrip, ServerWelcomeCarriesTimeControl)
     EXPECT_EQ(m->timeControl, "10+0");
 }
 
+TEST(ProtocolRoundTrip, ServerWelcomeCarriesResumeToken)
+{
+    // 11.2: every seat gets its rejoin credential with the welcome.
+    ServerMessage msg = WelcomeMsg{Color::White, "Bob", 1500.0, 350.0, true,
+                                   "10+0", "deadbeefcafe"};
+    sf::Packet p = freshPacket(serializeServer(msg));
+    auto result = deserializeServer(p);
+    ASSERT_TRUE(result.has_value());
+    auto* m = std::get_if<WelcomeMsg>(&*result);
+    ASSERT_NE(m, nullptr);
+    EXPECT_EQ(m->resumeToken, "deadbeefcafe");
+}
+
+TEST(ProtocolRoundTrip, ClientResume)
+{
+    ClientMessage msg = ResumeMsg{"deadbeefcafe"};
+    sf::Packet p = freshPacket(serializeClient(msg));
+    auto result = deserializeClient(p);
+    ASSERT_TRUE(result.has_value());
+    auto* m = std::get_if<ResumeMsg>(&*result);
+    ASSERT_NE(m, nullptr);
+    EXPECT_EQ(m->token, "deadbeefcafe");
+}
+
+TEST(ProtocolGarbage, ClientResumeEmptyToken)
+{
+    sf::Packet p;
+    p << ProtocolVersion << static_cast<uint8_t>(13) << std::string();
+    EXPECT_FALSE(deserializeClient(p).has_value());
+}
+
+TEST(ProtocolGarbage, ClientResumeOversizedToken)
+{
+    sf::Packet p;
+    p << ProtocolVersion << static_cast<uint8_t>(13)
+      << std::string(65, 'a'); // one past the wire guard
+    EXPECT_FALSE(deserializeClient(p).has_value());
+}
+
+TEST(ProtocolRoundTrip, ServerResumeState)
+{
+    ResumeStateMsg msg;
+    msg.color = Color::Black;
+    msg.opponent = "Alice";
+    msg.rating = 1727.5;
+    msg.deviation = 88.0;
+    msg.rated = true;
+    msg.timeControl = "5+3";
+    msg.fen = "rnbqkbnr/pppppppp/8/8/4P3/8/8/RNBQKBNR b KQkq - 0 1";
+    msg.sans = {"e4", "e5", "Nf3"};
+    msg.whiteRemainingMs = 300000;
+    msg.blackRemainingMs = 291250;
+    sf::Packet p = freshPacket(serializeServer(ServerMessage{msg}));
+    auto result = deserializeServer(p);
+    ASSERT_TRUE(result.has_value());
+    auto* m = std::get_if<ResumeStateMsg>(&*result);
+    ASSERT_NE(m, nullptr);
+    EXPECT_EQ(m->color, Color::Black);
+    EXPECT_EQ(m->opponent, "Alice");
+    EXPECT_DOUBLE_EQ(m->rating, 1727.5);
+    EXPECT_DOUBLE_EQ(m->deviation, 88.0);
+    EXPECT_TRUE(m->rated);
+    EXPECT_EQ(m->timeControl, "5+3");
+    EXPECT_EQ(m->fen, msg.fen);
+    ASSERT_EQ(m->sans.size(), 3u);
+    EXPECT_EQ(m->sans[2], "Nf3");
+    EXPECT_EQ(m->whiteRemainingMs, 300000);
+    EXPECT_EQ(m->blackRemainingMs, 291250);
+}
+
+TEST(ProtocolRoundTrip, ServerResumeStateUnlimitedEmptySanList)
+{
+    ResumeStateMsg msg; // defaults: unlimited, no moves
+    sf::Packet p = freshPacket(serializeServer(ServerMessage{msg}));
+    auto result = deserializeServer(p);
+    ASSERT_TRUE(result.has_value());
+    auto* m = std::get_if<ResumeStateMsg>(&*result);
+    ASSERT_NE(m, nullptr);
+    EXPECT_TRUE(m->sans.empty());
+    EXPECT_EQ(m->whiteRemainingMs, 0);
+    EXPECT_EQ(m->blackRemainingMs, 0);
+}
+
+TEST(ProtocolGarbage, ServerResumeStateMissingClockFields)
+{
+    // A packet cut before both clock figures must not parse.
+    sf::Packet p;
+    p << ProtocolVersion << static_cast<uint8_t>(14)
+      << static_cast<int>(Color::White) << std::string("Bob")
+      << 1500.0 << 350.0 << static_cast<uint8_t>(0)
+      << std::string() << std::string() << static_cast<int32_t>(0);
+    EXPECT_FALSE(deserializeServer(p).has_value());
+}
+
+TEST(ProtocolGarbage, ServerResumeStateMovesTooMany)
+{
+    // Declared SAN count beyond the cap must be refused without reading.
+    sf::Packet p;
+    p << ProtocolVersion << static_cast<uint8_t>(14)
+      << static_cast<int>(Color::White) << std::string("Bob")
+      << 1500.0 << 350.0 << static_cast<uint8_t>(0)
+      << std::string() << std::string() << static_cast<int32_t>(513);
+    EXPECT_FALSE(deserializeServer(p).has_value());
+}
+
+TEST(ProtocolGarbage, ServerResumeStateNegativeMoves)
+{
+    sf::Packet p;
+    p << ProtocolVersion << static_cast<uint8_t>(14)
+      << static_cast<int>(Color::White) << std::string("Bob")
+      << 1500.0 << 350.0 << static_cast<uint8_t>(0)
+      << std::string() << std::string() << static_cast<int32_t>(-1);
+    EXPECT_FALSE(deserializeServer(p).has_value());
+}
+
+TEST(ProtocolGarbage, ServerResumeStateNegativeClock)
+{
+    // Clocks never carry negative time on the wire.
+    sf::Packet p;
+    p << ProtocolVersion << static_cast<uint8_t>(14)
+      << static_cast<int>(Color::White) << std::string("Bob")
+      << 1500.0 << 350.0 << static_cast<uint8_t>(0)
+      << std::string() << std::string() << static_cast<int32_t>(0)
+      << static_cast<int32_t>(-1) << static_cast<int32_t>(0);
+    EXPECT_FALSE(deserializeServer(p).has_value());
+}
+
+TEST(ProtocolRoundTrip, ServerOpponentReconnecting)
+{
+    ServerMessage msg = OpponentReconnectingMsg{30};
+    sf::Packet p = freshPacket(serializeServer(msg));
+    auto result = deserializeServer(p);
+    ASSERT_TRUE(result.has_value());
+    auto* m = std::get_if<OpponentReconnectingMsg>(&*result);
+    ASSERT_NE(m, nullptr);
+    EXPECT_EQ(m->graceSeconds, 30);
+}
+
+TEST(ProtocolGarbage, ServerOpponentReconnectingNegativeGrace)
+{
+    sf::Packet p;
+    p << ProtocolVersion << static_cast<uint8_t>(15)
+      << static_cast<int32_t>(-5);
+    EXPECT_FALSE(deserializeServer(p).has_value());
+}
+
+TEST(ProtocolRoundTrip, ServerOpponentResumed)
+{
+    ServerMessage msg = OpponentResumedMsg{};
+    sf::Packet p = freshPacket(serializeServer(msg));
+    auto result = deserializeServer(p);
+    ASSERT_TRUE(result.has_value());
+    EXPECT_TRUE(std::holds_alternative<OpponentResumedMsg>(*result));
+}
+
 TEST(ProtocolRoundTrip, ServerMoveCarriesRemainingMs)
 {
     ServerMessage msg = ServerMoveMsg{"e4", 298500};
@@ -719,7 +874,8 @@ TEST(ProtocolGarbage, WelcomeBadRatedFlag)
       << static_cast<uint8_t>(0)
       << static_cast<int>(Color::White)
       << std::string("Bob") << 1650.0 << 132.5;
-    p << static_cast<uint8_t>(2);
+    p << static_cast<uint8_t>(2)
+      << std::string("10+0") << std::string("token");
     EXPECT_FALSE(deserializeServer(p).has_value());
 }
 

@@ -152,9 +152,20 @@ TEST_F(BotMatchTest, HumanDisconnectEndsGame)
     human_.state = ClientState::InMatch;
     bot_.state = ClientState::InMatch;
 
-    Match match(human_, bot_);
+    // Zero grace (11.2): the dropped human still loses the game on the
+    // reconnect window's expiry, exactly the pre-11.2 outcome but delayed.
+    Match match(human_, bot_, {}, 0);
     match.startBot(chess::Color::Black, 1, enginePath_);
 
     match.handleDisconnect(human_);
+    EXPECT_TRUE(match.isActive());
+
+    const auto now = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
+    match.pollReconnect(now);
     EXPECT_FALSE(match.isActive());
+
+    const auto over = match.lastGameOver();
+    ASSERT_TRUE(over.has_value());
+    EXPECT_EQ(over->reason, chess::net::GameOverReason::Disconnection);
 }

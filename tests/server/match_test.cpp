@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <chrono>
+
 #include <SFML/Network/TcpListener.hpp>
 #include <SFML/Network/TcpSocket.hpp>
 
@@ -38,7 +40,10 @@ protected:
         white_.name = "Alice";
         black_.name = "Bob";
 
-        match_ = std::make_unique<Match>(white_, black_);
+        // Zero grace makes the 11.2 reconnect window deterministic in unit
+        // tests: the seat is absent and the next pollReconnect expires it.
+        match_ = std::make_unique<Match>(white_, black_, std::string(),
+                                         testGraceMs_);
     }
 
     void sendFromClient(sf::TcpSocket& sock, const chess::net::ClientMessage& msg) {
@@ -71,6 +76,7 @@ protected:
     Client white_;
     Client black_;
     std::unique_ptr<Match> match_;
+    std::int64_t testGraceMs_ = 0;
 };
 
 TEST_F(MatchTest, ValidMove)
@@ -185,18 +191,145 @@ TEST_F(MatchTest, ChatTooLong)
     EXPECT_EQ(err->message, "Message too long");
 }
 
-TEST_F(MatchTest, DisconnectWhite)
+// 11.2: a disconnect no longer ends the game — the absent seat runs out
+// its grace window (clock keeps ticking) while the opponent waits, and a
+// token rejoin rebinds the seat. Only a lapsed window or a second
+// departure is final.
+
+TEST_F(MatchTest, DisconnectHoldsMatchInReconnectGrace)
 {
     match_->handleDisconnect(white_);
-    EXPECT_FALSE(match_->isActive());
+    EXPECT_TRUE(match_->isActive());
 
+    // The survivor is told about the window, not the game end.
     auto bMsg = tryRecvOnClient(*clientBlack_);
     ASSERT_TRUE(bMsg.has_value());
-    auto* over = std::get_if<chess::net::GameOverMsg>(&*bMsg);
-    ASSERT_NE(over, nullptr);
+    auto* rc = std::get_if<chess::net::OpponentReconnectingMsg>(&*bMsg);
+    ASSERT_NE(rc, nullptr);
+    EXPECT_EQ(rc->graceSeconds, static_cast<std::int32_t>((testGraceMs_ + 999) / 1000));
+
+    // The absent seat is gone, the seated one still here.
+    EXPECT_FALSE(match_->seat(chess::Color::White).present);
+    EXPECT_TRUE(match_->seat(chess::Color::Black).present);
+    EXPECT_EQ(match_->white(), nullptr);
+    EXPECT_EQ(match_->black(), &black_);
+}
+
+TEST_F(MatchTest, GraceExpiryEndsGameWithOpponentWin)
+{
+    match_->handleDisconnect(white_);
+
+    const auto now = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
+    match_->pollClock(now);
+    match_->pollReconnect(now);
+    EXPECT_FALSE(match_->isActive());
+    EXPECT_TRUE(match_->reconnecting() == false);
+
+    const auto over = match_->lastGameOver();
+    ASSERT_TRUE(over.has_value());
     EXPECT_EQ(over->result, chess::net::GameResult::BlackWins);
     EXPECT_EQ(over->reason, chess::net::GameOverReason::Disconnection);
+
+    // The socket may still hold the reconnect notice; skip to the end.
+    std::optional<chess::net::GameOverMsg> bOver;
+    for (int i = 0; i < 8; ++i) {
+        auto m = tryRecvOnClient(*clientBlack_);
+        if (m) {
+            if (auto* go = std::get_if<chess::net::GameOverMsg>(&*m)) {
+                bOver = *go;
+                break;
+            }
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    ASSERT_TRUE(bOver.has_value());
+    EXPECT_EQ(bOver->result, chess::net::GameResult::BlackWins);
+    EXPECT_EQ(bOver->reason, chess::net::GameOverReason::Disconnection);
 }
+
+TEST_F(MatchTest, ResumeRebindsSeatAndNotifiesOpponent)
+{
+    match_->handleDisconnect(white_);
+
+    Client carol; // fresh connection, no socket needed for the match logic
+    carol.name = "Carol";
+    match_->resume(match_->resumeToken(chess::Color::White), carol);
+
+    EXPECT_TRUE(match_->isActive());
+    EXPECT_EQ(match_->white(), &carol);
+    EXPECT_TRUE(match_->seat(chess::Color::White).present);
+    EXPECT_FALSE(match_->reconnecting());
+
+    // The survivor learns play may continue.
+    auto bMsg = tryRecvOnClient(*clientBlack_);
+    bool resumed = false;
+    while (auto m = tryRecvOnClient(*clientBlack_))
+        if (std::holds_alternative<chess::net::OpponentResumedMsg>(*m))
+            resumed = true;
+    EXPECT_TRUE(resumed);
+
+    // The rebound seat is fully seated: they are the side to move and their
+    // move goes through (no "Not your turn").
+    match_->handleMessage(carol, chess::net::MoveMsg{"e4"});
+    auto bMsg2 = tryRecvOnClient(*clientBlack_);
+    ASSERT_TRUE(bMsg2.has_value());
+    auto* move = std::get_if<chess::net::ServerMoveMsg>(&*bMsg2);
+    ASSERT_NE(move, nullptr);
+    EXPECT_EQ(move->san, "e4");
+}
+
+TEST_F(MatchTest, ResumeWithWrongTokenDoesNothing)
+{
+    match_->handleDisconnect(white_);
+
+    Client carol;
+    carol.name = "Carol";
+    const auto outcome = match_->resume("no-such-token", carol);
+    EXPECT_EQ(outcome, Match::ResumeOutcome::NoSeat);
+
+    // Still absent; grace still armed; the stranger was not seated.
+    EXPECT_EQ(match_->white(), nullptr);
+    EXPECT_FALSE(match_->seat(chess::Color::White).present);
+}
+
+TEST_F(MatchTest, ResumeAlreadyConnectedRefused)
+{
+    // A live seat's token played back on a second connection is refused.
+    Client carol;
+    carol.name = "Carol";
+    const auto outcome =
+        match_->resume(match_->resumeToken(chess::Color::White), carol);
+    EXPECT_EQ(outcome, Match::ResumeOutcome::AlreadyConnected);
+    EXPECT_EQ(match_->white(), &white_);
+}
+
+TEST_F(MatchTest, DoubleDisconnectEndsGameUnratedAbort)
+{
+    match_->handleDisconnect(white_);
+    match_->handleDisconnect(black_);
+
+    EXPECT_FALSE(match_->isActive());
+    const auto over = match_->lastGameOver();
+    ASSERT_TRUE(over.has_value());
+    // Nobody stayed behind: nobody wins. Aborted games are never rated.
+    EXPECT_EQ(over->result, chess::net::GameResult::Abort);
+    EXPECT_EQ(over->reason, chess::net::GameOverReason::Disconnection);
+}
+
+TEST_F(MatchTest, FinishedGameMatchesTokenForLateResume)
+{
+    match_->handleMessage(white_, chess::net::ResignMsg{});
+    EXPECT_FALSE(match_->isActive());
+
+    const std::string loserToken = match_->resumeToken(chess::Color::White);
+    Client carol;
+    carol.name = "Carol";
+    EXPECT_EQ(match_->resume(loserToken, carol),
+              Match::ResumeOutcome::ReboundOver);
+    EXPECT_TRUE(match_->lastGameOver().has_value());
+}
+
 
 TEST_F(MatchTest, PingPong)
 {

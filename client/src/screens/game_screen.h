@@ -29,15 +29,15 @@ public:
     GameScreen(App& app, Color myColor, const std::string& opponentName,
                std::optional<std::pair<double, double>> opponentRating = {},
                bool rated = false,
-               const std::string& timeControl = {});
+               const std::string& timeControl = {},
+               const std::string& resumeToken = {});
     void handleEvent(const sf::Event& event) override;
     void update(float dtSec) override;
     void draw(sf::RenderWindow& window) override;
 
 private:
     void selectPiece(int file, int rank);
-    void trySendMove(int targetFile, int targetRank);
-    void deselect();
+    void trySendMove(int targetFile, int targetRank);    void deselect();
     void commitMove(const chess::Move& m);
     void buildPromotion(int fromFile, int fromRank, int toFile, int toRank);
     void sendPromotionMove(chess::PieceType type);
@@ -54,6 +54,12 @@ private:
     void drawChat(sf::RenderWindow& window);
     void drawHelpOverlay(sf::RenderWindow& window);
     void finishGameOver();
+
+    // Reconnect & resume (11.2): automatic token-based rejoin after a
+    // mid-game connection loss, with the game-over screen as the fallback.
+    void updateReconnect(float dtSec);
+    void giveUpReconnect();
+    void applyResume(const chess::net::ResumeStateMsg& msg);
 
     App& app_;
     Color myColor_;
@@ -90,6 +96,16 @@ private:
     Button declineBtn_;
     Button acceptBtn_;
     std::string timeControl_;
+    std::string resumeToken_;
+
+    // Reconnect state machine (11.2). Idle until a real connection loss;
+    // each step re-arms on new drops. RebindResumeFailed = token rejected
+    // by the server short-circuits the give-up timer.
+    enum class ReconnectPhase { None, Backoff, Connecting, AwaitingResume };
+    ReconnectPhase reconnectPhase_ = ReconnectPhase::None;
+    float reconnectWait_ = 0.f;
+    float reconnectElapsed_ = 0.f;
+    bool checkSelfResumeError_ = false;
 
     void layoutPanel();
 };

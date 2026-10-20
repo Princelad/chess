@@ -77,6 +77,11 @@ void Connection::join(const std::string& name, const std::string& timeControl)
     send(chess::net::JoinMsg{name, timeControl});
 }
 
+void Connection::resume(const std::string& token)
+{
+    send(chess::net::ResumeMsg{token});
+}
+
 Connection::~Connection()
 {
     if (connectThread_.joinable()) connectThread_.join();

@@ -639,10 +639,11 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [x] Time-control presets (bullet/blitz/rapid/classical) chosen before pairing (ConnectScreen cycle button `1+0/3+2/5+3/10+0/15+10/30+0/unlimited`, persisted as `general.time_control`; matchmaker pairs only equal TC strings — mismatched players stay queued)
   - [x] Ticking clock UI beside each player card (`Hud::syncClocks` re-syncs at every `ServerMoveMsg`, locally ticks between syncs in `Hud::update`; `m:ss` style, tenths under a minute, amber below 30 s, red below 10 s; no display for unlimited games)
 
-- [ ] **11.2 Reconnect & resume**
-  - [ ] Server keeps match alive ~30 s after disconnect; token-based rejoin
-  - [ ] Protocol: `RESUME {token}` → `STATE {fen, moves, clocks}` full resync
-  - [ ] Opponent sees "opponent reconnecting…" status
+- [x] **11.2 Reconnect & resume**
+  - [x] Server keeps match alive ~30 s after disconnect; token-based rejoin (`Match` refactored to two `Seat`s — join-persistent name/playerId/rating snapshot plus a live `Client*` presence and a per-seat resume token. `ServerConfig.reconnectGraceMs = 30000` (overridable via `--grace-ms`); a solo drop opens the window and notifies the survivor, both absent = immediate unrated `Abort`, lapsed window = opponent wins by `Disconnection` (rated), and the absent seat's clock keeps ticking throughout — a flag fall during grace still loses on time)
+  - [x] Protocol: `RESUME {token}` → `STATE {fen, moves, clocks}` full resync (protocol v2 append-only tags: client `Resume = 13`; server `ResumeState = 14`, `OpponentReconnecting = 15`, `OpponentResumed = 16`; `WelcomeMsg` gained `resumeToken`; `ResumeStateMsg` carries color/opponent/rated/TC/`fen`/SAN list (512-entry wire guard)/both remaining-ms. Finished matches linger in retention for the grace window so a late token still replays final state + `GameOverMsg`)
+  - [x] Opponent sees "opponent reconnecting…" status (plus "opponent reconnected" on the rebind; the dropped client auto-rejoins: HUD "Connection lost — reconnecting…", 1 s-retry loop against `App::last{Host,Port}`, `ResumeStateMsg` rebuilds the screen in place via SAN replay with both clock figures re-synced — no move animation; chat history is not restored (accepted v1 scope); give-up after ~30 s or a rejected token falls back to the pre-11.2 game-over screen)
+  - [x] Tests (shared `tests/e2e/harness.h` extracted from the fixtures; `tests/e2e/reconnect_test.cpp` covers leave→resume→finish rated+archived, grace expiry, double-disconnect abort, wrong token, and resume-after-game-over)
 
 - [ ] **11.3 Takeback**
   - [ ] Protocol `TAKEBACK_REQUEST/ACCEPT/DECLINE`; server validates via two-ply `undoMove`

@@ -124,6 +124,18 @@ void Hud::syncClocks(Color sideToMove, std::int64_t sideRemainingMs)
     sinceSyncSec_ = 0.f;
 }
 
+void Hud::syncClocks(std::int64_t whiteRemainingMs, std::int64_t blackRemainingMs,
+                     Color sideToMove)
+{
+    clocksOn_ = whiteRemainingMs > 0 || blackRemainingMs > 0;
+    if (!clocksOn_)
+        return;
+    remainingMs_[0] = static_cast<double>(whiteRemainingMs);
+    remainingMs_[1] = static_cast<double>(blackRemainingMs);
+    clockTurn_ = sideToMove;
+    sinceSyncSec_ = 0.f;
+}
+
 void Hud::update(float dtSec)
 {
     if (statusTimer_ > 0.f) {

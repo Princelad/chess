@@ -1,149 +1,20 @@
+// Basic end-to-end tests (extracted harness in 11.2): a real server on an
+// OS-assigned loopback port, driven with raw TCP packets.
 #include <gtest/gtest.h>
 
-#include <atomic>
-#include <chrono>
-#include <thread>
-#include <vector>
+#include <variant>
 
 #include <SFML/Network/TcpSocket.hpp>
 
 #include <chess/net/messages.h>
 #include <chess/net/protocol.h>
 
+#include "harness.h"
 #include "server.h"
 
 using namespace std::chrono_literals;
 
-static constexpr auto TestTimeout = 5s;
-
-class E2eTest : public ::testing::Test {
-protected:
-    void SetUp() override {
-        shutdownFlag_ = false;
-        boundPort_ = 0;
-
-        serverThread_ = std::thread([this]() {
-            chess::server::ServerConfig config;
-            config.port = 0;
-            config.host = "127.0.0.1";
-            // boundPort_ is written before the event loop starts
-            chess::server::runServer(config, shutdownFlag_, &boundPort_);
-        });
-
-        while (boundPort_ == 0)
-            std::this_thread::sleep_for(1ms);
-    }
-
-    void TearDown() override {
-        chess::server::stopServer(shutdownFlag_);
-        if (serverThread_.joinable()) serverThread_.join();
-    }
-
-    sf::TcpSocket connectClient() {
-        sf::TcpSocket sock;
-        auto status = sock.connect(sf::IpAddress::LocalHostV4, boundPort_);
-        EXPECT_EQ(status, sf::Socket::Status::Done);
-        sock.setBlocking(false);
-        return sock;
-    }
-
-    void sendMsg(sf::TcpSocket& sock, const chess::net::ClientMessage& msg) {
-        sf::Packet packet;
-        chess::net::serialize(packet, msg);
-        auto s = sock.send(packet);
-        ASSERT_EQ(s, sf::Socket::Status::Done);
-    }
-
-    std::optional<chess::net::ServerMessage> tryRecv(sf::TcpSocket& sock) {
-        // The one-packet-per-call version loses the rare TCP packets that
-        // arrive fragmented (bytes are consumed and dropped on timeout
-        // under load). Ride through Partial so a later receive completes it.
-        sf::Packet packet;
-        while (true) {
-            auto status = sock.receive(packet);
-            if (status == sf::Socket::Status::Done)
-                return chess::net::deserializeServer(packet);
-            if (status == sf::Socket::Status::Partial) {
-                std::this_thread::sleep_for(1ms);
-                continue;
-            }
-            return std::nullopt;
-        }
-    }
-
-    template <typename Pred>
-    bool pollUntil(Pred pred,
-                   std::chrono::milliseconds timeout = TestTimeout)
-    {
-        auto deadline = std::chrono::steady_clock::now() + timeout;
-        while (std::chrono::steady_clock::now() < deadline) {
-            if (pred()) return true;
-            std::this_thread::sleep_for(1ms);
-        }
-        return false;
-    }
-
-    void joinBoth(sf::TcpSocket& white, sf::TcpSocket& black,
-                  const std::string& wName = "White", const std::string& bName = "Black")
-    {
-        sendMsg(white, chess::net::JoinMsg{wName});
-        sendMsg(black, chess::net::JoinMsg{bName});
-
-        bool wWelcome = false, bWelcome = false;
-        ASSERT_TRUE(pollUntil([&]() {
-            if (!wWelcome) {
-                auto m = tryRecv(white);
-                if (m) {
-                    auto* w = std::get_if<chess::net::WelcomeMsg>(&*m);
-                    EXPECT_NE(w, nullptr);
-                    if (w) {
-                        EXPECT_EQ(w->color, chess::Color::White);
-                        EXPECT_EQ(w->opponent, bName);
-                    }
-                    wWelcome = true;
-                }
-            }
-            if (!bWelcome) {
-                auto m = tryRecv(black);
-                if (m) {
-                    auto* w = std::get_if<chess::net::WelcomeMsg>(&*m);
-                    EXPECT_NE(w, nullptr);
-                    if (w) {
-                        EXPECT_EQ(w->color, chess::Color::Black);
-                        EXPECT_EQ(w->opponent, wName);
-                    }
-                    bWelcome = true;
-                }
-            }
-            return wWelcome && bWelcome;
-        }));
-    }
-
-    // Drain one move from each side, return true if both received ServerMoveMsg.
-    bool drainOneMovePair(sf::TcpSocket& white, sf::TcpSocket& black,
-                          std::string* wSan = nullptr, std::string* bSan = nullptr)
-    {
-        bool wGot = false, bGot = false;
-        auto mw = tryRecv(white);
-        auto mb = tryRecv(black);
-        if (mw) {
-            auto* mv = std::get_if<chess::net::ServerMoveMsg>(&*mw);
-            if (mv) { wGot = true; if (wSan) *wSan = mv->san; }
-        }
-        if (mb) {
-            auto* mv = std::get_if<chess::net::ServerMoveMsg>(&*mb);
-            if (mv) { bGot = true; if (bSan) *bSan = mv->san; }
-        }
-        return wGot && bGot;
-    }
-
-    // Written by server thread before entering the event loop (runServer boundPortOut).
-    // Read by main thread in a spin loop — intentional data race, safe on all
-    // platforms for an aligned 2-byte write/read, and the sleep provides a barrier.
-    unsigned short boundPort_{0};
-    std::atomic<bool> shutdownFlag_{false};
-    std::thread serverThread_;
-};
+class E2eTest : public chess::e2e::E2eHarness {};
 
 // ── Join / matchmaking ──────────────────────────────────────────────────────
 

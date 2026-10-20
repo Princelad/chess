@@ -15,18 +15,25 @@ namespace chess::client {
 namespace {
 constexpr float BtnH = 30.f;
 constexpr float InputH = 28.f;
+// Reconnect loop timings (11.2): one retry per second, at most ~30 s of
+// trying — the server side grace is as long, so an unresponsive server
+// window naturally outlives the token's validity.
+constexpr float ReconnectRetrySeconds = 1.f;
+constexpr float ReconnectGiveUpSeconds = 30.f;
 constexpr std::size_t MaxChatLog = 50;
 constexpr std::size_t MaxChatInput = 200;
 }
 
 GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName,
                        std::optional<std::pair<double, double>> opponentRating,
-                       bool rated, const std::string& timeControl)
+                       bool rated, const std::string& timeControl,
+                       const std::string& resumeToken)
     : app_(app)
     , myColor_(myColor)
     , opponentName_(opponentName)
     , opponentRating_(std::move(opponentRating))
     , rated_(rated)
+    , resumeToken_(resumeToken)
     , boardView_(static_cast<float>(App::WindowWidth),
                  static_cast<float>(App::WindowHeight),
                  myColor,
@@ -637,6 +644,24 @@ void GameScreen::update(float dtSec)
             app_.setProfile(*profileMsg);
             refreshRatingsHud();
         }
+        else if (auto* resumeState = std::get_if<chess::net::ResumeStateMsg>(&msg)) {
+            // Token resume (11.2): the full remote state, replayed in place.
+            reconnectPhase_ = ReconnectPhase::None;
+            applyResume(*resumeState);
+        }
+        else if (auto* reconn = std::get_if<chess::net::OpponentReconnectingMsg>(&msg)) {
+            hud_.setStatus("Opponent reconnecting...",
+                           static_cast<float>(reconn->graceSeconds));
+            chatLog_.push_back("Opponent lost connection");
+            if (chatLog_.size() > MaxChatLog)
+                chatLog_.erase(chatLog_.begin());
+        }
+        else if (std::holds_alternative<chess::net::OpponentResumedMsg>(msg)) {
+            hud_.setStatus("Opponent reconnected", 3.f);
+            chatLog_.push_back("Opponent reconnected");
+            if (chatLog_.size() > MaxChatLog)
+                chatLog_.erase(chatLog_.begin());
+        }
         else if (auto* chat = std::get_if<chess::net::ServerChatMsg>(&msg)) {
             chatLog_.push_back(chat->name + ": " + chat->text);
             if (chatLog_.size() > MaxChatLog)
@@ -648,16 +673,151 @@ void GameScreen::update(float dtSec)
                 myTurn_ = true;
                 hud_.setInfo(opponentName_, myColor_, myTurn_, gameOver_);
             }
+            if (reconnectPhase_ == ReconnectPhase::AwaitingResume) {
+                // The token was rejected: give up at once instead of
+                // retrying the same dead resume for the rest of the window.
+                checkSelfResumeError_ = true;
+            }
         }
     }
 
-    if (app_.connection().state() == ConnectionState::Disconnected) {
-        gameOver_ = true;
-        app_.switchScreen(std::make_unique<GameOverScreen>(
-            app_, net::GameResult::Abort, net::GameOverReason::Disconnection,
-            hud_.navigator().initialBoard(), hud_.navigator().moves(),
-            hud_.navigator().sans()));
+    // Reconnect engine (11.2): runs while the flow is active, and picks up
+    // a fresh drop whenever the connection died outside the flow.
+    if (reconnectPhase_ != ReconnectPhase::None
+        || app_.connection().state() == ConnectionState::Disconnected)
+        updateReconnect(dtSec);
+}
+
+// Token-based reconnect loop (11.2). Left alone, this self-heals within a
+// second of the network coming back; rejected tokens exit the loop at once
+// (see checkSelfResumeError_) and everything else falls back to the
+// game-over screen after the give-up window.
+void GameScreen::updateReconnect(float dtSec)
+{
+    // Defense: a game session with no token has nothing to resume — keep
+    // the old instant "Connection lost" behavior.
+    if (resumeToken_.empty())
+        return giveUpReconnect();
+
+    auto& conn = app_.connection();
+    switch (reconnectPhase_) {
+        case ReconnectPhase::None:
+            // Fresh drop detected by the caller: arm the flow.
+            reconnectElapsed_ = 0.f;
+            reconnectWait_ = 0.f;
+            reconnectPhase_ = ReconnectPhase::Backoff;
+            hud_.setStatus("Connection lost — reconnecting...",
+                           ReconnectGiveUpSeconds);
+            break;
+
+        case ReconnectPhase::Backoff: {
+            reconnectWait_ += dtSec;
+            reconnectElapsed_ += dtSec;
+            if (reconnectElapsed_ >= ReconnectGiveUpSeconds)
+                return giveUpReconnect();
+            if (reconnectWait_ >= ReconnectRetrySeconds
+                && conn.state() == ConnectionState::Disconnected) {
+                // Use the credentials remembered at the last successful
+                // connect; failed dials loop back to Backoff via state
+                // checks below.
+                try {
+                    const auto port = static_cast<unsigned short>(
+                        std::stoi(app_.lastPort()));
+                    app_.connection().connect(app_.lastHost(), port);
+                    reconnectPhase_ = ReconnectPhase::Connecting;
+                } catch (...) {
+                    // Unparsable remembered port: no credentials, no resume.
+                    return giveUpReconnect();
+                }
+            }
+            break;
+        }
+
+        case ReconnectPhase::Connecting: {
+            reconnectElapsed_ += dtSec;
+            if (reconnectElapsed_ >= ReconnectGiveUpSeconds)
+                return giveUpReconnect();
+            if (conn.state() == ConnectionState::Connected) {
+                conn.resume(resumeToken_);
+                reconnectPhase_ = ReconnectPhase::AwaitingResume;
+            } else if (conn.state() == ConnectionState::Disconnected) {
+                reconnectWait_ = 0.f;
+                reconnectPhase_ = ReconnectPhase::Backoff;
+            }
+            break;
+        }
+
+        case ReconnectPhase::AwaitingResume: {
+            if (checkSelfResumeError_)
+                return giveUpReconnect();
+            reconnectElapsed_ += dtSec;
+            if (reconnectElapsed_ >= ReconnectGiveUpSeconds)
+                return giveUpReconnect();
+            // Another drop while awaiting the reply: retry from scratch.
+            if (conn.state() == ConnectionState::Disconnected) {
+                reconnectWait_ = 0.f;
+                reconnectPhase_ = ReconnectPhase::Backoff;
+            }
+            break;
+        }
     }
+}
+
+void GameScreen::giveUpReconnect()
+{
+    reconnectPhase_ = ReconnectPhase::None;
+    checkSelfResumeError_ = false;
+    gameOver_ = true;
+    hud_.setGameOver(true);
+    app_.switchScreen(std::make_unique<GameOverScreen>(
+        app_, net::GameResult::Abort, net::GameOverReason::Disconnection,
+        hud_.navigator().initialBoard(), hud_.navigator().moves(),
+        hud_.navigator().sans()));
+}
+
+// Rebuilds this screen from a full ResumeStateMsg (11.2): SAN replay for the
+// board, refreshed identity/opponent/ratings, both clock figures. No move
+// animation — the missing moves are history, not action.
+void GameScreen::applyResume(const chess::net::ResumeStateMsg& msg)
+{
+    myColor_ = msg.color;
+    opponentName_ = msg.opponent;
+    rated_ = msg.rated;
+    timeControl_ = msg.timeControl;
+    opponentRating_ = std::make_pair(msg.rating, msg.deviation);
+
+    // Replay the SAN chain over the standard start position (the archive
+    // replay uses the same reconstruction; `fen` is accepted for forward
+    // compatibility but is always the start position today).
+    Board board = Board::fromStartPos();
+    std::vector<chess::Move> moves;
+    moves.reserve(msg.sans.size());
+    for (const auto& san : msg.sans) {
+        auto mv = chess::san::fromSan(board, san);
+        if (!mv.has_value())
+            break;
+        moves.push_back(*mv);
+        board.makeMove(*mv);
+    }
+    hud_.setGame(Board::fromStartPos(), moves, msg.sans);
+
+    // Drop leftover interaction state from before the drop.
+    hl_.selectedSquare.reset();
+    dragFrom_.reset();
+    rightPress_.reset();
+    promo_.reset();
+    annotations_.clear();
+    drawOfferPending_ = false;
+    chatLog_.clear();
+    chatInput_.setFocused(false);
+
+    myTurn_ = board.sideToMove() == myColor_ && !gameOver_;
+    hud_.setInfo(opponentName_, myColor_, myTurn_, gameOver_);
+    hud_.setGameOver(gameOver_);
+    refreshRatingsHud();
+    hud_.syncClocks(msg.whiteRemainingMs, msg.blackRemainingMs,
+                    board.sideToMove());
+    hud_.setStatus("Reconnected", 2.f);
 }
 
 void GameScreen::finishGameOver()

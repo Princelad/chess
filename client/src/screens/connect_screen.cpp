@@ -322,7 +322,7 @@ void ConnectScreen::update(float dtSec)
                 opponentRating = std::make_pair(welcome->rating, welcome->deviation);
             app_.switchScreen(std::make_unique<GameScreen>(
                 app_, welcome->color, welcome->opponent, opponentRating,
-                welcome->rated, welcome->timeControl));
+                welcome->rated, welcome->timeControl, welcome->resumeToken));
             return;
         }
         if (auto* profileMsg = std::get_if<chess::net::ProfileMsg>(&msg)) {

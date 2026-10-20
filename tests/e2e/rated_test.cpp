@@ -3,9 +3,7 @@
 #include <gtest/gtest.h>
 
 #include <atomic>
-#include <chrono>
 #include <filesystem>
-#include <thread>
 #include <variant>
 
 #include <SFML/Network/TcpSocket.hpp>
@@ -13,126 +11,36 @@
 #include <chess/net/messages.h>
 #include <chess/net/protocol.h>
 
+#include "harness.h"
 #include "server.h"
 
 using namespace std::chrono_literals;
 
-namespace {
-
-constexpr auto TestTimeout = 5s;
-
-class RatedE2eTest : public ::testing::Test {
+// ── Harness wrapper: points the shared server at a temp SQLite file ────────
+class RatedE2eTest : public chess::e2e::E2eHarness {
 protected:
-    void SetUp() override
+    void beforeStart() override
     {
         dbPath_ = std::filesystem::temp_directory_path()
             / ("chess_rated_e2e_" + std::to_string(++dbCounter) + ".db");
         std::filesystem::remove(dbPath_);
         std::filesystem::remove(dbPath_.string() + "-wal");
         std::filesystem::remove(dbPath_.string() + "-shm");
-
-        shutdownFlag_ = false;
-        boundPort_ = 0;
-        serverThread_ = std::thread([this]() {
-            chess::server::ServerConfig config;
-            config.port = 0;
-            config.host = "127.0.0.1";
-            config.dbPath = dbPath_.string();
-            chess::server::runServer(config, shutdownFlag_, &boundPort_);
-        });
-        while (boundPort_ == 0)
-            std::this_thread::sleep_for(1ms);
     }
 
-    void TearDown() override
+    void configure(chess::server::ServerConfig& config) override
     {
-        chess::server::stopServer(shutdownFlag_);
-        if (serverThread_.joinable())
-            serverThread_.join();
+        config.dbPath = dbPath_.string();
+    }
+
+    void afterStop() override
+    {
         std::filesystem::remove(dbPath_);
         std::filesystem::remove(dbPath_.string() + "-wal");
         std::filesystem::remove(dbPath_.string() + "-shm");
     }
 
-    sf::TcpSocket connectClient()
-    {
-        sf::TcpSocket sock;
-        EXPECT_EQ(sock.connect(sf::IpAddress::LocalHostV4, boundPort_),
-                  sf::Socket::Status::Done);
-        sock.setBlocking(false);
-        return sock;
-    }
-
-    void sendMsg(sf::TcpSocket& sock, const chess::net::ClientMessage& msg)
-    {
-        sf::Packet packet;
-        chess::net::serialize(packet, msg);
-        ASSERT_EQ(sock.send(packet), sf::Socket::Status::Done);
-    }
-
-    // Sends one SAN move and waits until the server echoes it back to the
-    // sender. This synchronizes play with server processing: the next move
-    // is never sent before the previous one was applied, so the select
-    // loop's cross-socket drain order cannot reorder move applications.
-    // The sender's socket may still hold the previous move's own stale
-    // echo, so non-matching ServerMoveMsg entries are skipped; ErrorMsg
-    // (e.g. out of turn) fails fast.
-    bool playMove(sf::TcpSocket& sender, const std::string& san)
-    {
-        sendMsg(sender, chess::net::MoveMsg{san});
-        const auto deadline = std::chrono::steady_clock::now() + TestTimeout;
-        while (std::chrono::steady_clock::now() < deadline) {
-            if (auto msg = tryRecv(sender)) {
-                if (auto* move = std::get_if<chess::net::ServerMoveMsg>(&*msg)) {
-                    if (move->san == san)
-                        return true;
-                }
-                else if (std::holds_alternative<chess::net::ErrorMsg>(*msg))
-                    return false;
-            }
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
-        }
-        return false;
-    }
-
-    std::optional<chess::net::ServerMessage> tryRecv(sf::TcpSocket& sock)
-    {
-        // The one-packet-per-call version loses the rare TCP packets that
-        // arrive fragmented (bytes are consumed and dropped on timeout
-        // under load). Ride through Partial so a later receive completes it.
-        sf::Packet packet;
-        while (true) {
-            auto status = sock.receive(packet);
-            if (status == sf::Socket::Status::Done)
-                return chess::net::deserializeServer(packet);
-            if (status == sf::Socket::Status::Partial) {
-                std::this_thread::sleep_for(1ms);
-                continue;
-            }
-            return std::nullopt;
-        }
-    }
-
-    // Polls sock until it sees the wanted message type; ignores others.
-    template <typename T>
-    std::optional<T> await(sf::TcpSocket& sock, std::chrono::milliseconds timeout = TestTimeout)
-    {
-        const auto deadline = std::chrono::steady_clock::now() + timeout;
-        while (std::chrono::steady_clock::now() < deadline) {
-            if (auto msg = tryRecv(sock)) {
-                if (auto* wanted = std::get_if<T>(&*msg))
-                    return *wanted;
-                // Ignore Progress-bearing siblings (welcome, moves, ...).
-            }
-            std::this_thread::sleep_for(1ms);
-        }
-        return std::nullopt;
-    }
-
     std::filesystem::path dbPath_;
-    std::atomic<bool> shutdownFlag_ = false;
-    std::thread serverThread_;
-    unsigned short boundPort_ = 0;
 
     static std::atomic<int> dbCounter;
 };
@@ -535,4 +443,3 @@ TEST_F(RatedE2eTest, ArchiveRequestBeyondClampStillDeserializes)
     EXPECT_TRUE(list->games[0].rated);
 }
 
-} // namespace

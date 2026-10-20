@@ -97,6 +97,13 @@ struct LeaderboardRequestMsg {
     int limit = 50;
 };
 
+// Token-based rejoin (11.2): sent on a fresh connection to reclaim one's
+// seat in a live game after a mid-game drop. The token arrives per seat in
+// WelcomeMsg; anything else unlocks nothing.
+struct ResumeMsg {
+    std::string token;
+};
+
 using ClientMessage = std::variant<
     JoinMsg,
     MoveMsg,
@@ -109,7 +116,8 @@ using ClientMessage = std::variant<
     LoginMsg,
     ArchiveRequestMsg,
     ArchiveGetMsg,
-    LeaderboardRequestMsg
+    LeaderboardRequestMsg,
+    ResumeMsg
 >;
 
 // ── Server → Client ─────────────────────────────────────────────────────────
@@ -117,10 +125,13 @@ using ClientMessage = std::variant<
 struct WelcomeMsg {
     Color color;
     std::string opponent;
-    double rating = 1500.0;  // opponent's pre-game rating
+    double rating = 1500.0;   // opponent's pre-game rating
     double deviation = 350.0;
-    bool rated = false;      // both players registered and the game counts
-    std::string timeControl; // "5+3" or empty = unlimited (11.1)
+    bool rated = false;       // both players registered and the game counts
+    std::string timeControl;  // "5+3" or empty = unlimited (11.1)
+    // Per-seat rejoin credential (11.2): a mid-game drop is recovered on a
+    // fresh connection by sending it back in ResumeMsg.
+    std::string resumeToken;
 };
 
 struct OpponentJoinedMsg {
@@ -162,9 +173,7 @@ struct ProfileMsg {
     double rating = 1500.0;
     double deviation = 350.0;
     bool isGuest = true;
-};
-
-// One row of the game archive: enough for a list, not the moves themselves.
+};// One row of the game archive: enough for a list, not the moves themselves.
 struct ArchiveEntryMsg {
     std::int64_t id = 0;
     std::string whiteName;
@@ -211,6 +220,33 @@ struct LeaderboardListMsg {
     std::vector<LeaderboardEntryMsg> players;
 };
 
+// Full resync after a token rejoin (11.2): the seat is re-bound and the
+// client rebuilds the board by replaying `sans` (chaining san::fromSan from
+// `fen`, always the standard start position today). The clock figures are
+// both sides' remaining time sampled at the resync (0 = no clock).
+struct ResumeStateMsg {
+    Color color = Color::White;
+    std::string opponent;
+    double rating = 1500.0;
+    double deviation = 350.0;
+    bool rated = false;
+    std::string timeControl;
+    std::string fen;
+    std::vector<std::string> sans;
+    std::int32_t whiteRemainingMs = 0;
+    std::int32_t blackRemainingMs = 0;
+};
+
+// The opponent's connection dropped mid-game; the match lives for this many
+// seconds awaiting their token rejoin (11.2). The seat's clock keeps running
+// meanwhile — a flag fall inside the grace window still loses on time.
+struct OpponentReconnectingMsg {
+    std::int32_t graceSeconds = 0;
+};
+
+// The rejoining seat is bound again: clear the reconnecting notice and play on.
+struct OpponentResumedMsg {};
+
 using ServerMessage = std::variant<
     WelcomeMsg,
     OpponentJoinedMsg,
@@ -225,7 +261,10 @@ using ServerMessage = std::variant<
     ProfileMsg,
     ArchiveListMsg,
     ArchiveGameMsg,
-    LeaderboardListMsg
+    LeaderboardListMsg,
+    ResumeStateMsg,
+    OpponentReconnectingMsg,
+    OpponentResumedMsg
 >;
 
 } // namespace net
