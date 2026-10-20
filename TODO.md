@@ -633,11 +633,11 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
 
 **Exit version:** `v1.4.0`
 
-- [ ] **11.1 Chess clocks**
-  - [ ] Protocol: remaining-time synced with every MOVE broadcast
-  - [ ] Server-enforced timeout = loss; Fischer increment supported
-  - [ ] Time-control presets (bullet/blitz/rapid/classical) chosen before pairing
-  - [ ] Ticking clock UI beside each player card
+- [x] **11.1 Chess clocks**
+  - [x] Protocol: remaining-time synced with every MOVE broadcast (`JoinMsg.timeControl` + `WelcomeMsg.timeControl` carry the "m+s" strings, empty = unlimited; `ServerMoveMsg.remainingMs` carries the on-move player's fresh remaining; `GameOverReason::Timeout` appended last — parser promoted to `chess::net::parseTimeControl` in messages.h, malformed = unlimited)
+  - [x] Server-enforced timeout = loss; Fischer increment supported (`server/src/clock.{h,cpp}` — pure `MatchClock` over injected timestamps; White's clock starts at match construction, the mover is charged elapsed + increment per move and the broadcast carries their new remaining; `Match::pollClock` polls every loop pass, select wait shrinks to 100 ms while a clock runs; bots mirror the waiting human's TC and time out like humans)
+  - [x] Time-control presets (bullet/blitz/rapid/classical) chosen before pairing (ConnectScreen cycle button `1+0/3+2/5+3/10+0/15+10/30+0/unlimited`, persisted as `general.time_control`; matchmaker pairs only equal TC strings — mismatched players stay queued)
+  - [x] Ticking clock UI beside each player card (`Hud::syncClocks` re-syncs at every `ServerMoveMsg`, locally ticks between syncs in `Hud::update`; `m:ss` style, tenths under a minute, amber below 30 s, red below 10 s; no display for unlimited games)
 
 - [ ] **11.2 Reconnect & resume**
   - [ ] Server keeps match alive ~30 s after disconnect; token-based rejoin

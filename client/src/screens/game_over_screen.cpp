@@ -36,6 +36,7 @@ GameOverScreen::GameOverScreen(App& app,
         case net::GameOverReason::Disconnection:      reasonStr = "Disconnection"; break;
         case net::GameOverReason::Abort:              reasonStr = "Aborted"; break;
         case net::GameOverReason::AgreedDraw:         reasonStr = "Draw by agreement"; break;
+        case net::GameOverReason::Timeout:            reasonStr = "Won on time"; break;
         default:                                      reasonStr = "Unknown"; break;
     }
 

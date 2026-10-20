@@ -35,7 +35,7 @@ public:
 
     void connect(const std::string& host, unsigned short port);
     void disconnect();
-    void join(const std::string& name);
+    void join(const std::string& name, const std::string& timeControl = {});
 
     void poll();
     bool send(const chess::net::ClientMessage& msg);

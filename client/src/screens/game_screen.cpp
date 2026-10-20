@@ -21,7 +21,7 @@ constexpr std::size_t MaxChatInput = 200;
 
 GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName,
                        std::optional<std::pair<double, double>> opponentRating,
-                       bool rated)
+                       bool rated, const std::string& timeControl)
     : app_(app)
     , myColor_(myColor)
     , opponentName_(opponentName)
@@ -39,6 +39,14 @@ GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName,
     hud_.setGame(Board::fromStartPos(), {}, {});
     hud_.setInfo(opponentName_, myColor_, myTurn_, gameOver_);
     refreshRatingsHud();
+
+    // Prime the clocks from the agreed time control (11.1): the server
+    // starts White's clock at match creation, so both displays begin at
+    // base time; each ServerMoveMsg re-syncs real authority afterwards.
+    timeControl_ = timeControl;
+    const auto tc = chess::net::parseTimeControl(timeControl_);
+    if (!tc.unlimited)
+        hud_.syncClocks(Color::White, tc.baseSeconds * 60000);
 
     chatInput_.setMaxLength(MaxChatInput);
     chatInput_.setPlaceholder("Type a message...");
@@ -587,6 +595,10 @@ void GameScreen::update(float dtSec)
                 }
                 app_.sounds().playMove(before, *parsed);
                 hud_.navigator().appendMove(*parsed, move->san);
+                // Re-sync the clock authority: remainingMs is the fresh
+                // remaining of whoever is on the move after this move.
+                hud_.syncClocks(hud_.navigator().finalBoard().sideToMove(),
+                                move->remainingMs);
                 hl_.selectedSquare.reset();
                 hl_.legalMoveTargets.clear();
                 myTurn_ = true;

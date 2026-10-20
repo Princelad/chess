@@ -1,4 +1,5 @@
 add_library(chessserver STATIC
+    src/clock.cpp
     src/matchmaker.cpp
     src/match.cpp
     src/server.cpp

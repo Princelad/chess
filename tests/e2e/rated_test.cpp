@@ -176,6 +176,56 @@ TEST_F(RatedE2eTest, GuestJoinCannotTakeAnAccountName)
     EXPECT_FALSE(welcome->rated); // still an unrated guest game
 }
 
+TEST_F(RatedE2eTest, TimedGameFlagsTheIdleMover)
+{
+    // "0+5" leaves base time empty and grants +5 s per completed move, so
+    // the first side to move is out of time the moment the clock starts —
+    // a full timeout test in real milliseconds, no long waits.
+    auto white = connectClient();
+    auto black = connectClient();
+
+    sendMsg(white, chess::net::JoinMsg{"GuestX", "0+5"});
+    sendMsg(black, chess::net::JoinMsg{"GuestY", "0+5"});
+
+    auto wWelcome = await<chess::net::WelcomeMsg>(white);
+    auto bWelcome = await<chess::net::WelcomeMsg>(black);
+    ASSERT_TRUE(wWelcome.has_value());
+    ASSERT_TRUE(bWelcome.has_value());
+    EXPECT_EQ(wWelcome->timeControl, "0+5");
+    EXPECT_EQ(bWelcome->timeControl, "0+5");
+
+    // White never moves a single piece: flag falls, black wins on time —
+    // both sockets get the same game-over broadcast.
+    auto wOver = await<chess::net::GameOverMsg>(white);
+    ASSERT_TRUE(wOver.has_value());
+    EXPECT_EQ(wOver->result, chess::net::GameResult::BlackWins);
+    EXPECT_EQ(wOver->reason, chess::net::GameOverReason::Timeout);
+    auto bOver = await<chess::net::GameOverMsg>(black);
+    ASSERT_TRUE(bOver.has_value());
+    EXPECT_EQ(bOver->result, chess::net::GameResult::BlackWins);
+    EXPECT_EQ(bOver->reason, chess::net::GameOverReason::Timeout);
+}
+
+TEST_F(RatedE2eTest, TimeControlMismatchDoesNotPair)
+{
+    auto bullet = connectClient();
+    sendMsg(bullet, chess::net::JoinMsg{"GuestX", "1+0"});
+    auto blitz = connectClient();
+    sendMsg(blitz, chess::net::JoinMsg{"GuestY", "5+3"});
+
+    // A same-time-control client pairs with the first one; the "5+3" one
+    // would stay queued instead with an unpaired match.
+    auto partner = connectClient();
+    sendMsg(partner, chess::net::JoinMsg{"GuestZ", "1+0"});
+
+    auto wWelcome = await<chess::net::WelcomeMsg>(bullet);
+    ASSERT_TRUE(wWelcome.has_value());
+    EXPECT_EQ(wWelcome->timeControl, "1+0");
+    auto pWelcome = await<chess::net::WelcomeMsg>(partner);
+    ASSERT_TRUE(pWelcome.has_value());
+    EXPECT_EQ(pWelcome->timeControl, "1+0");
+}
+
 TEST_F(RatedE2eTest, WrongPasswordIsAnErrorAndRetryRegistersLogically)
 {
     // Unknown name + wrong-looking password register attempt:

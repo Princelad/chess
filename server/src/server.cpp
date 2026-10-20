@@ -28,6 +28,21 @@ static constexpr std::size_t MaxPacketSize = 4096;
 static constexpr int MaxBadMessages = 3;
 static constexpr std::size_t MaxNameLength = 32;
 
+// Canonicalizes the JoinMsg time-control payload for pairing and the
+// archive row: anything unparsable ("5+a", no '+', oversized) is the
+// unlimited game, valid forms rebuild as "base+increment" from the parsed
+// numbers so the stored string always round-trips through parseTimeControl.
+static std::string canonicalTimeControl(const std::string& tc)
+{
+    if (tc.size() > 16)
+        return {};
+    const auto parsed = chess::net::parseTimeControl(tc);
+    if (parsed.unlimited)
+        return {};
+    return std::to_string(parsed.baseSeconds) + "+"
+           + std::to_string(parsed.incrementSeconds);
+}
+
 using ClientVec = std::vector<std::unique_ptr<Client>>;
 using MatchVec = std::vector<std::unique_ptr<Match>>;
 
@@ -215,6 +230,7 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
             row.blackName = black->name;
             row.result = static_cast<int>(result);
             row.reason = static_cast<int>(reason);
+            row.timeControl = match.timeControl();
             std::string sanJoined;
             for (const auto& san : match.sanHistory()) {
                 if (!sanJoined.empty()) sanJoined += ' ';
@@ -266,7 +282,7 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
     auto startMatch = [&](Client& first, Client& second) -> Match* {
         first.state = ClientState::InMatch;
         second.state = ClientState::InMatch;
-        auto match = std::make_unique<Match>(first, second);
+        auto match = std::make_unique<Match>(first, second, first.timeControl);
         match->setGameOverCallback(onGameOver);
         first.match = match.get();
         second.match = match.get();
@@ -285,9 +301,11 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
         const auto [secondRating, secondDeviation] = opponentRow(second);
 
         sendTo(first, chess::net::WelcomeMsg{
-            chess::Color::White, second.name, secondRating, secondDeviation, rated});
+            chess::Color::White, second.name, secondRating, secondDeviation, rated,
+            first.timeControl});
         sendTo(second, chess::net::WelcomeMsg{
-            chess::Color::Black, first.name, firstRating, firstDeviation, rated});
+            chess::Color::Black, first.name, firstRating, firstDeviation, rated,
+            first.timeControl});
         Match* rawMatch = match.get();
         matches.push_back(std::move(match));
         return rawMatch;
@@ -295,13 +313,27 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
 
     while (!shutdownFlag.load(std::memory_order_relaxed)) {
         bool hasThinkingBot = false;
+        bool hasRunningClock = false;
         for (const auto& m : matches) {
-            if (m->isActive() && m->isBotTurn()) {
+            if (!m->isActive())
+                continue;
+            if (m->isBotTurn())
                 hasThinkingBot = true;
-                break;
-            }
+            if (m->clockRuns())
+                hasRunningClock = true;
         }
-        auto waitTime = hasThinkingBot ? std::chrono::milliseconds(50) : std::chrono::seconds(1);
+        // The loop samples clocks on each pass, so shrink the select wait
+        // when any time control is running: flags fire within ~100ms.
+        auto waitTime = hasThinkingBot ? std::chrono::milliseconds(50)
+            : hasRunningClock ? std::chrono::milliseconds(100)
+            : std::chrono::seconds(1);
+        // pollClock runs every pass even when the wait expired with no
+        // events — a flag may fall for a player simply sitting still.
+        const auto nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count();
+        for (auto& match : matches)
+            match->pollClock(nowMs);
+
         if (!selector.wait(waitTime))
             continue;
 
@@ -424,8 +456,7 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
                         case ClientState::Connected:
                             if (auto* login = std::get_if<chess::net::LoginMsg>(&*msg)) {
                                 handleLogin(client, *login, players);
-                            } else if (auto* join = std::get_if<chess::net::JoinMsg>(&*msg)) {
-                                if (!client.playerId.has_value()) {
+                            } else if (auto* join = std::get_if<chess::net::JoinMsg>(&*msg)) {                                if (!client.playerId.has_value()) {
                                     // Guest join: name comes from the payload.
                                     if (join->name.empty()) {
                                         sendTo(client, chess::net::ErrorMsg{"Name required"});
@@ -453,6 +484,8 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
                                 // Authenticated clients keep the (canonical)
                                 // account name set during LoginMsg; allowing
                                 // re-joining after a finished game.
+                                client.timeControl =
+                                    canonicalTimeControl(join->timeControl);
                                 client.state = ClientState::Queued;
                                 auto pair = matchmaker.enqueue(client);
                                 if (pair.has_value()) {
@@ -465,6 +498,10 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
                                         bot->isBot = true;
                                         bot->name = "Bot-" + std::to_string(++botNameCounter);
                                         bot->state = ClientState::Queued;
+                                        // Bot mirrors the waiting human's
+                                        // time control so it can pair and
+                                        // play a clocked game.
+                                        bot->timeControl = client.timeControl;
                                         bot->lastActivity = std::chrono::steady_clock::now();
                                         Client* botPtr = bot.get();
                                         clients.push_back(std::move(bot));

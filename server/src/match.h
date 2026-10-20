@@ -11,11 +11,15 @@
 #include <chess/net/messages.h>
 #include <chess/uci/engine.h>
 
+#include "clock.h"
+
 struct Client;
 
 class Match {
 public:
-    Match(Client& white, Client& black);
+    // An empty timeControl keeps the legacy unlimited game; otherwise it
+    // must parse ("5+3" style) and both sides are clocked from game start.
+    Match(Client& white, Client& black, const std::string& timeControl = {});
 
     // Observer notified once after GameOverMsg has been broadcast to both
     // players (used by the server for rated updates, archive writes, ...).
@@ -36,6 +40,18 @@ public:
     // move is accepted; used by the game-over hook for the archive row.
     const std::vector<std::string>& sanHistory() const { return sanHistory_; }
 
+    // Agreed time control string ("" = unlimited), for the archive row.
+    const std::string& timeControl() const { return timeControl_; }
+
+    // Charges a flag fall if the side to move is out of time at nowMs.
+    // Called by the server loop between socket events (a player may pass
+    // their turn's last millisecond simply by sitting there).
+    void pollClock(std::int64_t nowMs);
+
+    // True while an unlimited clock is not active; the server loop uses
+    // this to shorten its select wait so flags fire near-precisely.
+    bool clockRuns() const { return clock_.active() && active_; }
+
     void startBot(chess::Color color, int depth, std::string enginePath);
     void stopBot();
     void pollBotMove();
@@ -54,6 +70,9 @@ private:
 
     void endGame(chess::net::GameResult result, chess::net::GameOverReason reason);
     std::pair<chess::net::GameResult, chess::net::GameOverReason> classifyState(chess::GameState state) const;
+
+    std::string timeControl_;
+    chess::server::MatchClock clock_;
 
     chess::Board board_;
     Client* white_;

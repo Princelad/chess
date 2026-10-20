@@ -21,4 +21,7 @@ struct Client {
     bool isBot = false;
     // Account id when authenticated via LoginMsg; empty for guests and bots.
     std::optional<std::int64_t> playerId = std::nullopt;
+    // Time-control string agreed at JoinMsg ("5+3" canonical, or empty =
+    // unlimited). Pairing matches only equal strings (11.1).
+    std::string timeControl;
 };

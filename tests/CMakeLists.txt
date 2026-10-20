@@ -36,6 +36,7 @@ if(BUILD_TESTING)
         db/rating_class_test.cpp
         db/game_store_test.cpp
         net/protocol_test.cpp
+        server/clock_test.cpp
         server/matchmaker_test.cpp
         server/match_test.cpp
         server/bot_match_test.cpp

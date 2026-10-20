@@ -1,5 +1,6 @@
 #include "match.h"
 
+#include <chrono>
 #include <string>
 #include <type_traits>
 
@@ -14,11 +15,26 @@
 static constexpr std::size_t MaxChatLength = 500;
 static constexpr std::size_t MaxSanLength = 10;
 
-Match::Match(Client& white, Client& black)
-    : board_(chess::Board::fromStartPos())
+// The one server-side monotonic time source for clocks. Matches replace the
+// steady wall by it; e2e/unit tests inject their own timestamps into
+// MatchClock, only Match itself reads real time.
+static std::int64_t steadyNowMs()
+{
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+               std::chrono::steady_clock::now().time_since_epoch())
+        .count();
+}
+
+Match::Match(Client& white, Client& black, const std::string& timeControl)
+    : timeControl_(timeControl)
+    , board_(chess::Board::fromStartPos())
     , white_(&white)
     , black_(&black)
 {
+    // White's clock starts at game start per custom; unlimited games leave
+    // the clock passive.
+    clock_.start(chess::net::parseTimeControl(timeControl_),
+                 chess::Color::White, steadyNowMs());
 }
 
 void Match::handleMessage(Client& sender, const chess::net::ClientMessage& msg)
@@ -88,7 +104,16 @@ bool Match::handleMoveSAN(Client& sender, const std::string& san)
     board_.makeMove(*move);
     sanHistory_.push_back(canonical);
 
-    chess::net::ServerMoveMsg serverMove{canonical};
+    // Charge the mover's clock for the elapsed turn and hand the turn to
+    // the opponent: the broadcast carries the on-move player's fresh
+    // remaining time (0 = unlimited).
+    chess::net::ServerMoveMsg serverMove{canonical, 0};
+    if (clock_.active()) {
+        std::int64_t moverRemaining = 0;
+        clock_.completedMove(whiteToMove ? chess::Color::White : chess::Color::Black,
+                             steadyNowMs(), moverRemaining);
+        serverMove.remainingMs = static_cast<std::int32_t>(moverRemaining);
+    }
     sendTo(*white_, serverMove);
     sendTo(*black_, serverMove);
 
@@ -171,6 +196,21 @@ void Match::handleDisconnect(const Client& client)
 }
 
 bool Match::isActive() const { return active_; }
+
+void Match::pollClock(std::int64_t nowMs)
+{
+    if (!active_ || !clock_.active())
+        return;
+
+    auto flagged = clock_.checkFlag(nowMs);
+    if (!flagged)
+        return;
+
+    endGame(*flagged == chess::Color::White
+                ? chess::net::GameResult::BlackWins
+                : chess::net::GameResult::WhiteWins,
+            chess::net::GameOverReason::Timeout);
+}
 
 Client* Match::white() const { return white_; }
 

@@ -67,7 +67,8 @@ bool readFlag(sf::Packet& packet, bool& value)
 
 bool writeClient(sf::Packet& packet, const JoinMsg& msg)
 {
-    packet << static_cast<uint8_t>(ClientMsgType::Join) << msg.name;
+    packet << static_cast<uint8_t>(ClientMsgType::Join) << msg.name
+           << msg.timeControl;
     return static_cast<bool>(packet);
 }
 
@@ -147,6 +148,7 @@ bool writeServer(sf::Packet& packet, const WelcomeMsg& msg)
            << static_cast<int>(msg.color) << msg.opponent
            << msg.rating << msg.deviation;
     writeFlag(packet, msg.rated);
+    packet << msg.timeControl;
     return static_cast<bool>(packet);
 }
 
@@ -164,7 +166,8 @@ bool writeServer(sf::Packet& packet, OpponentLeftMsg)
 
 bool writeServer(sf::Packet& packet, const ServerMoveMsg& msg)
 {
-    packet << static_cast<uint8_t>(ServerMsgType::Move) << msg.san;
+    packet << static_cast<uint8_t>(ServerMsgType::Move) << msg.san
+           << msg.remainingMs;
     return static_cast<bool>(packet);
 }
 
@@ -274,7 +277,7 @@ bool validResult(int v)
 
 bool validReason(int v)
 {
-    return v >= 0 && v <= static_cast<int>(GameOverReason::AgreedDraw);
+    return v >= 0 && v <= static_cast<int>(GameOverReason::Timeout);
 }
 
 const char* resultStr(GameResult r)
@@ -301,6 +304,7 @@ const char* reasonStr(GameOverReason r)
         case GameOverReason::Disconnection:       return "Disconnection";
         case GameOverReason::Abort:               return "Abort";
         case GameOverReason::AgreedDraw:           return "AgreedDraw";
+        case GameOverReason::Timeout:              return "Timeout";
         default:                                  return "Unknown";
     }
 }
@@ -332,6 +336,32 @@ std::string escape(const std::string& s)
 
 } // anonymous namespace
 
+TimeControl parseTimeControl(std::string_view tc)
+{
+    TimeControl out;
+
+    // Every valid wire form has "base+increment"; anything else — including
+    // the empty string — is the unlimited game.
+    const auto plus = tc.find('+');
+    if (plus == std::string_view::npos)
+        return out;
+
+    const std::string_view base = tc.substr(0, plus);
+    const std::string_view increment = tc.substr(plus + 1);
+    const auto digitsOnlyAll = [](std::string_view s) {
+        return !s.empty() && std::all_of(s.begin(), s.end(),
+                                         [](char c) { return c >= '0' && c <= '9'; });
+    };
+    if (!digitsOnlyAll(base) || !digitsOnlyAll(increment))
+        return out;
+
+    out.baseSeconds = std::stoll(std::string(base));
+    out.incrementSeconds = std::stoll(std::string(increment));
+    if (out.baseSeconds > 0 || out.incrementSeconds > 0)
+        out.unlimited = false;
+    return out;
+}
+
 bool serialize(sf::Packet& packet, const ClientMessage& msg)
 {
     packet << ProtocolVersion;
@@ -359,7 +389,7 @@ std::optional<ClientMessage> deserializeClient(sf::Packet& packet)
     switch (static_cast<ClientMsgType>(tag)) {
         case ClientMsgType::Join: {
             JoinMsg msg;
-            packet >> msg.name;
+            packet >> msg.name >> msg.timeControl;
             if (!static_cast<bool>(packet)) return std::nullopt;
             return msg;
         }
@@ -439,6 +469,8 @@ std::optional<ServerMessage> deserializeServer(sf::Packet& packet)
             if (!static_cast<bool>(packet)) return std::nullopt;
             if (!validColor(color)) return std::nullopt;
             if (!readFlag(packet, msg.rated)) return std::nullopt;
+            packet >> msg.timeControl;
+            if (!static_cast<bool>(packet)) return std::nullopt;
             msg.color = static_cast<Color>(color);
             return msg;
         }
@@ -452,8 +484,9 @@ std::optional<ServerMessage> deserializeServer(sf::Packet& packet)
             return OpponentLeftMsg{};
         case ServerMsgType::Move: {
             ServerMoveMsg msg;
-            packet >> msg.san;
+            packet >> msg.san >> msg.remainingMs;
             if (!static_cast<bool>(packet)) return std::nullopt;
+            if (msg.remainingMs < 0) return std::nullopt;
             return msg;
         }
         case ServerMsgType::DrawOffer:
@@ -552,7 +585,8 @@ std::string debugString(const ClientMessage& msg)
     return std::visit([](auto&& m) -> std::string {
         using T = std::decay_t<decltype(m)>;
         if constexpr (std::is_same_v<T, JoinMsg>)
-            return "Join{name=\"" + escape(m.name) + "\"}";
+            return "Join{name=\"" + escape(m.name) + "\", tc=\""
+                + escape(m.timeControl) + "\"}";
         else if constexpr (std::is_same_v<T, MoveMsg>)
             return "Move{san=\"" + escape(m.san) + "\"}";
         else if constexpr (std::is_same_v<T, DrawOfferMsg>)
@@ -585,13 +619,16 @@ std::string debugString(const ServerMessage& msg)
     return std::visit([](auto&& m) -> std::string {
         using T = std::decay_t<decltype(m)>;
         if constexpr (std::is_same_v<T, WelcomeMsg>)
-            return "Welcome{color=" + std::string(colorStr(m.color)) + ", opponent=\"" + escape(m.opponent) + "\"}";
+            return "Welcome{color=" + std::string(colorStr(m.color))
+                + ", opponent=\"" + escape(m.opponent) + "\", tc=\""
+                + escape(m.timeControl) + "\"}";
         else if constexpr (std::is_same_v<T, OpponentJoinedMsg>)
             return "OpponentJoined{name=\"" + escape(m.name) + "\"}";
         else if constexpr (std::is_same_v<T, OpponentLeftMsg>)
             return "OpponentLeft{}";
         else if constexpr (std::is_same_v<T, ServerMoveMsg>)
-            return "Move{san=\"" + escape(m.san) + "\"}";
+            return "Move{san=\"" + escape(m.san) + "\", remainingMs="
+                + std::to_string(m.remainingMs) + "}";
         else if constexpr (std::is_same_v<T, ServerDrawOfferMsg>)
             return "DrawOffer{}";
         else if constexpr (std::is_same_v<T, ServerDrawDeclineMsg>)

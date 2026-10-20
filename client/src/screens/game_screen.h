@@ -28,7 +28,8 @@ class GameScreen : public Screen {
 public:
     GameScreen(App& app, Color myColor, const std::string& opponentName,
                std::optional<std::pair<double, double>> opponentRating = {},
-               bool rated = false);
+               bool rated = false,
+               const std::string& timeControl = {});
     void handleEvent(const sf::Event& event) override;
     void update(float dtSec) override;
     void draw(sf::RenderWindow& window) override;
@@ -88,6 +89,7 @@ private:
     Button offerDrawBtn_;
     Button declineBtn_;
     Button acceptBtn_;
+    std::string timeControl_;
 
     void layoutPanel();
 };

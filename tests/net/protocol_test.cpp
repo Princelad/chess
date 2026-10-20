@@ -359,6 +359,109 @@ TEST(ProtocolRoundTrip, ServerGameOver)
     EXPECT_EQ(m->reason, GameOverReason::Checkmate);
 }
 
+TEST(ProtocolRoundTrip, ServerGameOverTimeout)
+{
+    ServerMessage msg = GameOverMsg{GameResult::BlackWins, GameOverReason::Timeout};
+    sf::Packet p = freshPacket(serializeServer(msg));
+    auto result = deserializeServer(p);
+    ASSERT_TRUE(result.has_value());
+    auto* m = std::get_if<GameOverMsg>(&*result);
+    ASSERT_NE(m, nullptr);
+    EXPECT_EQ(m->reason, GameOverReason::Timeout);
+}
+
+// ── 11.1 clock fields ───────────────────────────────────────────────────────
+
+TEST(ProtocolRoundTrip, ClientJoinCarriesTimeControl)
+{
+    ClientMessage msg = JoinMsg{"Alice", "5+3"};
+    sf::Packet p = freshPacket(serializeClient(msg));
+    auto result = deserializeClient(p);
+    ASSERT_TRUE(result.has_value());
+    auto* m = std::get_if<JoinMsg>(&*result);
+    ASSERT_NE(m, nullptr);
+    EXPECT_EQ(m->name, "Alice");
+    EXPECT_EQ(m->timeControl, "5+3");
+}
+
+TEST(ProtocolRoundTrip, ClientJoinUnlimitedRoundTripsEmptyTimeControl)
+{
+    ClientMessage msg = JoinMsg{"Alice", ""};
+    sf::Packet p = freshPacket(serializeClient(msg));
+    auto result = deserializeClient(p);
+    ASSERT_TRUE(result.has_value());
+    auto* m = std::get_if<JoinMsg>(&*result);
+    ASSERT_NE(m, nullptr);
+    EXPECT_EQ(m->name, "Alice");
+    EXPECT_EQ(m->timeControl, "");
+    EXPECT_TRUE(parseTimeControl(m->timeControl).unlimited);
+}
+
+TEST(ProtocolRoundTrip, ServerWelcomeCarriesTimeControl)
+{
+    ServerMessage msg = WelcomeMsg{Color::White, "Bob", 1500.0, 350.0, true, "10+0"};
+    sf::Packet p = freshPacket(serializeServer(msg));
+    auto result = deserializeServer(p);
+    ASSERT_TRUE(result.has_value());
+    auto* m = std::get_if<WelcomeMsg>(&*result);
+    ASSERT_NE(m, nullptr);
+    EXPECT_EQ(m->timeControl, "10+0");
+}
+
+TEST(ProtocolRoundTrip, ServerMoveCarriesRemainingMs)
+{
+    ServerMessage msg = ServerMoveMsg{"e4", 298500};
+    sf::Packet p = freshPacket(serializeServer(msg));
+    auto result = deserializeServer(p);
+    ASSERT_TRUE(result.has_value());
+    auto* m = std::get_if<ServerMoveMsg>(&*result);
+    ASSERT_NE(m, nullptr);
+    EXPECT_EQ(m->san, "e4");
+    EXPECT_EQ(m->remainingMs, 298500);
+}
+
+// Negative remaining is corrupt/hostile: the wire never produces it.
+TEST(ProtocolRoundTrip, ServerMoveRejectsNegativeRemainingMs)
+{
+    sf::Packet p;
+    p << ProtocolVersion << static_cast<uint8_t>(3) << std::string("e4")
+      << static_cast<int32_t>(-1);
+    auto result = deserializeServer(p);
+    EXPECT_FALSE(result.has_value());
+}
+
+// ── time-control parsing ────────────────────────────────────────────────────
+
+TEST(ParseTimeControl, ValidForms)
+{
+    auto tc = parseTimeControl("5+3");
+    ASSERT_FALSE(tc.unlimited);
+    EXPECT_EQ(tc.baseSeconds, 5);
+    EXPECT_EQ(tc.incrementSeconds, 3);
+
+    tc = parseTimeControl("90+0");
+    ASSERT_FALSE(tc.unlimited);
+    EXPECT_EQ(tc.baseSeconds, 90);
+    EXPECT_EQ(tc.incrementSeconds, 0);
+
+    tc = parseTimeControl("0+3"); // increment-only: the clock still runs
+    ASSERT_FALSE(tc.unlimited);
+    EXPECT_EQ(tc.baseSeconds, 0);
+    EXPECT_EQ(tc.incrementSeconds, 3);
+}
+
+TEST(ParseTimeControl, MalformedIsUnlimited)
+{
+    EXPECT_TRUE(parseTimeControl("").unlimited);
+    EXPECT_TRUE(parseTimeControl("5").unlimited);
+    EXPECT_TRUE(parseTimeControl("5+").unlimited);
+    EXPECT_TRUE(parseTimeControl("+3").unlimited);
+    EXPECT_TRUE(parseTimeControl("5+a").unlimited);
+    EXPECT_TRUE(parseTimeControl("a+3").unlimited);
+    EXPECT_TRUE(parseTimeControl("5+3 ").unlimited);
+    EXPECT_TRUE(parseTimeControl("0+0").unlimited); // zeroed = no clock
+}
+
 TEST(ProtocolRoundTrip, ServerGameOverDraw)
 {
     ServerMessage msg = GameOverMsg{GameResult::Draw, GameOverReason::Stalemate};

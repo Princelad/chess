@@ -14,7 +14,7 @@ constexpr float FieldX = StartX + 80.f;
 constexpr float FieldW = 280.f;
 constexpr float FieldH = 36.f;
 constexpr float RowGap = 56.f;
-constexpr float BtnY = 148.f + 4.f * RowGap + 10.f;
+constexpr float BtnY = 148.f + 5.f * RowGap + 10.f;
 }
 
 ConnectScreen::ConnectScreen(App& app)
@@ -30,6 +30,30 @@ ConnectScreen::ConnectScreen(App& app)
         labels_[i].setColor(sf::Color(200, 200, 200));
         fields_[i].setMaxLength(32);
     }
+    // Time control presets (11.1): cycled by the picker button, first entry
+    // stays the classic unlimited game. The choice persists in the config.
+    static constexpr const char* TimeControlPresets[TimeControlCount] = {
+        "", "1+0", "3+2", "5+3", "10+0", "15+10", "30+0",
+    };
+    for (int i = 0; i < TimeControlCount; ++i)
+        timeControls_[i] = TimeControlPresets[i];
+    const std::string savedTc = app_.config().get("general.time_control", "");
+    for (int i = TimeControlCount; i-- > 0;) {
+        if (savedTc == timeControls_[i]) {
+            tcIndex_ = static_cast<std::size_t>(i);
+            break;
+        }
+    }
+    tcLabel_.setText("Time control:");
+    tcLabel_.setFontSize(20);
+    tcLabel_.setColor(sf::Color(200, 200, 200));
+    tcBtn_.setColors(sf::Color(70, 74, 96), sf::Color(84, 88, 112),
+                     sf::Color(58, 62, 82), sf::Color(45, 48, 66),
+                     sf::Color(150, 150, 150), sf::Color(255, 255, 255),
+                     sf::Color(60, 64, 86), sf::Color(160, 168, 200),
+                     sf::Color(200, 208, 240));
+    tcBtn_.setOnClick([this] { selectTimeControl(); });
+    updateTimeControlLabel();
     // Password: masked input, longer allowed than names, guest by default.
     fields_[3].setMasked(true);
     fields_[3].setMaxLength(64);
@@ -106,10 +130,31 @@ void ConnectScreen::layoutWidgets()
     // Row two: leaderboard browsing, same connect-without-queueing flow.
     leaderboardBtn_.setRect(sf::FloatRect(sf::Vector2f(FieldX, BtnY + 50.f),
                                           sf::Vector2f(200.f, 40.f)));
+    // TC picker picks up the row after the last field, buttons shifted one
+    // row down: the preset is chosen before pairing, so it needs a slot of
+    // its own among the fields.
+    tcLabel_.setPosition({StartX, StartY + 4.f * RowGap + 6.f});
+    tcBtn_.setRect(sf::FloatRect(sf::Vector2f(FieldX, StartY + 4.f * RowGap),
+                                 sf::Vector2f(FieldW, FieldH)));
 }
 
-void ConnectScreen::cycleField(bool backward)
+// Cycles the preset forward and stamps the choice into the config, so the
+// next visit starts where the player left off.
+void ConnectScreen::selectTimeControl()
 {
+    tcIndex_ = (tcIndex_ + 1) % timeControls_.size();
+    updateTimeControlLabel();
+    app_.config().set("general.time_control", timeControls_[tcIndex_]);
+}
+
+void ConnectScreen::updateTimeControlLabel()
+{
+    tcBtn_.setLabel(timeControls_[tcIndex_].empty()
+        ? "Time control: unlimited"
+        : "Time control: " + timeControls_[tcIndex_]);
+}
+
+void ConnectScreen::cycleField(bool backward){
     int next = static_cast<int>(activeField_);
     if (backward)
         next = (next - 1 + static_cast<int>(FieldCount)) % static_cast<int>(FieldCount);
@@ -160,7 +205,7 @@ void ConnectScreen::tryConnectOrRetry()
             status_.setText("Waiting for opponent...");
             for (auto& field : fields_) field.setEnabled(false);
             app_.clearProfile();
-            app_.connection().join(name());
+            app_.connection().join(name(), timeControl());
         }
     }
 }
@@ -255,6 +300,7 @@ void ConnectScreen::handleEvent(const sf::Event& event)
     if (phase_ == ConnectPhase::Idle && !name().empty()) {
         archiveBtn_.handleEvent(event, local);
         leaderboardBtn_.handleEvent(event, local);
+        tcBtn_.handleEvent(event, local);
     }
 }
 
@@ -276,7 +322,7 @@ void ConnectScreen::update(float dtSec)
                 opponentRating = std::make_pair(welcome->rating, welcome->deviation);
             app_.switchScreen(std::make_unique<GameScreen>(
                 app_, welcome->color, welcome->opponent, opponentRating,
-                welcome->rated));
+                welcome->rated, welcome->timeControl));
             return;
         }
         if (auto* profileMsg = std::get_if<chess::net::ProfileMsg>(&msg)) {
@@ -287,7 +333,7 @@ void ConnectScreen::update(float dtSec)
                 } else {
                     phase_ = ConnectPhase::WaitingForOpponent;
                     status_.setText("Waiting for opponent...");
-                    app_.connection().join(name());
+                    app_.connection().join(name(), timeControl());
                 }
             }
             continue;
@@ -329,7 +375,7 @@ void ConnectScreen::update(float dtSec)
         } else {
             phase_ = ConnectPhase::WaitingForOpponent;
             status_.setText("Waiting for opponent...");
-            app_.connection().join(name());
+            app_.connection().join(name(), timeControl());
         }
     }
     else if (phase_ == ConnectPhase::ConnectingBrowse &&
@@ -376,6 +422,9 @@ void ConnectScreen::draw(sf::RenderWindow& window)
         archiveBtn_.draw(window, font);
         leaderboardBtn_.draw(window, font);
     }
+    tcLabel_.draw(window, font);
+    if (phase_ == ConnectPhase::Idle)
+        tcBtn_.draw(window, font);
 
     float statusY = BtnY + 104.f;
     if (!error_.text().empty()) {

@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <variant>
 #include <vector>
 
@@ -28,12 +29,29 @@ enum class GameOverReason : int {
     Disconnection,
     Abort,
     AgreedDraw,
+    Timeout, // flag fall (11.1); appended last for protocol v2 compatibility
 };
+
+// Time control in the wire form ("5+3"). Empty = the unlimited game,
+// exactly what every pre-clock message still produces.
+struct TimeControl {
+    std::int64_t baseSeconds = 0;
+    std::int64_t incrementSeconds = 0;
+    bool unlimited = true;
+};
+
+// Parses the JoinMsg/WelcomeMsg form: "base+increment" (minutes). Anything
+// malformed — empty, no '+', non-digit parts — is the unlimited game,
+// never trust the payload.
+TimeControl parseTimeControl(std::string_view tc);
 
 // ── Client → Server ─────────────────────────────────────────────────────────
 
+// The time control requested at pairing ("5+3" style, or empty for the
+// legacy unlimited game). Pairing only matches equal strings.
 struct JoinMsg {
     std::string name;
+    std::string timeControl;
 };
 
 struct MoveMsg {
@@ -102,6 +120,7 @@ struct WelcomeMsg {
     double rating = 1500.0;  // opponent's pre-game rating
     double deviation = 350.0;
     bool rated = false;      // both players registered and the game counts
+    std::string timeControl; // "5+3" or empty = unlimited (11.1)
 };
 
 struct OpponentJoinedMsg {
@@ -112,6 +131,9 @@ struct OpponentLeftMsg {};
 
 struct ServerMoveMsg {
     std::string san;
+    // Remaining time of the player now on the move, in milliseconds.
+    // 0 = no clock (unlimited game). 11.1: synced with every move broadcast.
+    std::int32_t remainingMs = 0;
 };
 
 struct ServerDrawOfferMsg {};

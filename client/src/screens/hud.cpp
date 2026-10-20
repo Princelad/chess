@@ -34,6 +34,31 @@ std::string ratingSuffix(const std::optional<std::pair<double, double>>& rating)
     const auto deviation = static_cast<long long>(rating->second + 0.5);
     return "  (" + std::to_string(value) + " \u00b1 " + std::to_string(deviation) + ")";
 }
+
+// Clock display: "m:ss" normally, tenths under a minute ("42.3"), the
+// usual online-chess shape.
+std::string clockText(double ms)
+{
+    const double s = std::max(0.0, ms) / 1000.0;
+    if (s < 60.0) {
+        const int tenths = static_cast<int>(s * 10.0 + 0.5);
+        if (tenths >= 600) // rounding pushed us back to the minute
+            return "1:00";
+        return std::to_string(tenths / 10) + "."
+               + std::to_string(tenths % 10);
+    }
+    const int total = static_cast<int>(s + 0.5);
+    return std::to_string(total / 60) + ":"
+           + (total % 60 < 10 ? "0" : "") + std::to_string(total % 60);
+}
+
+// Low time heats up: red inside the last 10 s, amber until 30 s.
+sf::Color clockColor(double ms)
+{
+    if (ms < 10000.0) return sf::Color(255, 90, 90);
+    if (ms < 30000.0) return sf::Color(255, 190, 70);
+    return sf::Color(210, 210, 210);
+}
 }
 
 Hud::Hud(App& app, float panelX, float panelWidth)
@@ -88,10 +113,15 @@ void Hud::setRatings(std::optional<std::pair<double, double>> local,
     opponentRating_ = std::move(opponent);
 }
 
-void Hud::setStatus(const std::string& msg, float duration)
+void Hud::syncClocks(Color sideToMove, std::int64_t sideRemainingMs)
 {
-    statusMsg_ = msg;
-    statusTimer_ = duration;
+    clocksOn_ = sideRemainingMs > 0;
+    if (!clocksOn_)
+        return;
+    remainingMs_[sideToMove == Color::White ? 0 : 1] =
+        static_cast<double>(sideRemainingMs);
+    clockTurn_ = sideToMove;
+    sinceSyncSec_ = 0.f;
 }
 
 void Hud::update(float dtSec)
@@ -100,6 +130,24 @@ void Hud::update(float dtSec)
         statusTimer_ -= dtSec;
         if (statusTimer_ <= 0.f) statusMsg_.clear();
     }
+    if (clocksOn_ && !gameOver_)
+        sinceSyncSec_ += dtSec;
+}
+
+double Hud::shownRemainingMs(Color side) const
+{
+    double ms = remainingMs_[side == Color::White ? 0 : 1];
+    if (!clocksOn_)
+        return ms;
+    if (side == clockTurn_)
+        ms -= sinceSyncSec_ * 1000.0;
+    return std::max(0.0, ms);
+}
+
+void Hud::setStatus(const std::string& msg, float duration)
+{
+    statusMsg_ = msg;
+    statusTimer_ = duration;
 }
 
 float Hud::contentBottom() const
@@ -114,10 +162,16 @@ float Hud::moveListBottom() const
 
 void Hud::draw(sf::RenderWindow& window, const sf::Font& font)
 {
+    std::string opponentClock, localClock;
+    if (clocksOn_) {
+        opponentClock = clockText(shownRemainingMs(opposite(myColor_)));
+        localClock = clockText(shownRemainingMs(myColor_));
+    }
+
     std::string opponentText = "vs " + opponentName_
         + ratingSuffix(opponentRating_);
     drawPlayerCard(window, font, opponentText, opposite(myColor_),
-                   OpponentNameY, OpponentCapturedY, false);
+                   OpponentNameY, OpponentCapturedY, false, opponentClock);
 
     std::string colorStr = myColor_ == Color::White ? "White" : "Black";
     std::string localName = "You - " + colorStr + ratingSuffix(localRating_);
@@ -126,7 +180,7 @@ void Hud::draw(sf::RenderWindow& window, const sf::Font& font)
     localNameLabel_.setColor(myTurn_ ? sf::Color(76, 175, 80)
                                      : sf::Color(180, 180, 180));
     drawPlayerCard(window, font, localName, myColor_,
-                   LocalNameY, LocalCapturedY, true);
+                   LocalNameY, LocalCapturedY, true, localClock);
 
     if (!statusMsg_.empty()) {
         statusLabel_.setText(statusMsg_);
@@ -147,18 +201,30 @@ void Hud::draw(sf::RenderWindow& window, const sf::Font& font)
 
 void Hud::drawPlayerCard(sf::RenderWindow& window, const sf::Font& font,
                          const std::string& name, Color cardColor,
-                         float nameY, float capturedY, bool isLocal)
+                         float nameY, float capturedY, bool isLocal,
+                         const std::string& clockText)
 {
     Label& nameLabel = isLocal ? localNameLabel_ : opponentNameLabel_;
     nameLabel.setText(name);
     nameLabel.setPosition({panelX_, nameY});
     nameLabel.draw(window, font);
 
+    float right = panelX_ + panelW_;
+
+    if (!clockText.empty()) {
+        sf::Text clock(font, clockText, 14);
+        clock.setFillColor(clockColor(shownRemainingMs(cardColor)));
+        const float clockW = clock.getLocalBounds().size.x;
+        clock.setPosition({right - clockW, nameY});
+        window.draw(clock);
+        right -= clockW + 10.f;
+    }
+
     int advantage = navigator_.materialAdvantage(cardColor);
     if (advantage > 0) {
         sf::Text diff(font, "+" + std::to_string(advantage), 14);
         diff.setFillColor(sf::Color(140, 200, 140));
-        float x = panelX_ + panelW_ - diff.getLocalBounds().size.x;
+        float x = right - diff.getLocalBounds().size.x;
         diff.setPosition({x, nameY});
         window.draw(diff);
     }

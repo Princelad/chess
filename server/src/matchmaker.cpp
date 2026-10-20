@@ -14,16 +14,30 @@ std::optional<std::pair<Client*, Client*>> Matchmaker::enqueue(Client& client)
 
     queue_.push_back(&client);
 
-    if (queue_.size() < 2)
+    // Pair the first queued player with the same time control (11.1); one
+    // with a different "5+3"≠"10+0" (or unlimited≠timed) stays queued. The
+    // earlier entry plays White, as before.
+    Client* other = nullptr;
+    for (auto* c : queue_)
+        if (c != &client && c->timeControl == client.timeControl) {
+            other = c;
+            break;
+        }
+    if (other == nullptr)
         return std::nullopt;
 
-    Client* white = queue_[0];
-    Client* black = queue_[1];
-    queue_.clear();
+    // Both sides leave the queue; the caller was pushed last moments ago,
+    // so pop it instead of a scan-with-erase.
+    queue_.pop_back();
+    queue_.erase(std::remove(queue_.begin(), queue_.end(), other),
+                 queue_.end());
 
-    LOG_INFO("Matched: " + white->name + " (White) vs " + black->name + " (Black)");
+    LOG_INFO("Matched: " + other->name + " (White) vs " + client.name
+             + " (Black)" + (other->timeControl.empty()
+                ? " (unlimited)"
+                : " (" + other->timeControl + ")"));
 
-    return std::make_pair(white, black);
+    return std::make_pair(other, &client);
 }
 
 void Matchmaker::remove(Client& client)
