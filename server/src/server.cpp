@@ -435,6 +435,19 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
                                         sendTo(client, chess::net::ErrorMsg{"Name too long"});
                                         break;
                                     }
+                                    // An account is gated by its password, but a
+                                    // guest name matching one would still put
+                                    // impostor chat and archive rows beside that
+                                    // player's real rating — reject it.
+                                    if (players != nullptr) {
+                                        auto account = players->byName(join->name);
+                                        if (account.has_value()) {
+                                            sendTo(client, chess::net::ErrorMsg{
+                                                "Name '" + account->name + "' belongs to an account — "
+                                                "log in with its password or pick another name"});
+                                            break;
+                                        }
+                                    }
                                     client.name = join->name;
                                 }
                                 // Authenticated clients keep the (canonical)

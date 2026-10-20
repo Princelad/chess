@@ -152,6 +152,30 @@ TEST_F(RatedE2eTest, LoginCreatesProfileMessage)
     EXPECT_FALSE(profile->isGuest);
 }
 
+TEST_F(RatedE2eTest, GuestJoinCannotTakeAnAccountName)
+{
+    // An account is gated by its password, so guests must not reuse its
+    // name: chat/archive attribution and player cards would be spoofable.
+    auto creator = connectClient();
+    sendMsg(creator, chess::net::LoginMsg{"Ada", "pw"});
+    ASSERT_TRUE(await<chess::net::ProfileMsg>(creator).has_value());
+
+    // Same name case-insensitively (the account lookup is NOCASE) → refused.
+    auto guest = connectClient();
+    sendMsg(guest, chess::net::JoinMsg{"ada"});
+    auto err = await<chess::net::ErrorMsg>(guest);
+    ASSERT_TRUE(err.has_value());
+    EXPECT_NE(err->message.find("account"), std::string::npos);
+
+    // Any other name queues as before (paired here from a second socket).
+    sendMsg(guest, chess::net::JoinMsg{"GuestA"});
+    auto peer = connectClient();
+    sendMsg(peer, chess::net::JoinMsg{"GuestB"});
+    auto welcome = await<chess::net::WelcomeMsg>(guest);
+    ASSERT_TRUE(welcome.has_value());
+    EXPECT_FALSE(welcome->rated); // still an unrated guest game
+}
+
 TEST_F(RatedE2eTest, WrongPasswordIsAnErrorAndRetryRegistersLogically)
 {
     // Unknown name + wrong-looking password register attempt:
@@ -224,6 +248,46 @@ TEST_F(RatedE2eTest, RatedGameUpdatesProfileAfterResign)
     EXPECT_LT(wProfile->rating, 1500.0);
     EXPECT_GT(bProfile->rating, 1500.0);
     EXPECT_LT(wProfile->deviation, 350.0); // more certain after a rated game
+}
+
+TEST_F(RatedE2eTest, DisconnectingClientLosesAndGameIsRated)
+{
+    // Ranked loss on disconnect: no resignation message is ever sent — the
+    // server's disconnect path assigns the defeat to the dropped side and
+    // rates it like any decisive result.
+    auto white = connectClient();
+    auto black = connectClient();
+
+    sendMsg(white, chess::net::LoginMsg{"Ria", "pw"});
+    sendMsg(black, chess::net::LoginMsg{"Ken", "pw"});
+    ASSERT_TRUE(await<chess::net::ProfileMsg>(white).has_value());
+    ASSERT_TRUE(await<chess::net::ProfileMsg>(black).has_value());
+
+    sendMsg(white, chess::net::JoinMsg{"Ria"});
+    sendMsg(black, chess::net::JoinMsg{"Ken"});
+    ASSERT_TRUE(await<chess::net::WelcomeMsg>(white).has_value());
+    ASSERT_TRUE(await<chess::net::WelcomeMsg>(black).has_value());
+
+    ASSERT_TRUE(playMove(white, "f3"));
+
+    // White drops the connection outright.
+    white.disconnect();
+    auto bOver = await<chess::net::GameOverMsg>(black);
+    ASSERT_TRUE(bOver.has_value());
+    EXPECT_EQ(bOver->result, chess::net::GameResult::BlackWins);
+    EXPECT_EQ(bOver->reason, chess::net::GameOverReason::Disconnection);
+
+    auto bProfile = await<chess::net::ProfileMsg>(black);
+    ASSERT_TRUE(bProfile.has_value());
+    EXPECT_GT(bProfile->rating, 1500.0);
+    EXPECT_LT(bProfile->deviation, 350.0);
+
+    // The dropped client logs in again fresh and sees the defeat applied.
+    auto rejoin = connectClient();
+    sendMsg(rejoin, chess::net::LoginMsg{"Ria", "pw"});
+    auto rProfile = await<chess::net::ProfileMsg>(rejoin);
+    ASSERT_TRUE(rProfile.has_value());
+    EXPECT_LT(rProfile->rating, 1500.0);
 }
 
 TEST_F(RatedE2eTest, GuestGameIsUnrated)

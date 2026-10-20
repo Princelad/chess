@@ -59,7 +59,8 @@ struct LoginMsg {
 
 // Game-archive request: the latest completed games, optionally restricted to
 // one's own account (mineOnly applies to logged-in players; a guest gets the
-// global list server-side). limit 0 = server default; values above 200 clamp.
+// global list server-side). limit 0 = server default; values above 100 clamp
+// (the server's clamp mirrors the MaxArchiveEntries wire guard).
 struct ArchiveRequestMsg {
     int limit = 50;
     bool mineOnly = false;

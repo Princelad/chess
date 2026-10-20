@@ -64,8 +64,8 @@ public:
         std::int64_t whiteId, std::int64_t blackId, chess::net::GameResult result);
 
     // Applies Glicko-2 idle-period deviation growth (10.2): one growth step
-    // per full rating period (day) since last_rated_at, capped at 100 periods
-    // and an RD of 350. Rating and volatility are untouched. Returns the
+    // per full rating period (day) since last_rated_at, capped at 5000
+    // periods (≈13.7 years of absence per login pass) and an RD of 350. Rating and volatility are untouched. Returns the
     // fresh row (whether or not anything grew); std::nullopt when the id is
     // unknown or a statement fails. Players never rated grow nothing — their
     // RD already sits at the cap.

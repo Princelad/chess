@@ -13,9 +13,10 @@ constexpr const char* SelectColumns =
 
 // One idle rating period = one day (Glicko-2 periods are arbitrary; daily is
 // the usual server convention). Glickman's no-game period grows RD by
-// sqrt(φ² + σ²) each period ≈ 0.07 RD points with σ = 0.06, so a very long
-// absence is the honest way back to the 350 cap: allow ~13 years of idle
-// periods per login pass, with an early exit at the cap.
+// sqrt(φ² + σ²) each period — roughly 1 RD point early on and ~0.15 near the
+// cap with σ = 0.06 — so a long absence is the honest way back to the 350
+// cap: allow ~13.7 years of idle periods per login pass, with an early exit
+// at the cap.
 constexpr std::int64_t RatingPeriodSec = 86400;
 constexpr int MaxIdlePeriods = 5000;
 
