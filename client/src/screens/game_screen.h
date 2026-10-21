@@ -3,6 +3,7 @@
 #include "app.h"
 #include "board_interaction.h"
 #include "boardview.h"
+#include "chat_log.h"
 #include "game_over_transition.h"
 #include "hud.h"
 #include "move_animator.h"
@@ -99,10 +100,13 @@ private:
     std::optional<std::pair<double, double>> opponentRating_;
     bool rated_ = false;
 
-    std::vector<std::string> chatLog_;
+    std::vector<ChatEntry> chatLog_;
     TextField chatInput_;
     Panel chatLogBg_;
     Label chatLabel_;
+
+    void addChatLine(const std::string& name, const std::string& text);
+    void addSystemChat(const std::string& text);
     Label drawOfferLabel_;
     Label takebackLabel_;
     Button resignBtn_;

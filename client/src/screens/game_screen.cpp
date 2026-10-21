@@ -9,6 +9,7 @@
 #include <chess/net/messages.h>
 
 #include <algorithm>
+#include <ctime>
 
 namespace chess::client {
 
@@ -93,9 +94,7 @@ GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName,
     offerDrawBtn_.setOnClick([this] {
         if (gameOver_) return;
         app_.connection().send(chess::net::DrawOfferMsg{});
-        chatLog_.push_back("Draw offer sent");
-        if (chatLog_.size() > MaxChatLog)
-            chatLog_.erase(chatLog_.begin());
+        addSystemChat("Draw offer sent");
     });
 
     declineBtn_.setLabel("Decline");
@@ -108,14 +107,12 @@ GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName,
         if (drawOfferPending_) {
             app_.connection().send(chess::net::DrawDeclineMsg{});
             drawOfferPending_ = false;
-            chatLog_.push_back("Draw declined");
+            addSystemChat("Draw declined");
         } else if (takebackOfferPending_) {
             app_.connection().send(chess::net::TakebackDeclineMsg{});
             takebackOfferPending_ = false;
-            chatLog_.push_back("Takeback declined");
+            addSystemChat("Takeback declined");
         }
-        if (chatLog_.size() > MaxChatLog)
-            chatLog_.erase(chatLog_.begin());
     });
 
     acceptBtn_.setLabel("Accept");
@@ -147,9 +144,7 @@ GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName,
     takebackBtn_.setOnClick([this] {
         if (gameOver_) return;
         app_.connection().send(chess::net::TakebackRequestMsg{});
-        chatLog_.push_back("Takeback requested");
-        if (chatLog_.size() > MaxChatLog)
-            chatLog_.erase(chatLog_.begin());
+        addSystemChat("Takeback requested");
     });
 
     layoutPanel();
@@ -413,14 +408,50 @@ PromoCell GameScreen::promoCell(int index) const
     };
 }
 
+void GameScreen::addChatLine(const std::string& name, const std::string& text)
+{
+    chatLog_.push_back(ChatEntry{name, text, std::time(nullptr)});
+    if (chatLog_.size() > MaxChatLog)
+        chatLog_.erase(chatLog_.begin());
+}
+
+void GameScreen::addSystemChat(const std::string& text)
+{
+    addChatLine("", text);
+}
+
 void GameScreen::sendChat()
 {
     if (chatInput_.text().empty()) return;
-    app_.connection().send(chess::net::ChatMsg{chatInput_.text()});
-    chatLog_.push_back("You: " + chatInput_.text());
-    if (chatLog_.size() > MaxChatLog)
-        chatLog_.erase(chatLog_.begin());
+    const std::string text = chatInput_.text();
     chatInput_.setText("");
+
+    // Slash commands (11.8) stay client-local: mute bookkeeping never
+    // travels to the server. The name is the rest of the line (names may
+    // contain spaces); the saved config re-persists on every toggle.
+    if (text[0] == '/') {
+        Config& config = app_.config();
+        const std::size_t space = text.find(' ');
+        const std::string cmd = space == std::string::npos
+            ? text : text.substr(0, space);
+        std::string name = space == std::string::npos
+            ? "" : text.substr(space + 1);
+        while (!name.empty() && (name.front() == ' ' || name.front() == '\t'))
+            name.erase(name.begin());
+        while (!name.empty() && (name.back() == ' ' || name.back() == '\t'))
+            name.pop_back();
+        if ((cmd == "/mute" || cmd == "/unmute") && !name.empty()) {
+            const bool muted = chatToggleMute(config, name);
+            config.save();
+            addSystemChat(name + (muted ? " muted" : " unmuted"));
+        } else {
+            addSystemChat("Commands: /mute <name>, /unmute <name>");
+        }
+        return;
+    }
+
+    app_.connection().send(chess::net::ChatMsg{text});
+    addChatLine(YouName(), text);
 }
 
 void GameScreen::handleEvent(const sf::Event& event)
@@ -720,16 +751,12 @@ void GameScreen::update(float dtSec)
             (void)drawOffer;
             drawOfferPending_ = true;
             hud_.setStatus("Opponent offers a draw", 3.0f);
-            chatLog_.push_back("Draw offer received");
-            if (chatLog_.size() > MaxChatLog)
-                chatLog_.erase(chatLog_.begin());
+            addSystemChat("Draw offer received");
         }
         else if (std::holds_alternative<chess::net::ServerDrawDeclineMsg>(msg)) {
             drawOfferPending_ = false;
             hud_.setStatus("Draw offer declined", 2.0f);
-            chatLog_.push_back("Draw offer declined");
-            if (chatLog_.size() > MaxChatLog)
-                chatLog_.erase(chatLog_.begin());
+            addSystemChat("Draw offer declined");
         }
         else if (std::holds_alternative<chess::net::ServerTakebackRequestMsg>(msg)) {
             // The opponent asks to retract the last full move; the same
@@ -737,9 +764,7 @@ void GameScreen::update(float dtSec)
             // precedence only while also showing — both stay pending).
             takebackOfferPending_ = true;
             hud_.setStatus("Opponent asks for a takeback", 3.0f);
-            chatLog_.push_back("Takeback requested by opponent");
-            if (chatLog_.size() > MaxChatLog)
-                chatLog_.erase(chatLog_.begin());
+            addSystemChat("Takeback requested by opponent");
         }
         else if (auto* takebackOk = std::get_if<chess::net::TakebackAcceptedMsg>(&msg)) {
             // Agreed (or bot-accepted) takeback: roll the board back to the
@@ -749,9 +774,7 @@ void GameScreen::update(float dtSec)
         }
         else if (std::holds_alternative<chess::net::ServerTakebackDeclineMsg>(msg)) {
             hud_.setStatus("Takeback declined", 2.0f);
-            chatLog_.push_back("Takeback declined");
-            if (chatLog_.size() > MaxChatLog)
-                chatLog_.erase(chatLog_.begin());
+            addSystemChat("Takeback declined");
         }
         else if (auto* profileMsg = std::get_if<chess::net::ProfileMsg>(&msg)) {
             // Rated game just ended: the server re-sends our fresh profile.
@@ -764,22 +787,19 @@ void GameScreen::update(float dtSec)
             applyResume(*resumeState);
         }
         else if (auto* reconn = std::get_if<chess::net::OpponentReconnectingMsg>(&msg)) {
-            hud_.setStatus("Opponent reconnecting...",
+            hud_.setStatus("Opponent lost connection",
                            static_cast<float>(reconn->graceSeconds));
-            chatLog_.push_back("Opponent lost connection");
-            if (chatLog_.size() > MaxChatLog)
-                chatLog_.erase(chatLog_.begin());
+            addSystemChat("Opponent lost connection");
         }
         else if (std::holds_alternative<chess::net::OpponentResumedMsg>(msg)) {
             hud_.setStatus("Opponent reconnected", 3.f);
-            chatLog_.push_back("Opponent reconnected");
-            if (chatLog_.size() > MaxChatLog)
-                chatLog_.erase(chatLog_.begin());
+            addSystemChat("Opponent reconnected");
         }
         else if (auto* chat = std::get_if<chess::net::ServerChatMsg>(&msg)) {
-            chatLog_.push_back(chat->name + ": " + chat->text);
-            if (chatLog_.size() > MaxChatLog)
-                chatLog_.erase(chatLog_.begin());
+            // Mute is client-local (11.8): the opposite seat never learns
+            // who is muted; a muted line simply never joins this log.
+            if (!chatIsMuted(chatMutedFromConfig(app_.config()), chat->name))
+                addChatLine(chat->name, chat->text);
         }
         else if (auto* err = std::get_if<chess::net::ErrorMsg>(&msg)) {
             hud_.setStatus(err->message, 2.0f);
@@ -969,9 +989,7 @@ void GameScreen::applyTakeback(const std::vector<std::string>& sans)
     myTurn_ = board.sideToMove() == myColor_ && !gameOver_;
     hud_.setInfo(opponentName_, myColor_, myTurn_, gameOver_);
     hud_.setStatus("Takeback accepted", 2.f);
-    chatLog_.push_back("Takeback accepted");
-    if (chatLog_.size() > MaxChatLog)
-        chatLog_.erase(chatLog_.begin());
+    addSystemChat("Takeback accepted");
 }
 
 void GameScreen::finishGameOver()
@@ -1042,17 +1060,44 @@ void GameScreen::drawChat(sf::RenderWindow& window)
     float y = logTop + 2.f;
     for (int i = start; i < static_cast<int>(chatLog_.size()); ++i) {
         if (y + lineH > logBottom) break;
-        sf::Text line(font, chatLog_[i], 13);
-        line.setFillColor(sf::Color(200, 200, 200));
-        line.setPosition({px + 4.f, y});
+        const ChatEntry& entry = chatLog_[i];
 
-        auto lb = line.getLocalBounds();
-        if (lb.size.x > panelW - 8.f) {
-            line.setString(sf::String(
-                safeTruncate(chatLog_[i],
-                    static_cast<std::size_t>((panelW - 8.f) / 6.f))));
+        // Three-part line (11.8): dim [HH:MM] tag, colored sender, gray
+        // text; system lines skip the sender and render gray. Each part
+        // truncates into the remaining panel width (~6 px per glyph, the
+        // same estimator the pre-11.8 renderer used).
+        const float left = px + 4.f;
+        const float right = px + panelW - 4.f;
+        const auto fits = [&](float x, const std::string& text) {
+            constexpr float CharWidth = 6.f;
+            return safeTruncate(text,
+                static_cast<std::size_t>(std::max(0.f, right - x) / CharWidth));
+        };
+
+        sf::Text timeTag(font, "[" + chatTimestamp(entry.epochSec) + "] ", 13);
+        timeTag.setFillColor(sf::Color(110, 110, 110));
+        timeTag.setPosition({left, y});
+        window.draw(timeTag);
+
+        float x = left + timeTag.getLocalBounds().size.x;
+        if (entry.name.empty()) {
+            sf::Text line(font, fits(x, entry.text), 13);
+            line.setFillColor(sf::Color(170, 170, 170));
+            line.setPosition({x, y});
+            window.draw(line);
+        } else {
+            sf::Text namePart(font, entry.name + ": ", 13);
+            namePart.setFillColor(entry.name == YouName()
+                ? sf::Color(255, 230, 130) : chatNameColor(entry.name));
+            namePart.setPosition({x, y});
+            window.draw(namePart);
+
+            sf::Text line(font, fits(x + namePart.getLocalBounds().size.x,
+                                     entry.text), 13);
+            line.setFillColor(sf::Color(200, 200, 200));
+            line.setPosition({x + namePart.getLocalBounds().size.x, y});
+            window.draw(line);
         }
-        window.draw(line);
         y += lineH;
     }
 

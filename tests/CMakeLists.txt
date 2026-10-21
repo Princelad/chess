@@ -44,6 +44,7 @@ if(BUILD_TESTING)
         client/move_navigator_test.cpp
         client/board_interaction_test.cpp
         client/config_test.cpp
+        client/chat_test.cpp
         client/keyboard_test.cpp
         client/move_animator_test.cpp
         client/premove_test.cpp
