@@ -6,6 +6,7 @@
 #include "game_over_transition.h"
 #include "hud.h"
 #include "move_animator.h"
+#include "premove.h"
 #include "promo_state.h"
 #include "widgets/button.h"
 #include "widgets/checkbox.h"
@@ -49,6 +50,12 @@ private:
     void syncViewHighlights();
     void clearBoardInput();
     bool ownPieceAt(int file, int rank);
+    // Premove (11.4): the queued move auto-sends the instant the position
+    // (the opponent's just-echoed move) makes it legal; flush clears it
+    // either way — sent, or dropped as "now illegal".
+    void queuePremove(int fromFile, int fromRank, int toFile, int toRank);
+    void flushPremove();
+    void setPremoveHighlight();
     sf::FloatRect autoQueenRect() const;
     std::optional<chess::PieceType> promoTypeForKey(sf::Keyboard::Key key) const;
     PromoCell promoCell(int index) const;
@@ -84,6 +91,8 @@ private:
     bool myTurn_ = false;
     bool gameOver_ = false;
     bool drawOfferPending_ = false;
+    // Premove (11.4): at most one queued move while the opponent thinks.
+    std::optional<Premove> premove_;
     GameOverTransition gameOverTransition_;
 
     std::string opponentName_;

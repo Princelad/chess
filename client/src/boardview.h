@@ -24,6 +24,9 @@ struct HighlightState {
     std::optional<std::pair<int, int>> lastMoveTo;
     std::optional<std::pair<int, int>> checkSquare;
     std::optional<std::pair<int, int>> cursorSquare;
+    // Premove (11.4): the queued move squares, tinted until flush.
+    std::optional<std::pair<int, int>> premoveFrom;
+    std::optional<std::pair<int, int>> premoveTo;
 };
 
 class BoardView {
@@ -45,6 +48,11 @@ public:
     void drawDraggedPiece(sf::RenderWindow& window, const sf::Font& font,
                           chess::Piece piece, sf::Vector2f cursor,
                           const App& app) const;
+    // Ghost of one premove (11.4): the origin piece translucent on its
+    // putative landing square, waiting for the position to confirm it.
+    void drawGhostPiece(sf::RenderWindow& window, const sf::Font& font,
+                        chess::Piece piece, int toFile, int toRank,
+                        const App& app) const;
 
     std::optional<std::pair<int, int>> pixelToSquare(sf::Vector2f pixel) const;
     sf::Vector2f squareCenter(int file, int rank) const;

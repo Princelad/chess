@@ -209,6 +209,14 @@ void GameScreen::selectPiece(int file, int rank)
 
 void GameScreen::trySendMove(int targetFile, int targetRank)
 {
+    // Not our turn yet: the move is queued as a premove and auto-sends the
+    // moment the echoed response makes it legal (11.4).
+    if (!myTurn_) {
+        queuePremove(hl_.selectedSquare->first, hl_.selectedSquare->second,
+                     targetFile, targetRank);
+        return;
+    }
+
     const Board& live = hud_.navigator().finalBoard();
     Square from = squareOf(hl_.selectedSquare->first, hl_.selectedSquare->second);
     Square to = squareOf(targetFile, targetRank);
@@ -268,6 +276,41 @@ void GameScreen::deselect()
     hl_.legalMoveTargets.clear();
 }
 
+// Queues the opponent-waiting move (11.4). The latest attempt replaces any
+// earlier premove — a single slot; right-click/Esc cancel it (see below).
+void GameScreen::queuePremove(int fromFile, int fromRank, int toFile, int toRank)
+{
+    if (fromFile == toFile && fromRank == toRank)
+        return;
+    premove_ = Premove{fromFile, fromRank, toFile, toRank};
+    deselect();
+}
+
+// Flushes the queued premove after the opponent's move has been applied.
+// Resolution is pure legality: whatever legal move matches the queued
+// from/to goes out as a plain MoveMsg (captured, castled, en passant),
+// a promotion frame sends the queen pre-move. Anything else — an empty
+// "capture" square, a blocked/pinned path, a landing on an own piece —
+// is dropped with a status line. Both states lose the queue.
+void GameScreen::flushPremove()
+{
+    if (!premove_)
+        return;
+    const Premove queued = *premove_;
+    premove_.reset();
+    if (!myTurn_ || gameOver_)
+        return;
+
+    auto resolved = resolvePremove(hud_.navigator().finalBoard(), queued);
+    if (resolved.has_value()) {
+        hud_.setStatus("Premove played", 1.5f);
+        commitMove(*resolved);
+    } else {
+        hud_.setStatus("Premove illegal", 2.f);
+        deselect();
+    }
+}
+
 void GameScreen::syncViewHighlights()
 {
     const Board& shown = hud_.navigator().board();
@@ -278,6 +321,14 @@ void GameScreen::syncViewHighlights()
     hl_.checkSquare = chess::inCheck(shown, stm)
         ? findKingSquare(shown, stm)
         : std::optional<std::pair<int, int>>{};
+    hl_.premoveFrom = premove_.has_value()
+        ? std::optional<std::pair<int, int>>{ {
+              premove_->fromFile, premove_->fromRank } }
+        : std::nullopt;
+    hl_.premoveTo = premove_.has_value()
+        ? std::optional<std::pair<int, int>>{ {
+              premove_->toFile, premove_->toRank } }
+        : std::nullopt;
 }
 
 void GameScreen::commitMove(const chess::Move& m)
@@ -388,6 +439,7 @@ void GameScreen::handleEvent(const sf::Event& event)
             if (showingHelp_) { showingHelp_ = false; return; }
             if (promo_) { cancelPromotion(); return; }
             clearBoardInput();
+            premove_.reset();
             deselect();
             return;
         }
@@ -404,6 +456,7 @@ void GameScreen::handleEvent(const sf::Event& event)
         switch (keyToAction(kp->code, kp->shift)) {
             case KeyboardAction::Deselect:
                 clearBoardInput();
+                premove_.reset();
                 deselect();
                 return;
             case KeyboardAction::Flip:
@@ -536,7 +589,7 @@ void GameScreen::handleEvent(const sf::Event& event)
             }
 
             annotations_.clear();
-            if (gameOver_ || !myTurn_) return;
+            if (gameOver_) return;
 
             if (!hud_.navigator().atEnd()) {
                 hud_.navigator().goEnd();
@@ -556,6 +609,7 @@ void GameScreen::handleEvent(const sf::Event& event)
         } else if (mb->button == sf::Mouse::Button::Right) {
             if (promo_) cancelPromotion();
             clearBoardInput();
+            premove_.reset();
             deselect();
             rightPress_ = boardView_.pixelToSquare(local);
         }
@@ -644,12 +698,15 @@ void GameScreen::update(float dtSec)
                 hl_.legalMoveTargets.clear();
                 myTurn_ = true;
                 hud_.setInfo(opponentName_, myColor_, myTurn_, gameOver_);
+                // Our premove (if any) auto-sends now, or dies trying (11.4).
+                flushPremove();
             }
         }
         else if (auto* gameOver = std::get_if<chess::net::GameOverMsg>(&msg)) {
             gameOver_ = true;
             drawOfferPending_ = false;
             takebackOfferPending_ = false;
+            premove_.reset();
             hud_.setGameOver(true);
             hud_.setInfo(opponentName_, myColor_, myTurn_, gameOver_);
             const auto& cfg = app_.config();
@@ -864,6 +921,7 @@ void GameScreen::applyResume(const chess::net::ResumeStateMsg& msg)
     dragFrom_.reset();
     rightPress_.reset();
     promo_.reset();
+    premove_.reset();
     annotations_.clear();
     drawOfferPending_ = false;
     takebackOfferPending_ = false;
@@ -906,6 +964,7 @@ void GameScreen::applyTakeback(const std::vector<std::string>& sans)
     dragFrom_.reset();
     rightPress_.reset();
     promo_.reset();
+    premove_.reset();
     annotations_.clear();
     myTurn_ = board.sideToMove() == myColor_ && !gameOver_;
     hud_.setInfo(opponentName_, myColor_, myTurn_, gameOver_);
@@ -1013,6 +1072,18 @@ void GameScreen::draw(sf::RenderWindow& window)
     boardView_.drawHighlights(window, hl_, shown);
     boardView_.drawLabels(window, font);
     boardView_.drawPieces(window, font, shown, app_, &anim_);
+
+    // Premove ghost (11.4): the queued piece translucent on its putative
+    // landing square. Live position only — a stepper is reading history.
+    if (premove_ && !myTurn_ && !gameOver_ && hud_.navigator().atEnd()) {
+        Piece ghost = hud_.navigator().finalBoard().pieceAt(
+            squareOf(premove_->fromFile, premove_->fromRank));
+        if (!ghost.isNone() && ghost.color == myColor_)
+            boardView_.drawGhostPiece(window, font, ghost,
+                                      premove_->toFile, premove_->toRank,
+                                      app_);
+    }
+
     boardView_.drawAnnotations(window, annotations_.arrows(), annotations_.circles());
 
     if (drag_.isDragging() && dragFrom_) {
@@ -1097,6 +1168,7 @@ void GameScreen::drawHelpOverlay(sf::RenderWindow& window)
         "[ / ] — previous / next move",
         "Home / End — go to start / end",
         "Q R B N or 1-4 — pick promotion",
+        "Right-click — cancel premove / annotate",
         "? — toggle this help",
     };
     constexpr int Count = static_cast<int>(sizeof(lines) / sizeof(lines[0]));

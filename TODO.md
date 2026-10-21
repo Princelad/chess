@@ -650,9 +650,9 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [x] Client request UI (Takeback button beside Resign/Offer Draw; prompt rows share the draw-offer accept/decline buttons) + `applyTakeback` rebuild via `MoveNavigator::setGame` SAN replay (`goEnd` immediately, no animation or move sound; `MoveAnimator::cancel` added; same `goEnd` fix applied to `applyResume`, which used to show ply 0 until the first click). Resume after a takeback replays the trimmed history (`TakebackE2eTest.ResumeAfterTakebackReplaysTrimmedHistory`)
   - [x] Tests (protocol round-trip/garbage; `MatchTest` validation + rollback + lifecycle; `BotMatchTest` auto-accept; `tests/e2e/takeback_test.cpp` agreed/declined/resume-after/clocked flows)
 
-- [ ] **11.4 Premoves**
-  - [ ] Queue next move while opponent thinks; ghost piece rendered
-  - [ ] Auto-send when legal on position update; right-click/Esc cancels (pairs with 9.4)
+- [x] **11.4 Premoves**
+  - [x] Queue next move while opponent thinks; ghost piece rendered (single `Premove` slot in `GameScreen`; moves trapped while `!myTurn_` are queued instead of sent; `BoardView::drawGhostPiece` shows the origin piece translucent on its landing square, plus cyan from/to tint via `HighlightState::premoveFrom/To`)
+  - [x] Auto-send when legal on position update; right-click/Esc cancels (pairs with 9.4) (`flushPremove` runs right after the `ServerMoveMsg` echo in `GameScreen::update` — the echo stays the single history-append point, so a flushed premove never double-records; pure `client/src/premove.h` `resolvePremove` matches the queued from/to against `generateLegalMoves` of the live position: empty "capture" squares, own-piece landings and pinned/blocked paths just drop with a "Premove illegal" status, castling and en passant frames resolve naturally, promotion premoves auto-queen. Online `GameScreen` only; cleared on game over / takeback / resume)
 
 - [ ] **11.5 Opening names (ECO)**
   - [ ] Small bundled ECO table asset; prefix-match on move list

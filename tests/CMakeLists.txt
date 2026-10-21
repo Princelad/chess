@@ -46,6 +46,7 @@ if(BUILD_TESTING)
         client/config_test.cpp
         client/keyboard_test.cpp
         client/move_animator_test.cpp
+        client/premove_test.cpp
         client/sfx_test.cpp
         client/widget_test.cpp
         client/archive_pgn_test.cpp

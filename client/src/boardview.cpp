@@ -120,6 +120,41 @@ void BoardView::drawDraggedPiece(sf::RenderWindow& window, const sf::Font& font,
     drawPieceAtCenter(window, font, piece, cursor, app);
 }
 
+void BoardView::drawGhostPiece(sf::RenderWindow& window, const sf::Font& font,
+                               chess::Piece piece, int toFile, int toRank,
+                               const App& app) const
+{
+    float pieceSize = squareSize_ * 0.8f;
+    sf::Vector2f topLeft = squareToPixel(toFile, toRank)
+        + (sf::Vector2f(squareSize_, squareSize_) - sf::Vector2f(pieceSize, pieceSize)) / 2.f;
+
+    if (app.piecesLoaded()) {
+        const auto& tex = app.pieceTexture(piece.color, piece.type);
+        sf::Sprite sprite(tex);
+        float scale = pieceSize / static_cast<float>(tex.getSize().x);
+        sprite.setScale({ scale, scale });
+        sprite.setPosition(topLeft);
+        sprite.setColor(sf::Color(255, 255, 255, 110));
+        window.draw(sprite);
+        return;
+    }
+    // Letter fallback, same 110-alpha translucency.
+    static const char pieceLetters[] = { 'P', 'N', 'B', 'R', 'Q', 'K' };
+    unsigned int letterSize = static_cast<unsigned int>(squareSize_ * 0.5f);
+    if (letterSize < 12) letterSize = 12;
+    sf::Text letter(font,
+                    std::string(1, pieceLetters[static_cast<int>(piece.type)]),
+                    letterSize);
+    letter.setFillColor(piece.color == Color::White
+        ? sf::Color(240, 240, 240, 110) : sf::Color(40, 40, 40, 110));
+    auto lb = letter.getLocalBounds();
+    letter.setPosition({
+        topLeft.x + (pieceSize - lb.size.x) / 2.f - lb.position.x,
+        topLeft.y + (pieceSize - lb.size.y) / 2.f - lb.position.y
+    });
+    window.draw(letter);
+}
+
 void BoardView::drawPieceAtCenter(sf::RenderWindow& window, const sf::Font& font,
                                   chess::Piece piece, sf::Vector2f center,
                                   const App& app) const
@@ -196,6 +231,13 @@ void BoardView::drawHighlights(sf::RenderWindow& window, const HighlightState& h
     if (hl.checkSquare)
         drawSquareTint(window, hl.checkSquare->first, hl.checkSquare->second,
                        sf::Color(255, 0, 0, 100));
+
+    if (hl.premoveFrom)
+        drawSquareTint(window, hl.premoveFrom->first, hl.premoveFrom->second,
+                       sf::Color(0, 170, 200, 70));
+    if (hl.premoveTo)
+        drawSquareTint(window, hl.premoveTo->first, hl.premoveTo->second,
+                       sf::Color(0, 170, 200, 70));
 
     float dotRadius = squareSize_ * 0.15f;
     float ringRadius = squareSize_ * 0.40f;
