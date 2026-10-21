@@ -22,6 +22,9 @@ enum class ClientMsgType : uint8_t {
     ArchiveGet,
     LeaderboardRequest,
     Resume,
+    TakebackRequest,
+    TakebackAccept,
+    TakebackDecline,
 };
 
 enum class ServerMsgType : uint8_t {
@@ -42,6 +45,9 @@ enum class ServerMsgType : uint8_t {
     ResumeState,
     OpponentReconnecting,
     OpponentResumed,
+    TakebackRequest,
+    TakebackAccepted,
+    TakebackDecline,
 };
 
 // Refuses absurd archive counts on deserialize: a corrupt or hostile packet
@@ -157,6 +163,24 @@ bool writeClient(sf::Packet& packet, const LeaderboardRequestMsg& msg)
 bool writeClient(sf::Packet& packet, const ResumeMsg& msg)
 {
     packet << static_cast<uint8_t>(ClientMsgType::Resume) << msg.token;
+    return static_cast<bool>(packet);
+}
+
+bool writeClient(sf::Packet& packet, TakebackRequestMsg)
+{
+    packet << static_cast<uint8_t>(ClientMsgType::TakebackRequest);
+    return static_cast<bool>(packet);
+}
+
+bool writeClient(sf::Packet& packet, TakebackAcceptMsg)
+{
+    packet << static_cast<uint8_t>(ClientMsgType::TakebackAccept);
+    return static_cast<bool>(packet);
+}
+
+bool writeClient(sf::Packet& packet, TakebackDeclineMsg)
+{
+    packet << static_cast<uint8_t>(ClientMsgType::TakebackDecline);
     return static_cast<bool>(packet);
 }
 
@@ -310,6 +334,27 @@ bool writeServer(sf::Packet& packet, const OpponentReconnectingMsg& msg)
 bool writeServer(sf::Packet& packet, OpponentResumedMsg)
 {
     packet << static_cast<uint8_t>(ServerMsgType::OpponentResumed);
+    return static_cast<bool>(packet);
+}
+
+bool writeServer(sf::Packet& packet, ServerTakebackRequestMsg)
+{
+    packet << static_cast<uint8_t>(ServerMsgType::TakebackRequest);
+    return static_cast<bool>(packet);
+}
+
+bool writeServer(sf::Packet& packet, const TakebackAcceptedMsg& msg)
+{
+    packet << static_cast<uint8_t>(ServerMsgType::TakebackAccepted)
+           << static_cast<int32_t>(msg.sans.size());
+    for (const auto& san : msg.sans)
+        packet << san;
+    return static_cast<bool>(packet);
+}
+
+bool writeServer(sf::Packet& packet, ServerTakebackDeclineMsg)
+{
+    packet << static_cast<uint8_t>(ServerMsgType::TakebackDecline);
     return static_cast<bool>(packet);
 }
 
@@ -500,6 +545,12 @@ std::optional<ClientMessage> deserializeClient(sf::Packet& packet)
                 return std::nullopt;
             return msg;
         }
+        case ClientMsgType::TakebackRequest:
+            return TakebackRequestMsg{};
+        case ClientMsgType::TakebackAccept:
+            return TakebackAcceptMsg{};
+        case ClientMsgType::TakebackDecline:
+            return TakebackDeclineMsg{};
         default:
             return std::nullopt;
     }
@@ -666,6 +717,26 @@ std::optional<ServerMessage> deserializeServer(sf::Packet& packet)
         }
         case ServerMsgType::OpponentResumed:
             return OpponentResumedMsg{};
+        case ServerMsgType::TakebackRequest:
+            return ServerTakebackRequestMsg{};
+        case ServerMsgType::TakebackAccepted: {
+            TakebackAcceptedMsg msg;
+            int32_t count = 0;
+            packet >> count;
+            if (!static_cast<bool>(packet) || count < 0
+                || count > MaxResumeMoves)
+                return std::nullopt;
+            msg.sans.reserve(static_cast<std::size_t>(count));
+            for (int32_t i = 0; i < count; ++i) {
+                std::string san;
+                packet >> san;
+                if (!static_cast<bool>(packet)) return std::nullopt;
+                msg.sans.push_back(std::move(san));
+            }
+            return msg;
+        }
+        case ServerMsgType::TakebackDecline:
+            return ServerTakebackDeclineMsg{};
         default:
             return std::nullopt;
     }
@@ -706,6 +777,12 @@ std::string debugString(const ClientMessage& msg)
             // Not a password-scale secret, but keeping it out of the log
             // still avoids inviting third-party token replays.
             return "Resume{token=***}";
+        else if constexpr (std::is_same_v<T, TakebackRequestMsg>)
+            return "TakebackRequest{}";
+        else if constexpr (std::is_same_v<T, TakebackAcceptMsg>)
+            return "TakebackAccept{}";
+        else if constexpr (std::is_same_v<T, TakebackDeclineMsg>)
+            return "TakebackDecline{}";
     }, msg);
 }
 
@@ -761,6 +838,12 @@ std::string debugString(const ServerMessage& msg)
             return "OpponentReconnecting{graceSeconds=" + std::to_string(m.graceSeconds) + "}";
         else if constexpr (std::is_same_v<T, OpponentResumedMsg>)
             return "OpponentResumed{}";
+        else if constexpr (std::is_same_v<T, ServerTakebackRequestMsg>)
+            return "TakebackRequest{}";
+        else if constexpr (std::is_same_v<T, TakebackAcceptedMsg>)
+            return "TakebackAccepted{plies=" + std::to_string(m.sans.size()) + "}";
+        else if constexpr (std::is_same_v<T, ServerTakebackDeclineMsg>)
+            return "TakebackDecline{}";
     }, msg);
 }
 

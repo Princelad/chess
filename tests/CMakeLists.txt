@@ -53,7 +53,8 @@ if(BUILD_TESTING)
         uci/engine_test.cpp
         e2e/e2e_test.cpp
         e2e/rated_test.cpp
-        e2e/reconnect_test.cpp)
+        e2e/reconnect_test.cpp
+        e2e/takeback_test.cpp)
 
     target_link_libraries(chess-tests PRIVATE chesscore chessnet chessclient chessserver chessuci chessdb GTest::gtest_main)
 

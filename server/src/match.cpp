@@ -139,6 +139,12 @@ void Match::handleMessage(Client& sender, const chess::net::ClientMessage& msg)
             handleDrawAccept(sender);
         else if constexpr (std::is_same_v<T, chess::net::DrawDeclineMsg>)
             handleDrawDecline(sender);
+        else if constexpr (std::is_same_v<T, chess::net::TakebackRequestMsg>)
+            handleTakebackRequest(sender);
+        else if constexpr (std::is_same_v<T, chess::net::TakebackAcceptMsg>)
+            handleTakebackAccept(sender);
+        else if constexpr (std::is_same_v<T, chess::net::TakebackDeclineMsg>)
+            handleTakebackDecline(sender);
         else if constexpr (std::is_same_v<T, chess::net::ResignMsg>)
             handleResign(sender);
         else if constexpr (std::is_same_v<T, chess::net::ChatMsg>)
@@ -199,7 +205,11 @@ bool Match::handleMoveSAN(Client& sender, const std::string& san)
         if (seat.present)
             sendTo(*seat.present, serverMove);
 
+    // An accepted move resolves whatever was on the table: the draw offer
+    // was for the old position, and the takeback (if one was out and the
+    // mover is its asker) issues from a frame that has moved on.
     drawOfferPending_ = false;
+    takebackPending_.reset();
 
     auto state = chess::evaluateGameState(board_);
     if (state != chess::GameState::Ongoing) {
@@ -245,6 +255,123 @@ void Match::handleDrawDecline(Client& sender)
     sendToPresent(seats_[1 - idx].present, chess::net::ServerDrawDeclineMsg{});
 }
 
+void Match::handleTakebackRequest(Client& sender)
+{
+    const std::size_t idx = seatIndexOf(sender);
+    if (idx >= 2)
+        return;
+
+    if (takebackPending_.has_value()) {
+        sendTo(sender, chess::net::ErrorMsg{"A takeback is already pending"});
+        return;
+    }
+    const std::size_t onMoveIdx =
+        board_.sideToMove() == chess::Color::White ? 0 : 1;
+    if (onMoveIdx != idx) {
+        sendTo(sender, chess::net::ErrorMsg{"Not your turn"});
+        return;
+    }
+    // Classic takeback = retract the last full move: the asker's own ply
+    // plus the opponent's response, which alone puts the asker back on the
+    // move. Earlier than that (fewer than two plies, or the asker moving
+    // first) has no two-ply frame to roll back.
+    if (sanHistory_.size() < 2) {
+        sendTo(sender, chess::net::ErrorMsg{"No move to take back"});
+        return;
+    }
+    // The asked seat answers, so a mid-grace absence (11.2) fails fast
+    // instead of queuing behind the reconnect.
+    if (seats_[1 - idx].present == nullptr) {
+        sendTo(sender, chess::net::ErrorMsg{"The opponent is away"});
+        return;
+    }
+
+    if (seats_[1 - idx].isBot) {
+        // Server bots always agree — keeps solo games flowing, and there is
+        // no round trip to surface a UI for anyway. No in-flight engine
+        // hazard: the bot only thinks on its own turn, which is exactly the
+        // frame a valid request (before the rollback) never is.
+        LOG_INFO("Takeback accepted by bot (" + seats_[idx].name + ")");
+        applyTakeback(idx);
+        return;
+    }
+
+    takebackPending_ = idx;
+    LOG_INFO("Takeback requested by " + seats_[idx].name);
+    sendToPresent(seats_[1 - idx].present,
+                  chess::net::ServerTakebackRequestMsg{});
+}
+
+void Match::handleTakebackAccept(Client& sender)
+{
+    const std::size_t idx = seatIndexOf(sender);
+    if (idx >= 2)
+        return;
+    // Only the asked seat can agree; the asker cannot accept own request.
+    if (!takebackPending_.has_value() || *takebackPending_ == idx) {
+        sendTo(sender, chess::net::ErrorMsg{"No takeback request pending"});
+        return;
+    }
+    applyTakeback(*takebackPending_);
+}
+
+void Match::handleTakebackDecline(Client& sender)
+{
+    const std::size_t idx = seatIndexOf(sender);
+    if (idx >= 2)
+        return;
+    if (!takebackPending_.has_value()) {
+        sendTo(sender, chess::net::ErrorMsg{"No takeback request pending"});
+        return;
+    }
+    // Either seat dissolves the offer: the asked seat declines outright,
+    // while the asker's own decline message reads as a self-cancel (the
+    // requester is the seat notified below, so the notice lands right
+    // either way).
+    const std::size_t requesterIdx = *takebackPending_;
+    takebackPending_.reset();
+    LOG_INFO("Takeback declined (seat of " + seats_[idx].name + ")");
+    sendToPresent(seats_[requesterIdx].present,
+                  chess::net::ServerTakebackDeclineMsg{});
+}
+
+// Rolls the live position two plies back: the asker's last move and the
+// opponent's reply disappear, leaving the asker on the move in the prior
+// position. The rebuild chains san::fromSan over the truncated history from
+// the start position — the reconstruction already exercised by the 11.2
+// resume and the archive replay — rather than adapting Board::undoMove's
+// internal state restoration to match-level scope.
+void Match::applyTakeback(std::size_t requesterIdx)
+{
+    if (sanHistory_.size() < 2)
+        return; // unreachable: every accept path validated the frame first
+    sanHistory_.resize(sanHistory_.size() - 2);
+    takebackPending_.reset();
+
+    board_ = chess::Board::fromStartPos();
+    for (const auto& san : sanHistory_) {
+        auto move = chess::san::fromSan(board_, san);
+        if (!move.has_value()) {
+            // Unreachable: every entry was produced by handleMoveSAN's own
+            // legality checks. Bailing here keeps the corrupt board out.
+            LOG_ERROR("Takeback replay failed at " + san);
+            return;
+        }
+        board_.makeMove(*move);
+    }
+
+    // Both present seats rebuild from the same list; an absent seat gets
+    // nothing and catches up through its resume replay of sanHistory_.
+    chess::net::TakebackAcceptedMsg accepted{sanHistory_};
+    for (auto& seat : seats_)
+        sendToPresent(seat.present, accepted);
+    LOG_INFO("Takeback for " + seats_[requesterIdx].name
+             + " (" + std::to_string(sanHistory_.size()) + " plies remain)");
+
+    // Nothing to trigger for the bot: after a valid request the asker —
+    // never a bot — is on the move in the rebuilt position.
+}
+
 void Match::handleResign(Client& sender)
 {
     const std::size_t idx = seatIndexOf(sender);
@@ -283,6 +410,10 @@ void Match::handleDisconnect(const Client& client)
     if (idx >= 2)
         return;
     seats_[idx].present = nullptr;
+
+    // A pending takeback is a two-seat conversation; a seat leaving ends
+    // it. A resumed asker can simply ask again once the table is whole.
+    takebackPending_.reset();
 
     if (bothSeatsAbsent()) {
         // Nobody left behind: nobody wins (Abort results never rate).
@@ -418,6 +549,8 @@ void Match::endGame(chess::net::GameResult result, chess::net::GameOverReason re
 {
     active_ = false;
     graceRunning_ = false;
+    drawOfferPending_ = false;
+    takebackPending_.reset();
     lastGameOver_ = chess::net::GameOverMsg{result, reason};
     finishedAtMs_ = steadyNowMs();
     // Present seats learn the outcome now; a seat already away replays it

@@ -105,9 +105,15 @@ GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName,
                           sf::Color(90, 60, 60), sf::Color(210, 120, 120),
                           sf::Color(180, 140, 140));
     declineBtn_.setOnClick([this] {
-        app_.connection().send(chess::net::DrawDeclineMsg{});
-        drawOfferPending_ = false;
-        chatLog_.push_back("Draw declined");
+        if (drawOfferPending_) {
+            app_.connection().send(chess::net::DrawDeclineMsg{});
+            drawOfferPending_ = false;
+            chatLog_.push_back("Draw declined");
+        } else if (takebackOfferPending_) {
+            app_.connection().send(chess::net::TakebackDeclineMsg{});
+            takebackOfferPending_ = false;
+            chatLog_.push_back("Takeback declined");
+        }
         if (chatLog_.size() > MaxChatLog)
             chatLog_.erase(chatLog_.begin());
     });
@@ -119,8 +125,31 @@ GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName,
                          sf::Color(70, 100, 70), sf::Color(140, 200, 140),
                          sf::Color(180, 220, 180));
     acceptBtn_.setOnClick([this] {
-        app_.connection().send(chess::net::DrawAcceptMsg{});
-        drawOfferPending_ = false;
+        if (drawOfferPending_) {
+            app_.connection().send(chess::net::DrawAcceptMsg{});
+            drawOfferPending_ = false;
+        } else if (takebackOfferPending_) {
+            app_.connection().send(chess::net::TakebackAcceptMsg{});
+            takebackOfferPending_ = false;
+        }
+    });
+
+    takebackLabel_.setText("Takeback asked:");
+    takebackLabel_.setFontSize(14);
+    takebackLabel_.setColor(sf::Color(255, 200, 60));
+
+    takebackBtn_.setLabel("Takeback");
+    takebackBtn_.setColors(sf::Color(70, 70, 95), sf::Color(85, 85, 115),
+                           sf::Color(58, 58, 78), sf::Color(45, 45, 58),
+                           sf::Color(105, 105, 120), sf::Color(230, 230, 235),
+                           sf::Color(80, 80, 100), sf::Color(150, 150, 175),
+                           sf::Color(180, 180, 205));
+    takebackBtn_.setOnClick([this] {
+        if (gameOver_) return;
+        app_.connection().send(chess::net::TakebackRequestMsg{});
+        chatLog_.push_back("Takeback requested");
+        if (chatLog_.size() > MaxChatLog)
+            chatLog_.erase(chatLog_.begin());
     });
 
     layoutPanel();
@@ -130,10 +159,14 @@ void GameScreen::layoutPanel()
 {
     float px = boardView_.panelX();
 
+    // Three action buttons share the panel row (96px each with gaps); the
+    // accept/decline prompt buttons keep the roomier two-button layout.
     resignBtn_.setRect(sf::FloatRect(sf::Vector2f(px, hud_.contentBottom()),
-                                     sf::Vector2f(140.f, BtnH)));
-    offerDrawBtn_.setRect(sf::FloatRect(sf::Vector2f(px + 148.f, hud_.contentBottom()),
-                                        sf::Vector2f(140.f, BtnH)));
+                                     sf::Vector2f(96.f, BtnH)));
+    offerDrawBtn_.setRect(sf::FloatRect(sf::Vector2f(px + 102.f, hud_.contentBottom()),
+                                        sf::Vector2f(96.f, BtnH)));
+    takebackBtn_.setRect(sf::FloatRect(sf::Vector2f(px + 204.f, hud_.contentBottom()),
+                                       sf::Vector2f(96.f, BtnH)));
 
     declineBtn_.setRect(sf::FloatRect(sf::Vector2f(px, hud_.contentBottom()),
                                       sf::Vector2f(90.f, BtnH)));
@@ -476,12 +509,13 @@ void GameScreen::handleEvent(const sf::Event& event)
     }
 
     if (!gameOver_) {
-        if (drawOfferPending_) {
+        if (drawOfferPending_ || takebackOfferPending_) {
             if (declineBtn_.handleEvent(event, local)) return;
             if (acceptBtn_.handleEvent(event, local)) return;
         } else {
             if (resignBtn_.handleEvent(event, local)) return;
             if (offerDrawBtn_.handleEvent(event, local)) return;
+            if (takebackBtn_.handleEvent(event, local)) return;
         }
     }
 
@@ -615,6 +649,7 @@ void GameScreen::update(float dtSec)
         else if (auto* gameOver = std::get_if<chess::net::GameOverMsg>(&msg)) {
             gameOver_ = true;
             drawOfferPending_ = false;
+            takebackOfferPending_ = false;
             hud_.setGameOver(true);
             hud_.setInfo(opponentName_, myColor_, myTurn_, gameOver_);
             const auto& cfg = app_.config();
@@ -636,6 +671,28 @@ void GameScreen::update(float dtSec)
             drawOfferPending_ = false;
             hud_.setStatus("Draw offer declined", 2.0f);
             chatLog_.push_back("Draw offer declined");
+            if (chatLog_.size() > MaxChatLog)
+                chatLog_.erase(chatLog_.begin());
+        }
+        else if (std::holds_alternative<chess::net::ServerTakebackRequestMsg>(msg)) {
+            // The opponent asks to retract the last full move; the same
+            // accept/decline prompt row answers it (draw prompt takes
+            // precedence only while also showing — both stay pending).
+            takebackOfferPending_ = true;
+            hud_.setStatus("Opponent asks for a takeback", 3.0f);
+            chatLog_.push_back("Takeback requested by opponent");
+            if (chatLog_.size() > MaxChatLog)
+                chatLog_.erase(chatLog_.begin());
+        }
+        else if (auto* takebackOk = std::get_if<chess::net::TakebackAcceptedMsg>(&msg)) {
+            // Agreed (or bot-accepted) takeback: roll the board back to the
+            // trimmed SAN list. The retracted moves are history, not action —
+            // no animation, no move sound, clocks stay as they are.
+            applyTakeback(takebackOk->sans);
+        }
+        else if (std::holds_alternative<chess::net::ServerTakebackDeclineMsg>(msg)) {
+            hud_.setStatus("Takeback declined", 2.0f);
+            chatLog_.push_back("Takeback declined");
             if (chatLog_.size() > MaxChatLog)
                 chatLog_.erase(chatLog_.begin());
         }
@@ -800,6 +857,7 @@ void GameScreen::applyResume(const chess::net::ResumeStateMsg& msg)
         board.makeMove(*mv);
     }
     hud_.setGame(Board::fromStartPos(), moves, msg.sans);
+    hud_.navigator().goEnd(); // show the live position, not ply zero
 
     // Drop leftover interaction state from before the drop.
     hl_.selectedSquare.reset();
@@ -808,6 +866,7 @@ void GameScreen::applyResume(const chess::net::ResumeStateMsg& msg)
     promo_.reset();
     annotations_.clear();
     drawOfferPending_ = false;
+    takebackOfferPending_ = false;
     chatLog_.clear();
     chatInput_.setFocused(false);
 
@@ -818,6 +877,42 @@ void GameScreen::applyResume(const chess::net::ResumeStateMsg& msg)
     hud_.syncClocks(msg.whiteRemainingMs, msg.blackRemainingMs,
                     board.sideToMove());
     hud_.setStatus("Reconnected", 2.f);
+}
+
+// Rebuilds the board from the takeback's trimmed SAN list (11.3): the same
+// replay as a token resume, minus the identity/clock refresh — a takeback
+// keeps both clocks exactly as they were, the retracted plies' time stays
+// spent. The requester ends up on the move; no animation or move sound
+// plays, the retracted moves were already aired once.
+void GameScreen::applyTakeback(const std::vector<std::string>& sans)
+{
+    Board board = Board::fromStartPos();
+    std::vector<chess::Move> moves;
+    moves.reserve(sans.size());
+    for (const auto& san : sans) {
+        auto mv = chess::san::fromSan(board, san);
+        if (!mv.has_value())
+            break;
+        moves.push_back(*mv);
+        board.makeMove(*mv);
+    }
+    hud_.setGame(Board::fromStartPos(), moves, sans);
+    hud_.navigator().goEnd();
+
+    // Stale interaction state pointing at the retracted plies.
+    anim_.cancel();
+    hl_.selectedSquare.reset();
+    hl_.legalMoveTargets.clear();
+    dragFrom_.reset();
+    rightPress_.reset();
+    promo_.reset();
+    annotations_.clear();
+    myTurn_ = board.sideToMove() == myColor_ && !gameOver_;
+    hud_.setInfo(opponentName_, myColor_, myTurn_, gameOver_);
+    hud_.setStatus("Takeback accepted", 2.f);
+    chatLog_.push_back("Takeback accepted");
+    if (chatLog_.size() > MaxChatLog)
+        chatLog_.erase(chatLog_.begin());
 }
 
 void GameScreen::finishGameOver()
@@ -845,9 +940,15 @@ void GameScreen::drawButtons(sf::RenderWindow& window)
         drawOfferLabel_.draw(window, font);
         declineBtn_.draw(window, font);
         acceptBtn_.draw(window, font);
+    } else if (takebackOfferPending_) {
+        takebackLabel_.setPosition({boardView_.panelX(), hud_.contentBottom() - 20.f});
+        takebackLabel_.draw(window, font);
+        declineBtn_.draw(window, font);
+        acceptBtn_.draw(window, font);
     } else if (!gameOver_) {
         resignBtn_.draw(window, font);
         offerDrawBtn_.draw(window, font);
+        takebackBtn_.draw(window, font);
     }
 }
 

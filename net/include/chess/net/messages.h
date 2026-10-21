@@ -104,6 +104,17 @@ struct ResumeMsg {
     std::string token;
 };
 
+// Takeback (11.3): a player asks to retract the last full move (their own
+// ply plus the opponent's reply), returning the board to the position where
+// they went on move. Heard only while the requester is exactly in that
+// frame (on the move, >= 2 plies, everyone still seated); the asked seat
+// answers accept/decline — a server bot answers itself. A pending request
+// dissolves on the next accepted move, a decline (or the requester's own
+// self-cancel), a disconnect, or the game ending.
+struct TakebackRequestMsg {};
+struct TakebackAcceptMsg {};
+struct TakebackDeclineMsg {};
+
 using ClientMessage = std::variant<
     JoinMsg,
     MoveMsg,
@@ -117,7 +128,10 @@ using ClientMessage = std::variant<
     ArchiveRequestMsg,
     ArchiveGetMsg,
     LeaderboardRequestMsg,
-    ResumeMsg
+    ResumeMsg,
+    TakebackRequestMsg,
+    TakebackAcceptMsg,
+    TakebackDeclineMsg
 >;
 
 // ── Server → Client ─────────────────────────────────────────────────────────
@@ -247,6 +261,26 @@ struct OpponentReconnectingMsg {
 // The rejoining seat is bound again: clear the reconnecting notice and play on.
 struct OpponentResumedMsg {};
 
+// ── Takeback (11.3) ─────────────────────────────────────────────────────────
+
+// Forwarded to the seat that must agree; empty, the interesting payload is
+// the answer below.
+struct ServerTakebackRequestMsg {};
+
+// A takeback went through: `sans` is the full remaining move list (the two
+// retracted plies are gone). Both clients rebuild by replaying the list
+// from the start position — the exact reconstruction used for token
+// resumes — and the requester ends up on the move. Clocks are not refunded:
+// the time the two plies spent stays spent, and the re-established turn
+// simply continues running from where it was.
+struct TakebackAcceptedMsg {
+    std::vector<std::string> sans;
+};
+
+// Sent to the requester only: the asked seat declined, or the requester
+// self-cancelled their own pending request.
+struct ServerTakebackDeclineMsg {};
+
 using ServerMessage = std::variant<
     WelcomeMsg,
     OpponentJoinedMsg,
@@ -264,7 +298,10 @@ using ServerMessage = std::variant<
     LeaderboardListMsg,
     ResumeStateMsg,
     OpponentReconnectingMsg,
-    OpponentResumedMsg
+    OpponentResumedMsg,
+    ServerTakebackRequestMsg,
+    TakebackAcceptedMsg,
+    ServerTakebackDeclineMsg
 >;
 
 } // namespace net

@@ -42,6 +42,10 @@ private:
     void buildPromotion(int fromFile, int fromRank, int toFile, int toRank);
     void sendPromotionMove(chess::PieceType type);
     void cancelPromotion();
+    // Rebuilds the board from a trimmed SAN list (11.3 takeback accepted):
+    // the two retracted plies are gone, the requester is on the move. Same
+    // reconstruction as a token resume, no animation or move sound.
+    void applyTakeback(const std::vector<std::string>& sans);
     void syncViewHighlights();
     void clearBoardInput();
     bool ownPieceAt(int file, int rank);
@@ -91,8 +95,14 @@ private:
     Panel chatLogBg_;
     Label chatLabel_;
     Label drawOfferLabel_;
+    Label takebackLabel_;
     Button resignBtn_;
     Button offerDrawBtn_;
+    Button takebackBtn_;
+    // 11.3: `takebackOfferPending_` is the opponent's incoming request
+    // awaiting the accept/decline prompt; our own request is only a status
+    // line (the server already errors on duplicate asks).
+    bool takebackOfferPending_ = false;
     Button declineBtn_;
     Button acceptBtn_;
     std::string timeControl_;

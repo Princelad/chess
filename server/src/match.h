@@ -84,6 +84,11 @@ public:
     // move is accepted; used by the game-over hook for the archive row.
     const std::vector<std::string>& sanHistory() const { return sanHistory_; }
 
+    // Takeback (11.3): true while a request is out for the asked seat to
+    // agree. One at a time; dissolved by the next accepted move, a decline,
+    // a disconnect of either seat, or the game ending.
+    bool takebackPending() const { return takebackPending_.has_value(); }
+
     // Agreed time control string ("" = unlimited), for the archive row.
     const std::string& timeControl() const { return timeControl_; }
 
@@ -139,12 +144,16 @@ private:
     void handleDrawOffer(Client& sender);
     void handleDrawAccept(Client& sender);
     void handleDrawDecline(Client& sender);
+    void handleTakebackRequest(Client& sender);
+    void handleTakebackAccept(Client& sender);
+    void handleTakebackDecline(Client& sender);
     void handleResign(Client& sender);
     void handleChat(Client& sender, const chess::net::ChatMsg& msg);
     void handlePing(Client& sender);
 
     void endGame(chess::net::GameResult result, chess::net::GameOverReason reason);
     std::pair<chess::net::GameResult, chess::net::GameOverReason> classifyState(chess::GameState state) const;
+    void applyTakeback(std::size_t requesterIdx);
 
     std::string timeControl_;
     chess::server::MatchClock clock_;
@@ -153,6 +162,10 @@ private:
     Seat seats_[2]; // [0] = White, [1] = Black
     bool active_ = true;
     bool drawOfferPending_ = false;
+
+    // Takeback (11.3): the pending request's asker seat index while the
+    // offer is out.
+    std::optional<std::size_t> takebackPending_;
 
     // Reconnect (11.2): one seat absent inside its grace window (both absent
     // ends the game immediately, so at most one seat can be away).

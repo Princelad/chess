@@ -77,6 +77,15 @@ public:
 
     bool empty() const { return steps_.empty(); }
 
+    // Drops any running slide: the position it animated no longer exists
+    // (a takeback rebuilt the board underneath it).
+    void cancel()
+    {
+        steps_.clear();
+        elapsed_ = 0.f;
+        duration_ = 0.f;
+    }
+
     static float smoothstep(float t)
     {
         const float x = std::clamp(t, 0.f, 1.f);

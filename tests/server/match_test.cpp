@@ -358,3 +358,247 @@ TEST_F(MatchTest, MessageAfterGameOver)
     ASSERT_NE(err, nullptr);
     EXPECT_EQ(err->message, "Game is over");
 }
+
+// ── Takeback (11.3) ─────────────────────────────────────────────────────────
+
+TEST_F(MatchTest, TakebackRequestRequiresTwoPlies)
+{
+    match_->handleMessage(white_, chess::net::TakebackRequestMsg{});
+    auto msg = tryRecvOnClient(*clientWhite_);
+    ASSERT_TRUE(msg.has_value());
+    auto* err = std::get_if<chess::net::ErrorMsg>(&*msg);
+    ASSERT_NE(err, nullptr);
+    EXPECT_EQ(err->message, "No move to take back");
+    EXPECT_FALSE(match_->takebackPending());
+}
+
+TEST_F(MatchTest, TakebackRequestRequiresOwnTurn)
+{
+    match_->handleMessage(white_, chess::net::MoveMsg{"e4"});
+    match_->handleMessage(black_, chess::net::MoveMsg{"e5"});
+    // Both on the table: black just moved, so white is on the move and
+    // black's request sits in the wrong frame. Both sockets hold the two
+    // echoes first.
+    match_->handleMessage(black_, chess::net::TakebackRequestMsg{});
+    for (auto sock : {clientWhite_.get(), clientBlack_.get()}) {
+        tryRecvOnClient(*sock);
+        tryRecvOnClient(*sock);
+        auto msg = tryRecvOnClient(*sock);
+
+        if (sock == clientBlack_.get()) {
+            ASSERT_TRUE(msg.has_value());
+            auto* err = std::get_if<chess::net::ErrorMsg>(&*msg);
+            ASSERT_NE(err, nullptr);
+            EXPECT_EQ(err->message, "Not your turn");
+        } else {
+            EXPECT_FALSE(msg.has_value());
+        }
+    }
+    EXPECT_FALSE(match_->takebackPending());
+}
+
+TEST_F(MatchTest, TakebackRequestForwardedAndPending)
+{
+    match_->handleMessage(white_, chess::net::MoveMsg{"e4"});
+    match_->handleMessage(black_, chess::net::MoveMsg{"e5"});
+    tryRecvOnClient(*clientWhite_); // echo e4
+    tryRecvOnClient(*clientBlack_); // echo e4
+    tryRecvOnClient(*clientWhite_); // echo e5
+    tryRecvOnClient(*clientBlack_); // echo e5
+
+    match_->handleMessage(white_, chess::net::TakebackRequestMsg{});
+    EXPECT_TRUE(match_->takebackPending());
+
+    auto ask = tryRecvOnClient(*clientBlack_);
+    ASSERT_TRUE(ask.has_value());
+    EXPECT_TRUE(std::get_if<chess::net::ServerTakebackRequestMsg>(&*ask));
+    // The asker gets nothing but quiet; the pending flag carries the state.
+    EXPECT_EQ(tryRecvOnClient(*clientWhite_), std::nullopt);
+}
+
+TEST_F(MatchTest, TakebackDuplicateRequestErrors)
+{
+    match_->handleMessage(white_, chess::net::MoveMsg{"e4"});
+    match_->handleMessage(black_, chess::net::MoveMsg{"e5"});
+    for (auto sock : {clientWhite_.get(), clientBlack_.get()}) {
+        tryRecvOnClient(*sock);
+        tryRecvOnClient(*sock);
+    }
+
+    match_->handleMessage(white_, chess::net::TakebackRequestMsg{});
+    match_->handleMessage(white_, chess::net::TakebackRequestMsg{});
+    auto msg = tryRecvOnClient(*clientWhite_);
+    ASSERT_TRUE(msg.has_value());
+    auto* err = std::get_if<chess::net::ErrorMsg>(&*msg);
+    ASSERT_NE(err, nullptr);
+    EXPECT_EQ(err->message, "A takeback is already pending");
+    EXPECT_TRUE(match_->takebackPending());
+}
+
+TEST_F(MatchTest, TakebackAcceptedRollsTwoPliesBack)
+{
+    match_->handleMessage(white_, chess::net::MoveMsg{"e4"});
+    match_->handleMessage(black_, chess::net::MoveMsg{"e5"});
+    match_->handleMessage(white_, chess::net::MoveMsg{"Nf3"});
+    match_->handleMessage(black_, chess::net::MoveMsg{"Nc6"});
+    for (auto sock : {clientWhite_.get(), clientBlack_.get()}) {
+        for (int i = 0; i < 4; ++i)
+            tryRecvOnClient(*sock);
+    }
+
+    match_->handleMessage(white_, chess::net::TakebackRequestMsg{});
+    tryRecvOnClient(*clientBlack_); // ServerTakebackRequestMsg
+    match_->handleMessage(black_, chess::net::TakebackAcceptMsg{});
+
+    for (auto& sock : {clientWhite_.get(), clientBlack_.get()}) {
+        auto msg = tryRecvOnClient(*sock);
+        ASSERT_TRUE(msg.has_value());
+        auto* accepted = std::get_if<chess::net::TakebackAcceptedMsg>(&*msg);
+        ASSERT_NE(accepted, nullptr);
+        ASSERT_EQ(accepted->sans.size(), 2u);
+        EXPECT_EQ(accepted->sans[0], "e4");
+        EXPECT_EQ(accepted->sans[1], "e5");
+    }
+    // The rollback retracts Nf3 and Nc6: position after 1.e4 e5, white
+    // (the asker) to move.
+    EXPECT_EQ(match_->currentFen(),
+              "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2");
+    EXPECT_EQ(match_->sanHistory().size(), 2u);
+    EXPECT_FALSE(match_->takebackPending());
+    EXPECT_TRUE(match_->isActive());
+}
+
+TEST_F(MatchTest, TakebackDeclinedNotifiesAskerOnly)
+{
+    match_->handleMessage(white_, chess::net::MoveMsg{"e4"});
+    match_->handleMessage(black_, chess::net::MoveMsg{"e5"});
+    for (auto sock : {clientWhite_.get(), clientBlack_.get()}) {
+        tryRecvOnClient(*sock);
+        tryRecvOnClient(*sock);
+    }
+
+    match_->handleMessage(white_, chess::net::TakebackRequestMsg{});
+    tryRecvOnClient(*clientBlack_);
+    match_->handleMessage(black_, chess::net::TakebackDeclineMsg{});
+
+    auto msg = tryRecvOnClient(*clientWhite_);
+    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(std::get_if<chess::net::ServerTakebackDeclineMsg>(&*msg));
+    // The history and the position never moved.
+    EXPECT_EQ(match_->sanHistory().size(), 2u);
+    EXPECT_FALSE(match_->takebackPending());
+    // Black's decline answer stops at the white socket: nothing for black.
+    EXPECT_EQ(tryRecvOnClient(*clientBlack_), std::nullopt);
+}
+
+TEST_F(MatchTest, TakebackAskerCannotSelfAccept)
+{
+    match_->handleMessage(white_, chess::net::MoveMsg{"e4"});
+    match_->handleMessage(black_, chess::net::MoveMsg{"e5"});
+    for (auto sock : {clientWhite_.get(), clientBlack_.get()}) {
+        tryRecvOnClient(*sock);
+        tryRecvOnClient(*sock);
+    }
+
+    match_->handleMessage(white_, chess::net::TakebackRequestMsg{});
+    match_->handleMessage(white_, chess::net::TakebackAcceptMsg{});
+    auto msg = tryRecvOnClient(*clientWhite_);
+    ASSERT_TRUE(msg.has_value());
+    auto* err = std::get_if<chess::net::ErrorMsg>(&*msg);
+    ASSERT_NE(err, nullptr);
+    EXPECT_EQ(err->message, "No takeback request pending");
+    EXPECT_EQ(match_->sanHistory().size(), 2u);
+}
+
+TEST_F(MatchTest, TakebackAskerSelfCancelsViaDecline)
+{
+    match_->handleMessage(white_, chess::net::MoveMsg{"e4"});
+    match_->handleMessage(black_, chess::net::MoveMsg{"e5"});
+    for (auto sock : {clientWhite_.get(), clientBlack_.get()}) {
+        tryRecvOnClient(*sock);
+        tryRecvOnClient(*sock);
+    }
+
+    match_->handleMessage(white_, chess::net::TakebackRequestMsg{});
+    tryRecvOnClient(*clientBlack_); // the forwarded request
+    match_->handleMessage(white_, chess::net::TakebackDeclineMsg{});
+    EXPECT_FALSE(match_->takebackPending());
+    // The cancellation notice lands on the asker's own socket, read as a
+    // plain "declined" line there.
+    auto msg = tryRecvOnClient(*clientWhite_);
+    ASSERT_TRUE(msg.has_value());
+    ASSERT_TRUE(std::get_if<chess::net::ServerTakebackDeclineMsg>(&*msg));
+    EXPECT_EQ(tryRecvOnClient(*clientBlack_), std::nullopt);
+}
+
+TEST_F(MatchTest, AcceptedMoveDissolvesPendingTakeback)
+{
+    match_->handleMessage(white_, chess::net::MoveMsg{"e4"});
+    match_->handleMessage(black_, chess::net::MoveMsg{"e5"});
+    for (auto sock : {clientWhite_.get(), clientBlack_.get()}) {
+        tryRecvOnClient(*sock);
+        tryRecvOnClient(*sock);
+    }
+
+    match_->handleMessage(white_, chess::net::TakebackRequestMsg{});
+    EXPECT_TRUE(match_->takebackPending());
+    // White changes their mind and simply plays on.
+    match_->handleMessage(white_, chess::net::MoveMsg{"Nf3"});
+    EXPECT_FALSE(match_->takebackPending());
+
+    // Black's cached prompt is stale: accepting now errors politely.
+    // Black's queue: the forwarded request, the Nf3 echo, then the error.
+    match_->handleMessage(black_, chess::net::TakebackAcceptMsg{});
+    auto fwd = tryRecvOnClient(*clientBlack_);
+    ASSERT_TRUE(fwd.has_value());
+    EXPECT_TRUE(std::get_if<chess::net::ServerTakebackRequestMsg>(&*fwd));
+    auto echo = tryRecvOnClient(*clientBlack_);
+    ASSERT_TRUE(echo.has_value());
+    auto* echoMove = std::get_if<chess::net::ServerMoveMsg>(&*echo);
+    ASSERT_NE(echoMove, nullptr);
+    EXPECT_EQ(echoMove->san, "Nf3");
+    auto msg = tryRecvOnClient(*clientBlack_);
+    ASSERT_TRUE(msg.has_value());
+    auto* err = std::get_if<chess::net::ErrorMsg>(&*msg);
+    ASSERT_NE(err, nullptr);
+    EXPECT_EQ(err->message, "No takeback request pending");
+    tryRecvOnClient(*clientWhite_); // white's Nf3 echo, back to quiet
+}
+
+TEST_F(MatchTest, DisconnectDissolvesPendingTakeback)
+{
+    match_->handleMessage(white_, chess::net::MoveMsg{"e4"});
+    match_->handleMessage(black_, chess::net::MoveMsg{"e5"});
+    for (auto sock : {clientWhite_.get(), clientBlack_.get()}) {
+        tryRecvOnClient(*sock);
+        tryRecvOnClient(*sock);
+    }
+
+    match_->handleMessage(white_, chess::net::TakebackRequestMsg{});
+    EXPECT_TRUE(match_->takebackPending());
+    match_->handleDisconnect(black_);
+    EXPECT_FALSE(match_->takebackPending());
+}
+
+TEST_F(MatchTest, TakebackWhileOpponentAwayFailsFast)
+{
+    match_->handleMessage(white_, chess::net::MoveMsg{"e4"});
+    match_->handleMessage(black_, chess::net::MoveMsg{"e5"});
+    match_->handleMessage(white_, chess::net::MoveMsg{"Nf3"});
+    match_->handleDisconnect(white_); // black is on the move, three plies deep
+    for (auto sock : {clientWhite_.get(), clientBlack_.get()}) {
+        for (int i = 0; i < 3; ++i)
+            tryRecvOnClient(*sock);
+    }
+    tryRecvOnClient(*clientBlack_); // OpponentReconnecting notice
+
+    // The frame checks pass (on the move, >= 2 plies); the absent seat is
+    // the gate that fails fast.
+    match_->handleMessage(black_, chess::net::TakebackRequestMsg{});
+    auto msg = tryRecvOnClient(*clientBlack_);
+    ASSERT_TRUE(msg.has_value());
+    auto* err = std::get_if<chess::net::ErrorMsg>(&*msg);
+    ASSERT_NE(err, nullptr);
+    EXPECT_EQ(err->message, "The opponent is away");
+    EXPECT_FALSE(match_->takebackPending());
+}

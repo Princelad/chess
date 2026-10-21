@@ -169,3 +169,65 @@ TEST_F(BotMatchTest, HumanDisconnectEndsGame)
     ASSERT_TRUE(over.has_value());
     EXPECT_EQ(over->reason, chess::net::GameOverReason::Disconnection);
 }
+
+TEST_F(BotMatchTest, BotAutoAcceptsTakeback)
+{
+    human_.state = ClientState::InMatch;
+    bot_.state = ClientState::InMatch;
+
+    Match match(human_, bot_);
+    match.startBot(chess::Color::Black, 1, enginePath_);
+
+    // e4, wait for the bot's answer; the human is then on the move with
+    // exactly one full move to retract. The own echo precedes the bot's
+    // reply in the human's queue.
+    match.handleMessage(human_, chess::net::MoveMsg{"e4"});
+    auto ownEcho = recvWait();
+    ASSERT_TRUE(ownEcho.has_value());
+    auto* ownMove = std::get_if<chess::net::ServerMoveMsg>(&*ownEcho);
+    ASSERT_NE(ownMove, nullptr);
+    EXPECT_EQ(ownMove->san, "e4");
+
+    pollUntilBotDone(match);
+    EXPECT_TRUE(match.isActive());
+
+    auto botReply = recvWait();
+    ASSERT_TRUE(botReply.has_value());
+    auto* botMove = std::get_if<chess::net::ServerMoveMsg>(&*botReply);
+    ASSERT_NE(botMove, nullptr);
+    EXPECT_FALSE(botMove->san.empty());
+
+    match.handleMessage(human_, chess::net::TakebackRequestMsg{});
+
+    // Auto-accept: no forwarded request, and the human learns the rollback
+    // straight away. The two plies (the human's e4 and the bot's answer)
+    // all disappear: the very first full move gets retracted whole.
+    auto msg = recvWait();
+    ASSERT_TRUE(msg.has_value());
+    auto* accepted = std::get_if<chess::net::TakebackAcceptedMsg>(&*msg);
+    ASSERT_NE(accepted, nullptr);
+    EXPECT_TRUE(accepted->sans.empty());
+    EXPECT_EQ(match.currentFen(), chess::Board::fromStartPos().toFen());
+    EXPECT_TRUE(match.sanHistory().empty());
+    // The bot is never prompted and never left thinking.
+    EXPECT_FALSE(match.isBotTurn());
+    EXPECT_TRUE(match.isActive());
+}
+
+TEST_F(BotMatchTest, BotMatchTakebackNeedsPlayableFrame)
+{
+    human_.state = ClientState::InMatch;
+    bot_.state = ClientState::InMatch;
+
+    Match match(human_, bot_);
+    match.startBot(chess::Color::Black, 1, enginePath_);
+
+    // No plies yet: the frame rule holds even against a bot.
+    match.handleMessage(human_, chess::net::TakebackRequestMsg{});
+    auto msg = recvWait();
+    ASSERT_TRUE(msg.has_value());
+    auto* err = std::get_if<chess::net::ErrorMsg>(&*msg);
+    ASSERT_NE(err, nullptr);
+    EXPECT_EQ(err->message, "No move to take back");
+    EXPECT_TRUE(match.isActive());
+}

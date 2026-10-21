@@ -435,14 +435,14 @@ TEST(ProtocolRoundTrip, ClientResume)
 TEST(ProtocolGarbage, ClientResumeEmptyToken)
 {
     sf::Packet p;
-    p << ProtocolVersion << static_cast<uint8_t>(13) << std::string();
+    p << ProtocolVersion << static_cast<uint8_t>(12) << std::string();
     EXPECT_FALSE(deserializeClient(p).has_value());
 }
 
 TEST(ProtocolGarbage, ClientResumeOversizedToken)
 {
     sf::Packet p;
-    p << ProtocolVersion << static_cast<uint8_t>(13)
+    p << ProtocolVersion << static_cast<uint8_t>(12)
       << std::string(65, 'a'); // one past the wire guard
     EXPECT_FALSE(deserializeClient(p).has_value());
 }
@@ -760,6 +760,125 @@ TEST(ProtocolRoundTrip, ServerProfileGuest)
     ASSERT_NE(m, nullptr);
     EXPECT_TRUE(m->isGuest);
     EXPECT_DOUBLE_EQ(m->rating, 1500.0);
+}
+
+// ── Takeback (11.3) ─────────────────────────────────────────────────────────
+
+TEST(ProtocolRoundTrip, ClientTakebackRequest)
+{
+    ClientMessage msg = TakebackRequestMsg{};
+    sf::Packet p = freshPacket(serializeClient(msg));
+    auto result = deserializeClient(p);
+    ASSERT_TRUE(result.has_value());
+    EXPECT_TRUE(std::holds_alternative<TakebackRequestMsg>(*result));
+}
+
+TEST(ProtocolRoundTrip, ClientTakebackAccept)
+{
+    ClientMessage msg = TakebackAcceptMsg{};
+    sf::Packet p = freshPacket(serializeClient(msg));
+    auto result = deserializeClient(p);
+    ASSERT_TRUE(result.has_value());
+    EXPECT_TRUE(std::holds_alternative<TakebackAcceptMsg>(*result));
+}
+
+TEST(ProtocolRoundTrip, ClientTakebackDecline)
+{
+    ClientMessage msg = TakebackDeclineMsg{};
+    sf::Packet p = freshPacket(serializeClient(msg));
+    auto result = deserializeClient(p);
+    ASSERT_TRUE(result.has_value());
+    EXPECT_TRUE(std::holds_alternative<TakebackDeclineMsg>(*result));
+}
+
+TEST(ProtocolRoundTrip, ServerTakebackRequest)
+{
+    ServerMessage msg = ServerTakebackRequestMsg{};
+    sf::Packet p = freshPacket(serializeServer(msg));
+    auto result = deserializeServer(p);
+    ASSERT_TRUE(result.has_value());
+    EXPECT_TRUE(std::holds_alternative<ServerTakebackRequestMsg>(*result));
+}
+
+TEST(ProtocolRoundTrip, ServerTakebackAccepted)
+{
+    TakebackAcceptedMsg msg;
+    msg.sans = {"e4", "e5", "Nf3"};
+    sf::Packet p = freshPacket(serializeServer(ServerMessage{msg}));
+    auto result = deserializeServer(p);
+    ASSERT_TRUE(result.has_value());
+    auto* m = std::get_if<TakebackAcceptedMsg>(&*result);
+    ASSERT_NE(m, nullptr);
+    ASSERT_EQ(m->sans.size(), 3u);
+    EXPECT_EQ(m->sans[0], "e4");
+    EXPECT_EQ(m->sans[1], "e5");
+    EXPECT_EQ(m->sans[2], "Nf3");
+}
+
+TEST(ProtocolRoundTrip, ServerTakebackAcceptedEmpty)
+{
+    // Accepting with no plies left = the start position again.
+    ServerMessage msg = TakebackAcceptedMsg{};
+    sf::Packet p = freshPacket(serializeServer(msg));
+    auto result = deserializeServer(p);
+    ASSERT_TRUE(result.has_value());
+    auto* m = std::get_if<TakebackAcceptedMsg>(&*result);
+    ASSERT_NE(m, nullptr);
+    EXPECT_TRUE(m->sans.empty());
+}
+
+TEST(ProtocolRoundTrip, ServerTakebackDecline)
+{
+    ServerMessage msg = ServerTakebackDeclineMsg{};
+    sf::Packet p = freshPacket(serializeServer(msg));
+    auto result = deserializeServer(p);
+    ASSERT_TRUE(result.has_value());
+    EXPECT_TRUE(std::holds_alternative<ServerTakebackDeclineMsg>(*result));
+}
+
+TEST(ProtocolGarbage, TakebackAcceptedCountTooLarge)
+{
+    sf::Packet p;
+    p << static_cast<uint8_t>(ProtocolVersion)
+      << static_cast<uint8_t>(18); // ServerMsgType::TakebackAccepted
+    p << static_cast<std::int32_t>(513); // MaxResumeMoves (512) + 1
+    EXPECT_FALSE(deserializeServer(p).has_value());
+}
+
+TEST(ProtocolGarbage, TakebackAcceptedNegativeCount)
+{
+    sf::Packet p;
+    p << static_cast<uint8_t>(ProtocolVersion)
+      << static_cast<uint8_t>(18);
+    p << static_cast<std::int32_t>(-1);
+    EXPECT_FALSE(deserializeServer(p).has_value());
+}
+
+TEST(ProtocolGarbage, TakebackAcceptedTruncatedSans)
+{
+    sf::Packet p;
+    p << static_cast<uint8_t>(ProtocolVersion)
+      << static_cast<uint8_t>(18);
+    p << static_cast<std::int32_t>(2);
+    p << std::string("e4"); // cut off before the second SAN
+    EXPECT_FALSE(deserializeServer(p).has_value());
+}
+
+TEST(ProtocolDebug, TakebackMessages)
+{
+    EXPECT_EQ(debugString(ClientMessage{TakebackRequestMsg{}}),
+              "TakebackRequest{}");
+    EXPECT_EQ(debugString(ClientMessage{TakebackAcceptMsg{}}),
+              "TakebackAccept{}");
+    EXPECT_EQ(debugString(ClientMessage{TakebackDeclineMsg{}}),
+              "TakebackDecline{}");
+    EXPECT_EQ(debugString(ServerMessage{ServerTakebackRequestMsg{}}),
+              "TakebackRequest{}");
+    TakebackAcceptedMsg accepted;
+    accepted.sans = {"e4", "e5"};
+    EXPECT_EQ(debugString(ServerMessage{accepted}), "TakebackAccepted{plies=2}");
+    EXPECT_EQ(debugString(ServerMessage{ServerTakebackDeclineMsg{}}),
+              "TakebackDecline{}");
 }
 
 // ── Garbage / truncated packets ─────────────────────────────────────────────
