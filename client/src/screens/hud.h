@@ -3,6 +3,7 @@
 #include "widgets/label.h"
 #include "widgets/move_navigator.h"
 #include "widgets/panel.h"
+#include "eco.h"
 #include <chess/move.h>
 #include <chess/types.h>
 
@@ -56,6 +57,9 @@ private:
     // Current shown remaining of one side, honoring local ticking since the
     // last server sync for the side on the move.
     double shownRemainingMs(Color side) const;
+    // Re-runs the ECO prefix-match (11.5) over the SAN history; called
+    // wherever the move list changes (setGame / appendMove).
+    void refreshOpening();
 
     App& app_;
     float panelX_ = 0.f;
@@ -80,6 +84,11 @@ private:
 
     std::string statusMsg_;
     float statusTimer_ = 0.f;
+
+    // Opening name (11.5), recomputed from the SAN history; empty label
+    // when the position does not name a known line.
+    std::optional<Opening> opening_;
+    Label openingLabel_;
 
     Label opponentNameLabel_;
     Label localNameLabel_;

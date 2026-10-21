@@ -654,9 +654,9 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [x] Queue next move while opponent thinks; ghost piece rendered (single `Premove` slot in `GameScreen`; moves trapped while `!myTurn_` are queued instead of sent; `BoardView::drawGhostPiece` shows the origin piece translucent on its landing square, plus cyan from/to tint via `HighlightState::premoveFrom/To`)
   - [x] Auto-send when legal on position update; right-click/Esc cancels (pairs with 9.4) (`flushPremove` runs right after the `ServerMoveMsg` echo in `GameScreen::update` — the echo stays the single history-append point, so a flushed premove never double-records; pure `client/src/premove.h` `resolvePremove` matches the queued from/to against `generateLegalMoves` of the live position: empty "capture" squares, own-piece landings and pinned/blocked paths just drop with a "Premove illegal" status, castling and en passant frames resolve naturally, promotion premoves auto-queen. Online `GameScreen` only; cleared on game over / takeback / resume)
 
-- [ ] **11.5 Opening names (ECO)**
-  - [ ] Small bundled ECO table asset; prefix-match on move list
-  - [ ] Show opening name (+ ECO code) in HUD after each move
+- [x] **11.5 Opening names (ECO)**
+  - [x] Small bundled ECO table asset; prefix-match on move list (compiled-in `client/src/eco.h` — no I/O, no install rules: ~130 `{sanPrefix, ECO code, name}` literals matched by **longest-prefix-wins** over the SAN history, so e4 → e4 c6 → e4 c6 d4 d5 e5 refines B00 King's Pawn → B10 Caro-Kann → B12 Advance; transposed move orders are covered by listing each spelling; '+'/'#' suffixes are stripped from both sides, so check-diversions still name the family; deliberately shallow — entries only where the ECO code is unambiguous)
+  - [x] Show opening name (+ ECO code) in HUD after each move (`Hud::refreshOpening` re-runs `ecoLookup(navigator_.sans())` at both SAN-mutation points — `setGame` and `appendMove` — never `setStatus` (that's the timed message channel); rendered as "B01 - Scandinavian Defence", right-aligned on the "Moves" row; local/engine/analysis games get names for free via the shared `Hud`)
 
 - [ ] **11.6 Themes**
   - [ ] Board color palettes + piece sets (`assets/pieces/<set>/`)

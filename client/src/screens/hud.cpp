@@ -79,6 +79,9 @@ Hud::Hud(App& app, float panelX, float panelWidth)
     headerLabel_.setFontSize(HeaderFontSize);
     headerLabel_.setColor(sf::Color(120, 120, 120));
 
+    openingLabel_.setFontSize(HeaderFontSize);
+    openingLabel_.setColor(sf::Color(150, 140, 110));
+
     navigator_.setLayout(
         sf::FloatRect(sf::Vector2f(panelX_, MoveListTop),
                       sf::Vector2f(panelW_, MoveListBottom - MoveListTop)),
@@ -90,11 +93,13 @@ void Hud::setGame(const Board& initialBoard, std::vector<chess::Move> moves,
                   std::vector<std::string> sans)
 {
     navigator_.setGame(initialBoard, std::move(moves), std::move(sans));
+    refreshOpening();
 }
 
 void Hud::appendMove(const chess::Move& move, const std::string& san)
 {
     navigator_.appendMove(move, san);
+    refreshOpening();
 }
 
 void Hud::setInfo(const std::string& opponentName, Color myColor,
@@ -162,6 +167,14 @@ void Hud::setStatus(const std::string& msg, float duration)
     statusTimer_ = duration;
 }
 
+void Hud::refreshOpening()
+{
+    opening_ = ecoLookup(navigator_.sans());
+    openingLabel_.setText(opening_.has_value()
+        ? opening_->code + " - " + opening_->name
+        : std::string());
+}
+
 float Hud::contentBottom() const
 {
     return NavBtnY + NavBtnH + 4.f;
@@ -207,6 +220,13 @@ void Hud::draw(sf::RenderWindow& window, const sf::Font& font)
 
     headerLabel_.setPosition({panelX_, MoveHeaderY});
     headerLabel_.draw(window, font);
+
+    // Opening name rides the "Moves" row, right-aligned (11.5).
+    if (!openingLabel_.text().empty()) {
+        const float openingW = openingLabel_.size(font).x;
+        openingLabel_.setPosition({panelX_ + panelW_ - openingW, MoveHeaderY});
+        openingLabel_.draw(window, font);
+    }
 
     navigator_.draw(window, font, app_);
 }
