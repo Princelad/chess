@@ -1,5 +1,6 @@
 #include "game_over_screen.h"
 #include "analysis_screen.h"
+#include "game_screen.h"
 #include "history_screen.h"
 #include "menu_screen.h"
 #include "widgets/layout.h"
@@ -8,10 +9,16 @@ namespace chess::client {
 
 namespace {
 constexpr float BtnW = 200.f;
-constexpr float BtnH = 44.f;
-constexpr float BtnY = 300.f;
-constexpr float ArchiveBtnY = 360.f;
-constexpr float AnalyzeBtnY = 420.f;
+constexpr float BtnH = 40.f;
+constexpr float OfferBtnW = 180.f;
+constexpr float ResultY = 165.f;
+constexpr float ReasonY = 210.f;
+constexpr float StatusY = 250.f;
+constexpr float OfferY = 285.f;
+constexpr float RematchY = 335.f;
+constexpr float ArchiveBtnY = 385.f;
+constexpr float AnalyzeBtnY = 435.f;
+constexpr float MenuBtnY = 485.f;
 }
 
 GameOverScreen::GameOverScreen(App& app,
@@ -71,6 +78,9 @@ GameOverScreen::GameOverScreen(App& app,
     reasonLabel_.setFontSize(20);
     reasonLabel_.setColor(sf::Color(160, 160, 160));
 
+    statusLabel_.setFontSize(16);
+    statusLabel_.setColor(sf::Color(190, 180, 120));
+
     hint_.setText("Tab to switch, Enter to select");
     hint_.setFontSize(14);
     hint_.setColor(sf::Color(100, 100, 100));
@@ -82,6 +92,22 @@ GameOverScreen::GameOverScreen(App& app,
                           sf::Color(100, 100, 100), sf::Color(200, 200, 200),
                           sf::Color(160, 160, 160));
     rematchBtn_.setOnClick([this] { activateRematch(); });
+
+    offerAcceptBtn_.setLabel("Accept");
+    offerAcceptBtn_.setColors(sf::Color(60, 130, 60), sf::Color(80, 160, 80),
+                              sf::Color(50, 110, 50), sf::Color(40, 90, 40),
+                              sf::Color(120, 150, 120), sf::Color(240, 240, 240),
+                              sf::Color(100, 100, 100), sf::Color(200, 200, 200),
+                              sf::Color(160, 160, 160));
+    offerAcceptBtn_.setOnClick([this] { acceptRematch(); });
+
+    offerDeclineBtn_.setLabel("Decline");
+    offerDeclineBtn_.setColors(sf::Color(140, 70, 60), sf::Color(165, 90, 80),
+                               sf::Color(115, 60, 50), sf::Color(95, 48, 40),
+                               sf::Color(150, 120, 120), sf::Color(240, 240, 240),
+                               sf::Color(100, 100, 100), sf::Color(200, 200, 200),
+                               sf::Color(160, 160, 160));
+    offerDeclineBtn_.setOnClick([this] { declineRematch(); });
 
     analyzeBtn_.setLabel("Analyze");
     analyzeBtn_.setColors(sf::Color(60, 80, 120), sf::Color(80, 100, 140),
@@ -102,6 +128,14 @@ GameOverScreen::GameOverScreen(App& app,
     archiveBtn_.setEnabled(
         app_.connection().state() == ConnectionState::Connected);
 
+    menuBtn_.setLabel("Menu");
+    menuBtn_.setColors(sf::Color(80, 80, 80), sf::Color(100, 100, 100),
+                       sf::Color(70, 70, 70), sf::Color(60, 60, 60),
+                       sf::Color(130, 130, 130), sf::Color(240, 240, 240),
+                       sf::Color(100, 100, 100), sf::Color(200, 200, 200),
+                       sf::Color(160, 160, 160));
+    menuBtn_.setOnClick([this] { activateMenu(); });
+
     layoutWidgets();
 
     rematchBtn_.setFocused(true);
@@ -112,20 +146,37 @@ void GameOverScreen::layoutWidgets()
     const sf::FloatRect area(
         sf::Vector2f(0.f, 0.f),
         sf::Vector2f(App::WindowWidth, App::WindowHeight));
+    (void)area;
     const sf::Vector2f btnSize(BtnW, BtnH);
 
     auto rb = resultLabel_.bounds(app_.font());
     resultLabel_.setPosition({
-        (App::WindowWidth - rb.size.x) / 2.f - rb.position.x, 200.f
+        (App::WindowWidth - rb.size.x) / 2.f - rb.position.x, ResultY
     });
 
     auto rr = reasonLabel_.bounds(app_.font());
     reasonLabel_.setPosition({
-        (App::WindowWidth - rr.size.x) / 2.f - rr.position.x, 250.f
+        (App::WindowWidth - rr.size.x) / 2.f - rr.position.x, ReasonY
     });
 
+    auto sb = statusLabel_.bounds(app_.font());
+    statusLabel_.setPosition({
+        (App::WindowWidth - sb.size.x) / 2.f - sb.position.x, StatusY
+    });
+
+    // The two answer buttons sit side by side on the offer row.
+    const float offerGap = 20.f;
+    const float offerTotal = OfferBtnW * 2.f + offerGap;
+    offerAcceptBtn_.setRect(sf::FloatRect(
+        sf::Vector2f((App::WindowWidth - offerTotal) / 2.f, OfferY),
+        sf::Vector2f(OfferBtnW, BtnH)));
+    offerDeclineBtn_.setRect(sf::FloatRect(
+        sf::Vector2f((App::WindowWidth - offerTotal) / 2.f + OfferBtnW
+                     + offerGap, OfferY),
+        sf::Vector2f(OfferBtnW, BtnH)));
+
     rematchBtn_.setRect(layout::centerIn(
-        sf::FloatRect(sf::Vector2f(0.f, BtnY),
+        sf::FloatRect(sf::Vector2f(0.f, RematchY),
                       sf::Vector2f(App::WindowWidth, BtnH)), btnSize));
 
     archiveBtn_.setRect(layout::centerIn(
@@ -140,17 +191,78 @@ void GameOverScreen::layoutWidgets()
         analyzeBtn_.setEnabled(false);
     }
 
-    const float hintY = !moves_.empty() ? AnalyzeBtnY + BtnH + 16.f
-                                        : BtnY + BtnH + 16.f;    auto hb = hint_.bounds(app_.font());
+    menuBtn_.setRect(layout::centerIn(
+        sf::FloatRect(sf::Vector2f(0.f, MenuBtnY),
+                      sf::Vector2f(App::WindowWidth, BtnH)), btnSize));
+
+    const float hintY = MenuBtnY + BtnH + 14.f;
+    auto hb = hint_.bounds(app_.font());
     hint_.setPosition({
         (App::WindowWidth - hb.size.x) / 2.f - hb.position.x, hintY
     });
 }
 
+void GameOverScreen::setStatusText(const std::string& text)
+{
+    statusLabel_.setText(text);
+    if (!text.empty()) {
+        auto sb = statusLabel_.bounds(app_.font());
+        statusLabel_.setPosition({
+            (App::WindowWidth - sb.size.x) / 2.f - sb.position.x, StatusY
+        });
+    }
+}
+
+void GameOverScreen::enterIdleRematch(const std::string& note)
+{
+    rematchPhase_ = RematchPhase::Idle;
+    rematchBtn_.setEnabled(true);
+    offerAcceptBtn_.setEnabled(false);
+    offerDeclineBtn_.setEnabled(false);
+    setStatusText(note);
+}
+
 void GameOverScreen::activateRematch()
+{
+    if (rematchPhase_ != RematchPhase::Idle) return;
+    if (app_.connection().state() != ConnectionState::Connected) {
+        setStatusText("Not connected — no rematch");
+        return;
+    }
+    if (app_.connection().send(chess::net::RematchRequestMsg{})) {
+        rematchPhase_ = RematchPhase::Sent;
+        rematchBtn_.setEnabled(false);
+        setStatusText("Rematch offered — waiting for the opponent...");
+    }
+}
+
+void GameOverScreen::activateMenu()
 {
     app_.connection().disconnect();
     app_.switchScreen(std::make_unique<MenuScreen>(app_));
+}
+
+void GameOverScreen::acceptRematch()
+{
+    if (rematchPhase_ != RematchPhase::Offered) return;
+    // The fresh WelcomeMsg of the server's rematched game does the switch;
+    // both answer paths are disabled immediately to keep a double click
+    // from sending two accepts.
+    if (app_.connection().send(chess::net::RematchAcceptMsg{})) {
+        rematchPhase_ = RematchPhase::Sent;
+        offerAcceptBtn_.setEnabled(false);
+        offerDeclineBtn_.setEnabled(false);
+        setStatusText("Starting the rematch...");
+    }
+}
+
+void GameOverScreen::declineRematch()
+{
+    if (rematchPhase_ != RematchPhase::Offered) return;
+    if (app_.connection().send(chess::net::RematchDeclineMsg{})) {
+        // No echo comes back for a plain decline (it is not the request).
+        enterIdleRematch("Rematch declined");
+    }
 }
 
 void GameOverScreen::activateAnalyze()
@@ -172,18 +284,27 @@ void GameOverScreen::activateArchive()
 
 void GameOverScreen::cycleFocus()
 {
-    if (moves_.empty()) return;
-    focus_ = (focus_ + 1) % 3;
-    rematchBtn_.setFocused(focus_ == 0);
-    archiveBtn_.setFocused(focus_ == 1);
-    analyzeBtn_.setFocused(focus_ == 2);
+    Button* order[] = {&rematchBtn_, &offerAcceptBtn_, &offerDeclineBtn_,
+                       &archiveBtn_, &analyzeBtn_, &menuBtn_};
+    for (int step = 1; step <= 6; ++step) {
+        const int next = (focus_ + step) % 6;
+        const bool visible = order[next] != &offerAcceptBtn_
+            && order[next] != &offerDeclineBtn_;
+        if (visible && order[next]->isEnabled()) {
+            focus_ = next;
+            for (int i = 0; i < 6; ++i)
+                order[i]->setFocused(false);
+            order[focus_]->setFocused(true);
+            return;
+        }
+    }
 }
 
 void GameOverScreen::handleEvent(const sf::Event& event)
 {
     if (const auto* kp = event.getIf<sf::Event::KeyPressed>()) {
         if (kp->code == sf::Keyboard::Key::Escape) {
-            activateRematch();
+            activateMenu();
             return;
         }
         if (kp->code == sf::Keyboard::Key::Tab) {
@@ -201,12 +322,73 @@ void GameOverScreen::handleEvent(const sf::Event& event)
         local = app_.toLocal(rb->position);
 
     if (rematchBtn_.handleEvent(event, local)) return;
+    if (rematchPhase_ == RematchPhase::Offered) {
+        if (offerAcceptBtn_.handleEvent(event, local)) return;
+        if (offerDeclineBtn_.handleEvent(event, local)) return;
+    }
     if (archiveBtn_.handleEvent(event, local)) return;
     if (moves_.empty()) return;
     if (analyzeBtn_.handleEvent(event, local)) return;
+    menuBtn_.handleEvent(event, local);
 }
 
-void GameOverScreen::update(float /*dtSec*/) {}
+void GameOverScreen::update(float /*dtSec*/)
+{
+    // The result screen now owns the live socket (11.7): it must pump the
+    // connection so pings keep flowing and the rematch conversation
+    // (offer, answer, the rematched game's WelcomeMsg) arrives here.
+    app_.connection().poll();
+
+    while (app_.connection().hasMessages()) {
+        auto msg = app_.connection().nextMessage();
+
+        if (auto* welcome = std::get_if<chess::net::WelcomeMsg>(&msg)) {
+            // The rematched game: same construction as the connect flow's
+            // pairing path — a fresh screen, colors already swapped by the
+            // server, the new seat's resume token riding along.
+            std::optional<std::pair<double, double>> opponentRating;
+            if (welcome->rated)
+                opponentRating = std::make_pair(welcome->rating,
+                                                welcome->deviation);
+            setStatusText("");
+            app_.switchScreen(std::make_unique<GameScreen>(
+                app_, welcome->color, welcome->opponent, opponentRating,
+                welcome->rated, welcome->timeControl, welcome->resumeToken));
+            return;
+        }
+        if (std::holds_alternative<chess::net::ServerRematchRequestMsg>(msg)) {
+            // The opponent asks for a rematch: the answer row replaces the
+            // question mark, focus jumps to Accept for a fast yes.
+            rematchPhase_ = RematchPhase::Offered;
+            rematchBtn_.setEnabled(false);
+            offerAcceptBtn_.setEnabled(true);
+            offerDeclineBtn_.setEnabled(true);
+            setStatusText("Opponent offers a rematch");
+            offerAcceptBtn_.setFocused(true);
+            rematchBtn_.setFocused(false);
+            offerDeclineBtn_.setFocused(false);
+            focus_ = 1;
+            continue;
+        }
+        if (auto* decline = std::get_if<chess::net::ServerRematchDeclineMsg>(
+                &msg)) {
+            enterIdleRematch(decline->withdrawn
+                                 ? "Rematch offer withdrawn"
+                                 : "Rematch declined");
+            continue;
+        }
+        if (auto* profileMsg = std::get_if<chess::net::ProfileMsg>(&msg)) {
+            app_.setProfile(*profileMsg);
+            continue;
+        }
+        if (auto* err = std::get_if<chess::net::ErrorMsg>(&msg)) {
+            // A failed request/error clears whatever rematch state this
+            // screen was in (the server has none pending for us).
+            enterIdleRematch(err->message);
+            continue;
+        }
+    }
+}
 
 void GameOverScreen::draw(sf::RenderWindow& window)
 {
@@ -215,12 +397,19 @@ void GameOverScreen::draw(sf::RenderWindow& window)
     resultLabel_.draw(window, font);
     if (!reasonText_.empty())
         reasonLabel_.draw(window, font);
+    if (!statusLabel_.text().empty())
+        statusLabel_.draw(window, font);
 
-    if (rematchBtn_.isEnabled())
+    if (rematchPhase_ == RematchPhase::Offered) {
+        offerAcceptBtn_.draw(window, font);
+        offerDeclineBtn_.draw(window, font);
+    } else {
         rematchBtn_.draw(window, font);
+    }
     archiveBtn_.draw(window, font);
     if (!moves_.empty())
         analyzeBtn_.draw(window, font);
+    menuBtn_.draw(window, font);
 
     hint_.draw(window, font);
 }

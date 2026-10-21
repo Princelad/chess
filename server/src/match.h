@@ -89,6 +89,34 @@ public:
     // a disconnect of either seat, or the game ending.
     bool takebackPending() const { return takebackPending_.has_value(); }
 
+    // Rematch (11.7), the post-game counterpart: true while an offer is out
+    // on a FINISHED match (retention window) for the asked seat to agree.
+    // Dissolved by a decline, the requester's self-cancel, either seat's
+    // departure, or the retention lapse erasing the match.
+    bool rematchPending() const { return rematchPending_.has_value(); }
+
+    // Fired exactly once per accepted rematch, while both seats are still
+    // attached in their game-over seats: the server swaps colors, dissolves
+    // this match's seats and pairs the same clients into a fresh match.
+    using RematchCallback = std::function<void(Match&)>;
+    void setRematchCallback(RematchCallback callback)
+    {
+        rematchCallback_ = std::move(callback);
+    }
+
+    // Voluntary departure from a finished match's game-over seat (the
+    // client requeues or resumes elsewhere). The seat is released; a
+    // pending rematch offer dissolves with a decline notice to the
+    // requester (withdrawn when the requester is the one leaving).
+    void leave(const Client& client);
+
+    // Clears every seat's presence and any pending rematch without
+    // notification (11.7): the server calls this when a rematch just
+    // re-seated both clients into a fresh match — this one lingers for
+    // its token-resume retention only, and stale seat pointers must not
+    // survive clients that moved on.
+    void detachAllSeats();
+
     // Agreed time control string ("" = unlimited), for the archive row.
     const std::string& timeControl() const { return timeControl_; }
 
@@ -138,6 +166,10 @@ private:
     std::size_t seatIndexOf(const Client& client) const;
     bool bothSeatsAbsent() const;
     bool graceArmed() const;
+    // True once the finished match's retention window has lapsed but the
+    // server loop's sweep has not torn the game-over seats down yet; the
+    // rematch handlers fold this stale frame into "session expired".
+    bool retentionLapsed() const;
 
     void handleMove(Client& sender, const chess::net::MoveMsg& msg);
     bool handleMoveSAN(Client& sender, const std::string& san);
@@ -147,6 +179,9 @@ private:
     void handleTakebackRequest(Client& sender);
     void handleTakebackAccept(Client& sender);
     void handleTakebackDecline(Client& sender);
+    void handleRematchRequest(Client& sender);
+    void handleRematchAccept(Client& sender);
+    void handleRematchDecline(Client& sender);
     void handleResign(Client& sender);
     void handleChat(Client& sender, const chess::net::ChatMsg& msg);
     void handlePing(Client& sender);
@@ -167,6 +202,15 @@ private:
     // offer is out.
     std::optional<std::size_t> takebackPending_;
 
+    // Rematch (11.7): the pending offer's asker seat index, valid only on
+    // a finished match (retention window). The fresh match on acceptance
+    // is built by the server-side rematch callback, never here.
+    std::optional<std::size_t> rematchPending_;
+
+    // Releases the pending rematch with a decline notice to the offer's
+    // asker; withdrawn=true when the asker themself is the one leaving.
+    void dissolveRematch(bool withdrawn);
+
     // Reconnect (11.2): one seat absent inside its grace window (both absent
     // ends the game immediately, so at most one seat can be away).
     std::int64_t graceMs_ = 30000;
@@ -183,4 +227,5 @@ private:
     bool botThinking_ = false;
     std::vector<std::string> sanHistory_;
     GameOverCallback gameOverCallback_;
+    RematchCallback rematchCallback_;
 };

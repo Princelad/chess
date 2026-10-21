@@ -25,6 +25,9 @@ enum class ClientMsgType : uint8_t {
     TakebackRequest,
     TakebackAccept,
     TakebackDecline,
+    RematchRequest,
+    RematchAccept,
+    RematchDecline,
 };
 
 enum class ServerMsgType : uint8_t {
@@ -48,6 +51,8 @@ enum class ServerMsgType : uint8_t {
     TakebackRequest,
     TakebackAccepted,
     TakebackDecline,
+    RematchRequest,
+    RematchDecline,
 };
 
 // Refuses absurd archive counts on deserialize: a corrupt or hostile packet
@@ -181,6 +186,24 @@ bool writeClient(sf::Packet& packet, TakebackAcceptMsg)
 bool writeClient(sf::Packet& packet, TakebackDeclineMsg)
 {
     packet << static_cast<uint8_t>(ClientMsgType::TakebackDecline);
+    return static_cast<bool>(packet);
+}
+
+bool writeClient(sf::Packet& packet, RematchRequestMsg)
+{
+    packet << static_cast<uint8_t>(ClientMsgType::RematchRequest);
+    return static_cast<bool>(packet);
+}
+
+bool writeClient(sf::Packet& packet, RematchAcceptMsg)
+{
+    packet << static_cast<uint8_t>(ClientMsgType::RematchAccept);
+    return static_cast<bool>(packet);
+}
+
+bool writeClient(sf::Packet& packet, RematchDeclineMsg)
+{
+    packet << static_cast<uint8_t>(ClientMsgType::RematchDecline);
     return static_cast<bool>(packet);
 }
 
@@ -355,6 +378,20 @@ bool writeServer(sf::Packet& packet, const TakebackAcceptedMsg& msg)
 bool writeServer(sf::Packet& packet, ServerTakebackDeclineMsg)
 {
     packet << static_cast<uint8_t>(ServerMsgType::TakebackDecline);
+    return static_cast<bool>(packet);
+}
+
+bool writeServer(sf::Packet& packet, ServerRematchRequestMsg)
+{
+    packet << static_cast<uint8_t>(ServerMsgType::RematchRequest);
+    return static_cast<bool>(packet);
+}
+
+bool writeServer(sf::Packet& packet, const ServerRematchDeclineMsg& msg)
+{
+    packet << static_cast<uint8_t>(ServerMsgType::RematchDecline);
+    if (!writeFlag(packet, msg.withdrawn))
+        return false;
     return static_cast<bool>(packet);
 }
 
@@ -551,6 +588,12 @@ std::optional<ClientMessage> deserializeClient(sf::Packet& packet)
             return TakebackAcceptMsg{};
         case ClientMsgType::TakebackDecline:
             return TakebackDeclineMsg{};
+        case ClientMsgType::RematchRequest:
+            return RematchRequestMsg{};
+        case ClientMsgType::RematchAccept:
+            return RematchAcceptMsg{};
+        case ClientMsgType::RematchDecline:
+            return RematchDeclineMsg{};
         default:
             return std::nullopt;
     }
@@ -737,6 +780,13 @@ std::optional<ServerMessage> deserializeServer(sf::Packet& packet)
         }
         case ServerMsgType::TakebackDecline:
             return ServerTakebackDeclineMsg{};
+        case ServerMsgType::RematchRequest:
+            return ServerRematchRequestMsg{};
+        case ServerMsgType::RematchDecline: {
+            ServerRematchDeclineMsg msg;
+            if (!readFlag(packet, msg.withdrawn)) return std::nullopt;
+            return msg;
+        }
         default:
             return std::nullopt;
     }
@@ -783,6 +833,12 @@ std::string debugString(const ClientMessage& msg)
             return "TakebackAccept{}";
         else if constexpr (std::is_same_v<T, TakebackDeclineMsg>)
             return "TakebackDecline{}";
+        else if constexpr (std::is_same_v<T, RematchRequestMsg>)
+            return "RematchRequest{}";
+        else if constexpr (std::is_same_v<T, RematchAcceptMsg>)
+            return "RematchAccept{}";
+        else if constexpr (std::is_same_v<T, RematchDeclineMsg>)
+            return "RematchDecline{}";
     }, msg);
 }
 
@@ -844,6 +900,11 @@ std::string debugString(const ServerMessage& msg)
             return "TakebackAccepted{plies=" + std::to_string(m.sans.size()) + "}";
         else if constexpr (std::is_same_v<T, ServerTakebackDeclineMsg>)
             return "TakebackDecline{}";
+        else if constexpr (std::is_same_v<T, ServerRematchRequestMsg>)
+            return "RematchRequest{}";
+        else if constexpr (std::is_same_v<T, ServerRematchDeclineMsg>)
+            return m.withdrawn ? "RematchDecline{withdrawn}"
+                               : "RematchDecline{}";
     }, msg);
 }
 

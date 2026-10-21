@@ -836,6 +836,55 @@ TEST(ProtocolRoundTrip, ServerTakebackDecline)
     EXPECT_TRUE(std::holds_alternative<ServerTakebackDeclineMsg>(*result));
 }
 
+TEST(ProtocolRoundTrip, ClientRematchTrio)
+{
+    ClientMessage request = RematchRequestMsg{};
+    sf::Packet p = freshPacket(serializeClient(request));
+    auto r = deserializeClient(p);
+    ASSERT_TRUE(r.has_value());
+    EXPECT_TRUE(std::holds_alternative<RematchRequestMsg>(*r));
+
+    ClientMessage accept = RematchAcceptMsg{};
+    sf::Packet p2 = freshPacket(serializeClient(accept));
+    auto r2 = deserializeClient(p2);
+    ASSERT_TRUE(r2.has_value());
+    EXPECT_TRUE(std::holds_alternative<RematchAcceptMsg>(*r2));
+
+    ClientMessage decline = RematchDeclineMsg{};
+    sf::Packet p3 = freshPacket(serializeClient(decline));
+    auto r3 = deserializeClient(p3);
+    ASSERT_TRUE(r3.has_value());
+    EXPECT_TRUE(std::holds_alternative<RematchDeclineMsg>(*r3));
+}
+
+TEST(ProtocolRoundTrip, ServerRematchRequest)
+{
+    ServerMessage msg = ServerRematchRequestMsg{};
+    sf::Packet p = freshPacket(serializeServer(msg));
+    auto result = deserializeServer(p);
+    ASSERT_TRUE(result.has_value());
+    EXPECT_TRUE(std::holds_alternative<ServerRematchRequestMsg>(*result));
+}
+
+TEST(ProtocolRoundTrip, ServerRematchDeclineCarriesWithdrawn)
+{
+    ServerMessage plain = ServerRematchDeclineMsg{};
+    sf::Packet p = freshPacket(serializeServer(plain));
+    auto result = deserializeServer(p);
+    ASSERT_TRUE(result.has_value());
+    auto* decline = std::get_if<ServerRematchDeclineMsg>(&*result);
+    ASSERT_NE(decline, nullptr);
+    EXPECT_FALSE(decline->withdrawn) << "default decline is not a withdraw";
+
+    ServerMessage withdrawn = ServerRematchDeclineMsg{true};
+    sf::Packet p2 = freshPacket(serializeServer(withdrawn));
+    auto result2 = deserializeServer(p2);
+    ASSERT_TRUE(result2.has_value());
+    auto* decline2 = std::get_if<ServerRematchDeclineMsg>(&*result2);
+    ASSERT_NE(decline2, nullptr);
+    EXPECT_TRUE(decline2->withdrawn) << "the withdrawn flag round-trips";
+}
+
 TEST(ProtocolGarbage, TakebackAcceptedCountTooLarge)
 {
     sf::Packet p;
@@ -879,6 +928,22 @@ TEST(ProtocolDebug, TakebackMessages)
     EXPECT_EQ(debugString(ServerMessage{accepted}), "TakebackAccepted{plies=2}");
     EXPECT_EQ(debugString(ServerMessage{ServerTakebackDeclineMsg{}}),
               "TakebackDecline{}");
+}
+
+TEST(ProtocolDebug, RematchMessages)
+{
+    EXPECT_EQ(debugString(ClientMessage{RematchRequestMsg{}}),
+              "RematchRequest{}");
+    EXPECT_EQ(debugString(ClientMessage{RematchAcceptMsg{}}),
+              "RematchAccept{}");
+    EXPECT_EQ(debugString(ClientMessage{RematchDeclineMsg{}}),
+              "RematchDecline{}");
+    EXPECT_EQ(debugString(ServerMessage{ServerRematchRequestMsg{}}),
+              "RematchRequest{}");
+    EXPECT_EQ(debugString(ServerMessage{ServerRematchDeclineMsg{}}),
+              "RematchDecline{}");
+    EXPECT_EQ(debugString(ServerMessage{ServerRematchDeclineMsg{true}}),
+              "RematchDecline{withdrawn}");
 }
 
 // ── Garbage / truncated packets ─────────────────────────────────────────────

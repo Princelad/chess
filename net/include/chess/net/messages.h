@@ -115,6 +115,19 @@ struct TakebackRequestMsg {};
 struct TakebackAcceptMsg {};
 struct TakebackDeclineMsg {};
 
+// Rematch (11.7): a post-game offer to play the same pairing again with
+// colors swapped, on the connection that just finished. Heard only while
+// the finished match still sits in its retention window and the opponent's
+// seat is present; the asked seat answers accept/decline — a server bot
+// answers itself. There is no separate "accepted" server message: the
+// fresh WelcomeMsg of the newly created match is the acceptance signal for
+// both seats. A pending offer dissolves on a decline (or the requester's
+// own self-cancel), either seat's departure, or the retention window
+// lapsing.
+struct RematchRequestMsg {};
+struct RematchAcceptMsg {};
+struct RematchDeclineMsg {};
+
 using ClientMessage = std::variant<
     JoinMsg,
     MoveMsg,
@@ -131,7 +144,10 @@ using ClientMessage = std::variant<
     ResumeMsg,
     TakebackRequestMsg,
     TakebackAcceptMsg,
-    TakebackDeclineMsg
+    TakebackDeclineMsg,
+    RematchRequestMsg,
+    RematchAcceptMsg,
+    RematchDeclineMsg
 >;
 
 // ── Server → Client ─────────────────────────────────────────────────────────
@@ -281,6 +297,21 @@ struct TakebackAcceptedMsg {
 // self-cancelled their own pending request.
 struct ServerTakebackDeclineMsg {};
 
+// ── Rematch (11.7) ─────────────────────────────────────────────────────────
+
+// Forwarded to the seat that must agree — the other player of the game that
+// just ended, still seated on its game-over screen. The fresh WelcomeMsg of
+// the rematched game (same time control, swapped colors) is the acceptance
+// signal; no separate "accepted" message exists.
+struct ServerRematchRequestMsg {};
+
+// Sent to the requester only: the asked seat declined outright (withdrawn
+// = false), or the offer was cancelled — the requester themself left or
+// dropped (withdrawn = true, the self-cancel path).
+struct ServerRematchDeclineMsg {
+    bool withdrawn = false;
+};
+
 using ServerMessage = std::variant<
     WelcomeMsg,
     OpponentJoinedMsg,
@@ -301,7 +332,9 @@ using ServerMessage = std::variant<
     OpponentResumedMsg,
     ServerTakebackRequestMsg,
     TakebackAcceptedMsg,
-    ServerTakebackDeclineMsg
+    ServerTakebackDeclineMsg,
+    ServerRematchRequestMsg,
+    ServerRematchDeclineMsg
 >;
 
 } // namespace net

@@ -124,6 +124,21 @@ void Match::handleMessage(Client& sender, const chess::net::ClientMessage& msg)
         return;
     }
 
+    // Rematch (11.7) is heard on finished matches (that is its home) but
+    // answers mid-game attempts with a clear error instead of silence.
+    if (std::get_if<chess::net::RematchRequestMsg>(&msg)) {
+        handleRematchRequest(sender);
+        return;
+    }
+    if (std::get_if<chess::net::RematchAcceptMsg>(&msg)) {
+        handleRematchAccept(sender);
+        return;
+    }
+    if (std::get_if<chess::net::RematchDeclineMsg>(&msg)) {
+        handleRematchDecline(sender);
+        return;
+    }
+
     if (!active_) {
         sendTo(sender, chess::net::ErrorMsg{"Game is over"});
         return;
@@ -372,6 +387,132 @@ void Match::applyTakeback(std::size_t requesterIdx)
     // never a bot — is on the move in the rebuilt position.
 }
 
+bool Match::retentionLapsed() const
+{
+    return !active_ && retentionEnded(steadyNowMs());
+}
+
+void Match::handleRematchRequest(Client& sender)
+{
+    const std::size_t idx = seatIndexOf(sender);
+    if (idx >= 2)
+        return;
+
+    // Rematch is a post-game creature: mid-game requests are unambiguous
+    // noise and get a clear answer.
+    if (active_) {
+        sendTo(sender, chess::net::ErrorMsg{"Game not over yet"});
+        return;
+    }
+    if (retentionLapsed()) {
+        // The sweep had not run since the window lapsed; this stale frame
+        // answers as the lobby would (the sweep dissolves pending offers
+        // without notices).
+        rematchPending_.reset();
+        sendTo(sender, chess::net::ErrorMsg{
+            "No game to rematch — session expired"});
+        return;
+    }
+    if (rematchPending_.has_value()) {
+        // A double click from the asker is harmless (idempotent); anything
+        // else tries to queue a second offer.
+        if (*rematchPending_ != idx)
+            sendTo(sender, chess::net::ErrorMsg{"A rematch is already pending"});
+        return;
+    }
+    // The asked seat answers, so their absence fails fast instead of
+    // queueing behind an unknown window length (same frame as takeback).
+    if (seats_[1 - idx].present == nullptr) {
+        sendTo(sender, chess::net::ErrorMsg{"The opponent is away"});
+        return;
+    }
+
+    if (seats_[1 - idx].isBot) {
+        // Server bots always agree — keeps solo games flowing, and there is
+        // no round trip to surface a UI for anyway. The fresh match is the
+        // server's callback problem: colors swap there, and the bot is
+        // restarted against its new seat.
+        LOG_INFO("Rematch accepted by bot (" + seats_[idx].name + ")");
+        rematchPending_ = idx;
+        if (rematchCallback_)
+            rematchCallback_(*this);
+        return;
+    }
+
+    rematchPending_ = idx;
+    LOG_INFO("Rematch requested by " + seats_[idx].name);
+    sendToPresent(seats_[1 - idx].present,
+                  chess::net::ServerRematchRequestMsg{});
+}
+
+void Match::handleRematchAccept(Client& sender)
+{
+    const std::size_t idx = seatIndexOf(sender);
+    if (idx >= 2)
+        return;
+    if (active_ || !rematchPending_.has_value() || *rematchPending_ == idx
+        || retentionLapsed()) {
+        sendTo(sender, chess::net::ErrorMsg{"No rematch request pending"});
+        return;
+    }
+    rematchPending_.reset();
+    // The server (via callback) tears this match's seats down and pairs the
+    // same clients into a fresh one with swapped colors; both seats learn
+    // about it through the fresh WelcomeMsg, which is the acceptance signal.
+    if (rematchCallback_) {
+        LOG_INFO("Rematch accepted (seat of " + seats_[idx].name + ")");
+        rematchCallback_(*this);
+    }
+}
+
+void Match::handleRematchDecline(Client& sender)
+{
+    const std::size_t idx = seatIndexOf(sender);
+    if (idx >= 2)
+        return;
+    if (active_ || !rematchPending_.has_value() || retentionLapsed()) {
+        sendTo(sender, chess::net::ErrorMsg{"No rematch request pending"});
+        return;
+    }
+    // Either seat dissolves the offer — the asker can decline their own
+    // (self-cancel). The requester's client needs the notice either way to
+    // clear its waiting state. Mirrors takeback's decline semantics.
+    const bool selfCancel = *rematchPending_ == idx;
+    dissolveRematch(selfCancel);
+}
+
+void Match::dissolveRematch(bool withdrawn)
+{
+    if (!rematchPending_.has_value())
+        return;
+    const std::size_t requesterIdx = *rematchPending_;
+    rematchPending_.reset();
+    LOG_INFO(withdrawn ? "Rematch offer withdrawn"
+                       : "Rematch declined");
+    sendToPresent(seats_[requesterIdx].present,
+                  chess::net::ServerRematchDeclineMsg{withdrawn});
+}
+
+// Voluntary departure from a finished match's game-over seat: the seat is
+// released, a pending rematch dissolves with the requester notified (the
+// asker leaving reads as withdrawn, the asked seat leaving as a decline).
+void Match::leave(const Client& client)
+{
+    const std::size_t idx = seatIndexOf(client);
+    if (idx >= 2)
+        return;
+    seats_[idx].present = nullptr;
+    if (rematchPending_.has_value())
+        dissolveRematch(*rematchPending_ == idx);
+}
+
+void Match::detachAllSeats()
+{
+    for (auto& seat : seats_)
+        seat.present = nullptr;
+    rematchPending_.reset();
+}
+
 void Match::handleResign(Client& sender)
 {
     const std::size_t idx = seatIndexOf(sender);
@@ -403,12 +544,21 @@ void Match::handlePing(Client& sender)
 
 void Match::handleDisconnect(const Client& client)
 {
-    if (!active_)
-        return;
-
     const std::size_t idx = seatIndexOf(client);
     if (idx >= 2)
         return;
+
+    if (!active_) {
+        // Game-over seat (11.7): the socket died while the seated player
+        // sat on the result screen. Release the seat quietly; a pending
+        // rematch offer dissolves (the asker's departure reads as
+        // withdrawn, the asked seat's as a plain decline).
+        seats_[idx].present = nullptr;
+        if (rematchPending_.has_value())
+            dissolveRematch(*rematchPending_ == idx);
+        return;
+    }
+
     seats_[idx].present = nullptr;
 
     // A pending takeback is a two-seat conversation; a seat leaving ends
@@ -561,15 +711,13 @@ void Match::endGame(chess::net::GameResult result, chess::net::GameOverReason re
              + " reason=" + std::to_string(static_cast<int>(reason)));
     if (gameOverCallback_)
         gameOverCallback_(*this, result, reason);
-    // Detach last so the hook still finds present seats for profile re-sends
-    // and archive lookups; hot clients head back to the lobby immediately.
-    for (auto& seat : seats_) {
-        if (seat.present) {
-            seat.present->match = nullptr;
-            seat.present->state = ClientState::Connected;
-            seat.present = nullptr;
-        }
-    }
+    // Seats stay attached through the retention window (11.7): the rematch
+    // offer routes through the match, so both game-over clients keep their
+    // seat membership until they leave, drop, or retention lapses (the
+    // server loop returns lingering clients to the Connected state then).
+    for (auto& seat : seats_)
+        if (seat.present)
+            seat.present->state = ClientState::GameOver;
 }
 
 std::pair<chess::net::GameResult, chess::net::GameOverReason>

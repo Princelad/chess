@@ -663,8 +663,8 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [x] Selected via the 9.5 settings/config file (new config key **`pieces.set`** (default `cburnett`, values = set dir names); Settings screen gains a "Piece set" cycle row right below the theme row (`pieceSetPrev_/Next_`, status text warns when a custom `pieces.path` overrides the named set); loading order in `loadPieceTextures`: custom path → `assets/pieces/<set>/` (all three relative roots) → legacy flat `assets/pieces/` root)
 
 - [ ] **11.7 Rematch flow**
-  - [ ] Post-game offer/accept starts a new game without reconnecting
-  - [ ] Colors swapped on rematch
+  - [x] Post-game offer/accept starts a new game without reconnecting (protocol v2 append-only: client tags `RematchRequest = 16`/`RematchAccept = 17`/`RematchDecline = 18`, server tags `ServerRematchRequest = 20`/`ServerRematchDecline = 21` (carries `withdrawn` 0/1 for the self-cancel path); there is NO `RematchAccepted` — the fresh `WelcomeMsg` of the new match is the acceptance signal for both seats; `GameOverScreen` pumps/drains its own connection now, rebuilds a `GameScreen` from the rematch `WelcomeMsg`, hosts the offer prompt (Accept/Decline replace the Rematch row) and maps every `ErrorMsg` into its status line; the old fake-"Rematch" button became a real `Menu` button)
+  - [x] Colors swapped on rematch (a finished match keeps both game-over seats **attached** for exactly its retention window (= reconnect grace, 11.2) via new `ClientState::GameOver`; the rematch callback fires from `Match::handleRematchAccept` with both clients referenced through the seats, the server dissolves the old match's seats (`detachAllSeats`) and pairs the same two clients again with colors swapped; bots auto-accept inside the request handler and are `startBot`-'d against their swapped color in the server's `onRematch`)
 
 - [ ] **11.8 Chat polish**
   - [ ] Timestamps, name colors, per-player mute

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <ctime>
+#include <functional>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -60,7 +61,8 @@ static ClientVec::iterator disconnectClient(
     }
     if (client.state == ClientState::Queued)
         matchmaker.remove(client);
-    else if (client.state == ClientState::InMatch)
+    else if (client.state == ClientState::InMatch
+             || client.state == ClientState::GameOver)
         client.match->handleDisconnect(client);
     return clients.erase(it);
 }
@@ -354,12 +356,40 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
     // Pairing helper (phase 10.2): creates the match, wires the rated hook
     // and broadcasts the richer WelcomeMsg (opponent rating + rated flag)
     // made from fresh rows; guests fall back to the default 1500 ± 350.
-    auto startMatch = [&](Client& first, Client& second) -> Match* {
+    // Held as a std::function because the rematch callback (11.7) is
+    // mutually recursive with it: an accept pairs the same two clients
+    // again with swapped colors and needs startMatch, and every fresh
+    // match in turn needs that hook wired.
+    std::function<Match*(Client&, Client&)> startMatch;
+
+    // Rematch hook (11.7): only fires from a finished match with both
+    // seats attached on their game-over screens. Colors swap (startMatch's
+    // first client takes White), the finished match keeps only its
+    // retention shell, and a rematched bot restarts against its new color.
+    auto onRematch = [&](Match& finished) {
+        Client* white = finished.white();
+        Client* black = finished.black();
+        if (!white || !black) {
+            LOG_WARN("Rematch fired with an absent seat — dropped");
+            return;
+        }
+        Client* bot = white->isBot ? white : (black->isBot ? black : nullptr);
+        const bool botSeatWhiteNext = bot == black;
+        finished.detachAllSeats();
+        Match* match = startMatch(*black, *white);
+        if (match != nullptr && bot != nullptr)
+            match->startBot(botSeatWhiteNext ? chess::Color::White
+                                             : chess::Color::Black,
+                            config.botDepth, config.botEnginePath);
+    };
+
+    startMatch = [&](Client& first, Client& second) -> Match* {
         first.state = ClientState::InMatch;
         second.state = ClientState::InMatch;
         auto match = std::make_unique<Match>(first, second, first.timeControl,
                                              config.reconnectGraceMs);
         match->setGameOverCallback(onGameOver);
+        match->setRematchCallback(onRematch);
         first.match = match.get();
         second.match = match.get();
 
@@ -417,6 +447,53 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
             match->pollReconnect(nowMs);
         }
 
+        for (auto& match : matches) {
+            if (match->isActive()) {
+                match->pollBotMove();
+            } else {
+                // Finished matches keep the game-over seats (11.7); they
+                // linger only for the token-resume retention window with
+                // the bot already quiesced.
+                match->stopBot();
+            }
+        }
+
+        // Retention cleanup (11.2/11.7): finished matches age out of the
+        // token-resume window; game-over seats still attached (rematch
+        // offers unanswered) return to the Connected lobby state quietly —
+        // their next rematch attempt answers "no recent game" from there.
+        // Runs on every pass, before the select: an idle server must still
+        // age out matches on the clock of the sweep itself.
+        for (auto it = matches.begin(); it != matches.end();) {
+            Match& m = **it;
+            if (!m.retentionEnded(nowMs)) {
+                ++it;
+                continue;
+            }
+            for (auto& c : clients) {
+                if (c->match == &m) {
+                    c->state = ClientState::Connected;
+                    c->match = nullptr;
+                }
+            }
+            it = matches.erase(it);
+        }
+
+        auto botIt = clients.begin();
+        while (botIt != clients.end()) {
+            Client& c = **botIt;
+            // A bot seats a rematch offer only while its finished match is
+            // still retained (the human may still ask); match == nullptr
+            // after the retention sweep releases it for real.
+            const bool botSeatedForRematch =
+                c.state == ClientState::GameOver && c.match != nullptr;
+            if (c.isBot && c.state != ClientState::InMatch && !botSeatedForRematch) {
+                botIt = clients.erase(botIt);
+            } else {
+                ++botIt;
+            }
+        }
+
         if (!selector.wait(waitTime))
             continue;
 
@@ -444,6 +521,12 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
             }
         }
 
+        // Bot spawns requested during the pass below are deferred until the
+        // client loop left iteration range: pushing into `clients` while
+        // iterating it reallocates the vector and invalidates the loop's
+        // own iterator (a fresh bot is the classic trigger — one join, two
+        // Clients).
+        std::vector<std::string> botSpawnQueue;
         for (auto it = clients.begin(); it != clients.end(); ) {
             Client& client = **it;
             if (client.isBot) {
@@ -577,24 +660,12 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
                                     auto botCount = std::count_if(clients.begin(), clients.end(),
                                         [](const auto& c) { return c->isBot; });
                                     if (static_cast<std::size_t>(botCount) < config.maxBots) {
-                                        auto bot = std::make_unique<Client>();
-                                        bot->isBot = true;
-                                        bot->name = "Bot-" + std::to_string(++botNameCounter);
-                                        bot->state = ClientState::Queued;
-                                        // Bot mirrors the waiting human's
-                                        // time control so it can pair and
-                                        // play a clocked game.
-                                        bot->timeControl = client.timeControl;
-                                        bot->lastActivity = std::chrono::steady_clock::now();
-                                        Client* botPtr = bot.get();
-                                        clients.push_back(std::move(bot));
-
-                                        auto botPair = matchmaker.enqueue(*botPtr);
-                                        if (botPair.has_value()) {
-                                            auto match = startMatch(*botPair->first, *botPair->second);
-                                            chess::Color botColor = botPair->first->isBot ? chess::Color::White : chess::Color::Black;
-                                            match->startBot(botColor, config.botDepth, config.botEnginePath);
-                                        }
+                                        // Deferred: pushing a new bot into
+                                        // `clients` here would reallocate the
+                                        // vector mid-iteration and invalidate
+                                        // this very loop's iterator (the bot
+                                        // spawn runs after the loop instead).
+                                        botSpawnQueue.push_back(client.timeControl);
                                     }
                                 }
                             } else if (std::get_if<chess::net::ResumeMsg>(&*msg)) {
@@ -603,6 +674,13 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
                                 handleResume(client,
                                     std::get<chess::net::ResumeMsg>(*msg),
                                     matches, players);
+                            } else if (std::get_if<chess::net::RematchRequestMsg>(
+                                           &*msg)) {
+                                // Rematch (11.7) after the retention sweep
+                                // reset the game-over seat: "Join first"
+                                // would be cryptic.
+                                sendTo(client, chess::net::ErrorMsg{
+                                    "No game to rematch — session expired"});
                             } else {
                                 sendTo(client, chess::net::ErrorMsg{"Join first"});
                             }
@@ -615,6 +693,12 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
                             }
                             break;
                         case ClientState::InMatch:
+                        case ClientState::GameOver:
+                            // Game-over seats (11.7) stay members of their
+                            // finished match for the retention window: the
+                            // rematch trio routes through the match, and
+                            // Match::handleMessage clears anything else it
+                            // refuses.
                             client.match->handleMessage(client, *msg);
                             break;
                         }
@@ -635,6 +719,35 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
             ++it;
         }
 
+        // Spawn the bots this pass requested (post-loop, so the pushes
+        // cannot disturb an in-flight iteration). Every queued enqueue
+        // resolves against whatever is waiting — its requesting human has
+        // already been queued, so the pairing outcome matches the old
+        // mid-loop form.
+        for (const auto& botTimeControl : botSpawnQueue) {
+            auto botCount = std::count_if(clients.begin(), clients.end(),
+                [](const auto& c) { return c->isBot; });
+            if (static_cast<std::size_t>(botCount) >= config.maxBots)
+                break;
+            auto bot = std::make_unique<Client>();
+            bot->isBot = true;
+            bot->name = "Bot-" + std::to_string(++botNameCounter);
+            bot->state = ClientState::Queued;
+            // Bot mirrors the waiting human's time control so it can pair
+            // and play a clocked game.
+            bot->timeControl = botTimeControl;
+            bot->lastActivity = std::chrono::steady_clock::now();
+            Client* botPtr = bot.get();
+            clients.push_back(std::move(bot));
+
+            auto botPair = matchmaker.enqueue(*botPtr);
+            if (botPair.has_value()) {
+                auto match = startMatch(*botPair->first, *botPair->second);
+                chess::Color botColor = botPair->first->isBot ? chess::Color::White : chess::Color::Black;
+                match->startBot(botColor, config.botDepth, config.botEnginePath);
+            }
+        }
+
         if (config.timeout > 0) {
             auto now = std::chrono::steady_clock::now();
             for (auto it = clients.begin(); it != clients.end(); ) {
@@ -648,31 +761,6 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
                 ++it;
             }
         }
-
-        for (auto& match : matches) {
-            if (match->isActive()) {
-                match->pollBotMove();
-            } else {
-                // Finished matches endGame-detached their seats already;
-                // they linger only for the token-resume retention window.
-                match->stopBot();
-            }
-        }
-
-        auto botIt = clients.begin();
-        while (botIt != clients.end()) {
-            Client& c = **botIt;
-            if (c.isBot && c.state != ClientState::InMatch) {
-                botIt = clients.erase(botIt);
-            } else {
-                ++botIt;
-            }
-        }
-
-        matches.erase(
-            std::remove_if(matches.begin(), matches.end(),
-                [&](const auto& m) { return m->retentionEnded(nowMs); }),
-            matches.end());
     }
 
     LOG_INFO("Shutting down with " + std::to_string(clients.size()) + " client(s) connected");

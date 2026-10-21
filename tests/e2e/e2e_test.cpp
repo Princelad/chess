@@ -272,8 +272,8 @@ TEST_F(E2eTest, MoveAfterGameOver)
         return wOver && bOver;
     }));
 
-    // After game-over, clients are returned to Connected state (match cleaned up).
-    // Sending a move now gets "Join first" since we're no longer in a match.
+    // After game-over, the game-over seat stays a member of the retained
+    // match (11.7), so a stray move is rejected by the match itself.
     sendMsg(black, chess::net::MoveMsg{"e5"});
     bool gotResponse = false;
     ASSERT_TRUE(pollUntil([&]() {
@@ -281,7 +281,7 @@ TEST_F(E2eTest, MoveAfterGameOver)
         auto m = tryRecv(black);
         if (m && std::get_if<chess::net::ErrorMsg>(&*m)) {
             auto* err = std::get_if<chess::net::ErrorMsg>(&*m);
-            EXPECT_EQ(err->message, "Join first");
+            EXPECT_EQ(err->message, "Game is over");
             gotResponse = true;
             return true;
         }

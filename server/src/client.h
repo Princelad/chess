@@ -9,7 +9,10 @@
 
 class Match;
 
-enum class ClientState : int { Connected, Queued, InMatch };
+// GameOver (11.7): the client finished a match but the match object still
+// lives in retention — rematch offers route through it while both seats
+// can still answer; JoinMsg/ResumeMsg (fresh connections) are unaffected.
+enum class ClientState : int { Connected, Queued, InMatch, GameOver };
 
 struct Client {
     std::unique_ptr<sf::TcpSocket> socket;
