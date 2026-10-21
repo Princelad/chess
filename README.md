@@ -138,8 +138,18 @@ Screen where you enter the server address, port, and your name.
 
 ## License and attribution
 
-Piece sprites are the lichess "cburnett" set
-(`https://github.com/lichess-org/lila`, `public/piece/cburnett/`), rasterized
-from the source SVGs, licensed under
-[CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/).
-Original piece set by Colin M.L. Burnett.
+Bundled piece sets live in `assets/pieces/<set>/` (160×160 RGBA PNGs
+rasterized from SVGs):
+
+- `cburnett` (default) — Colin M.L. Burnett,
+  [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/)
+  (lila also lists the set as GPLv2+).
+- `merida` — Merida staunton set, Armando Hernandez Marroquin, GPLv2+
+  (per lila's COPYING.md).
+- `chessnut` — flat geometric set by Alexis Luengas, Apache 2.0
+  (upstream `LexLuengas/chessnut-pieces`).
+
+All sprites come from `https://github.com/lichess-org/lila`
+(`public/piece/<set>/`); each set directory carries a README.md with the
+full source/license note, and the lila COPYING.md table is the
+authoritative attribution record.

@@ -11,6 +11,7 @@
 #include <chess/types.h>
 #include "config.h"
 #include "connection.h"
+#include "piece_sets.h"
 #include "sfx.h"
 #include "themes.h"
 
@@ -79,6 +80,18 @@ public:
     void setBoardTheme(BoardTheme theme)
     {
         config_.set("board.colors", boardThemeName(theme));
+        config_.save();
+    }
+
+    // Named piece set (11.6): directory under assets/pieces/. The explicit
+    // custom path (`pieces.path`) keeps priority over the named set.
+    PieceSet pieceSet() const
+    {
+        return pieceSetFromName(config_.get("pieces.set", "cburnett"));
+    }
+    void setPieceSet(PieceSet set)
+    {
+        config_.set("pieces.set", pieceSetDirName(set));
         config_.save();
     }
 

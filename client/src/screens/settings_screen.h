@@ -28,6 +28,8 @@ private:
         FocusSoundVolNext,
         FocusThemePrev,
         FocusThemeNext,
+        FocusPieceSetPrev,
+        FocusPieceSetNext,
         FocusPiecesField,
         FocusApply,
         FocusReset,
@@ -39,6 +41,8 @@ private:
     void focusNext(bool down);
     void applyFocus();
     void updateThemeLabel();
+    void updatePieceSetLabel();
+    void cyclePieceSet(int dir);
     void updateAnimDurLabel();
     void cycleAnimDur(int dir);
     void updateSoundVolLabel();
@@ -67,6 +71,10 @@ private:
     Button themePrev_;
     Button themeNext_;
     Label themeName_;
+
+    Button pieceSetPrev_;
+    Button pieceSetNext_;
+    Label pieceSetName_;
 
     Label piecesCaption_;
     TextField piecesField_;

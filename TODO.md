@@ -659,8 +659,8 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [x] Show opening name (+ ECO code) in HUD after each move (`Hud::refreshOpening` re-runs `ecoLookup(navigator_.sans())` at both SAN-mutation points — `setGame` and `appendMove` — never `setStatus` (that's the timed message channel); rendered as "B01 - Scandinavian Defence", right-aligned on the "Moves" row; local/engine/analysis games get names for free via the shared `Hud`)
 
 - [ ] **11.6 Themes**
-  - [ ] Board color palettes + piece sets (`assets/pieces/<set>/`)
-  - [ ] Selected via the 9.5 settings/config file
+  - [x] Board color palettes + piece sets (`assets/pieces/<set>/`) (palettes enum extended with **Wood** (warm walnut) and **Moss** (gray-green), appended after `Dark` so persisted `board.colors` names stay valid; piece sets restructured into `assets/pieces/{cburnett,merida,chessnut}/` — merida (GPLv2+, Armando Hernandez Marroquin) and chessnut (Apache 2.0, Alexis Luengas) rasterized 160×160 from lichess-org/lila `public/piece/<set>/` per lila COPYING.md, each dir carries a README.md credit)
+  - [x] Selected via the 9.5 settings/config file (new config key **`pieces.set`** (default `cburnett`, values = set dir names); Settings screen gains a "Piece set" cycle row right below the theme row (`pieceSetPrev_/Next_`, status text warns when a custom `pieces.path` overrides the named set); loading order in `loadPieceTextures`: custom path → `assets/pieces/<set>/` (all three relative roots) → legacy flat `assets/pieces/` root)
 
 - [ ] **11.7 Rematch flow**
   - [ ] Post-game offer/accept starts a new game without reconnecting

@@ -54,6 +54,7 @@ void App::loadAssets()
     if (!config_.has("board.colors")) config_.set("board.colors", "classic");
     if (!config_.has("board.show_coordinates")) config_.setBool("board.show_coordinates", true);
     if (!config_.has("pieces.path")) config_.set("pieces.path", "");
+    if (!config_.has("pieces.set")) config_.set("pieces.set", "cburnett");
     if (!config_.has("sound.volume")) config_.setInt("sound.volume", 100);
     if (!config_.has("sound.muted")) config_.setBool("sound.muted", false);
     if (!config_.has("animation.enabled")) config_.setBool("animation.enabled", true);
@@ -89,11 +90,14 @@ bool App::loadPieceTextures()
     const std::string customDir = config_.get("pieces.path", "");
     std::vector<std::string> dirs;
     if (!customDir.empty()) dirs.push_back(customDir);
-    dirs.insert(dirs.end(), {
-        "assets/pieces/",
-        "../assets/pieces/",
-        "../../assets/pieces/",
-    });
+    // Named set dirs (11.6), then the legacy flat root that predates the
+    // per-set subdirectories (keeps hand-assembled trees loadable).
+    for (const std::string base : { "assets/pieces/", "../assets/pieces/",
+                                    "../../assets/pieces/" })
+        dirs.push_back(base + pieceSetDirName(pieceSet()) + "/");
+    for (const char* base : { "assets/pieces/", "../assets/pieces/",
+                              "../../assets/pieces/" })
+        dirs.push_back(base);
 
     const char names[2][6] = {
         { 'w','w','w','w','w','w' },

@@ -8,7 +8,7 @@ namespace chess::client {
 
 // Board color themes. Selected in the settings screen and persisted to the
 // config file (`board.colors`); the foundation for phase 11 themes.
-enum class BoardTheme { Classic, Green, Blue, Dark, Count };
+enum class BoardTheme { Classic, Green, Blue, Dark, Wood, Moss, Count };
 
 struct BoardColors {
     sf::Color light;
@@ -22,6 +22,8 @@ inline BoardColors boardColorsFor(BoardTheme theme)
         case BoardTheme::Green:   return { sf::Color(167, 203, 149), sf::Color(88, 140, 89) };
         case BoardTheme::Blue:    return { sf::Color(133, 168, 199), sf::Color(76, 112, 148) };
         case BoardTheme::Dark:    return { sf::Color(86, 92, 98),    sf::Color(56, 60, 66) };
+        case BoardTheme::Wood:    return { sf::Color(233, 193, 143), sf::Color(158, 99, 62) };
+        case BoardTheme::Moss:    return { sf::Color(176, 182, 166), sf::Color(64, 94, 78) };
     }
     return { sf::Color(240, 217, 181), sf::Color(181, 136, 99) };
 }
@@ -33,6 +35,8 @@ inline const char* boardThemeName(BoardTheme theme)
         case BoardTheme::Green:   return "Green";
         case BoardTheme::Blue:    return "Blue";
         case BoardTheme::Dark:    return "Dark";
+        case BoardTheme::Wood:    return "Wood";
+        case BoardTheme::Moss:    return "Moss";
         default:                  return "Classic";
     }
 }

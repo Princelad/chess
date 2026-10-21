@@ -1,4 +1,5 @@
 #include "config.h"
+#include "piece_sets.h"
 #include "themes.h"
 
 #include <filesystem>
@@ -215,8 +216,25 @@ TEST(Themes, NameRoundTrip)
     EXPECT_EQ(boardThemeFromName("bogus"), BoardTheme::Classic);
 }
 
-TEST(Themes, LabelColorContrasts)
+TEST(PieceSets, RoundTripAndFallback)
 {
+    for (int i = 0; i < static_cast<int>(PieceSet::Count); ++i) {
+        auto set = static_cast<PieceSet>(i);
+        EXPECT_EQ(pieceSetFromName(pieceSetDirName(set)), set);
+    }
+    EXPECT_EQ(pieceSetFromName("bogus"), PieceSet::Cburnett);
+}
+
+TEST(PieceSets, AllNamedSetsResolve)
+{
+    EXPECT_EQ(pieceSetFromName("cburnett"), PieceSet::Cburnett);
+    EXPECT_EQ(pieceSetFromName("merida"), PieceSet::Merida);
+    EXPECT_EQ(pieceSetFromName("chessnut"), PieceSet::Chessnut);
+    EXPECT_EQ(pieceSetDirName(PieceSet::Merida), std::string("merida"));
+    EXPECT_EQ(pieceSetDirName(PieceSet::Chessnut), std::string("chessnut"));
+}
+
+TEST(Themes, LabelColorContrasts){
     sf::Color all[4] = { {0, 0, 0}, {255, 255, 255}, {60, 120, 180}, {240, 217, 181} };
     for (auto c : all) {
         auto label = labelColorFor(c);
