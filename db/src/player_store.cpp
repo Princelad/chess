@@ -394,6 +394,15 @@ std::optional<Player> PlayerStore::applyIdleGrowth(
         return std::nullopt;
     }
 
+    // One transaction for the whole pass (audit fix): a crash mid-pass must
+    // not leave a half-grown player (some class rows advanced, others not,
+    // mirror out of sync).
+    Transaction tx(db_);
+    if (!tx) {
+        errorMessage_ = db_.errorMessage();
+        return std::nullopt;
+    }
+
     // Per class (11.1b): every owned row idles independently. One query
     // scans the (sparse) class rows for the player while a second statement
     // writes grown rows back.
@@ -520,6 +529,10 @@ std::optional<Player> PlayerStore::applyIdleGrowth(
         player->losses = newestRow.losses;
         player->draws = newestRow.draws;
         player->lastRatedAt = newestRow.lastRatedAt;
+    }
+    if (!tx.commit()) {
+        errorMessage_ = db_.errorMessage();
+        return std::nullopt;
     }
     return player;
 }
