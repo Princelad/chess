@@ -166,6 +166,34 @@ static void handleLogin(Client& client, const chess::net::LoginMsg& login,
         return;
     }
 
+    // Login throttle (R2): consecutive failures on a connection back off
+    // exponentially (1 s doubling, 60 s cap) so password guessing by byte
+    // count is slowed to a crawl. The lock only delays new attempts — no
+    // error carries the account's existence.
+    const auto now = std::chrono::steady_clock::now();
+    if (now < client.loginLockedUntil) {
+        const auto wait = std::chrono::duration_cast<std::chrono::seconds>(
+            client.loginLockedUntil - now).count() + 1;
+        sendTo(client, chess::net::ErrorMsg{
+            "Too many failed logins — try again in "
+            + std::to_string(wait) + " seconds"});
+        return;
+    }
+
+    auto failLogin = [&client](const std::string& why) {
+        ++client.failedLogins;
+        // A single failure never locks: one typo followed by the correct
+        // password must stay instant. The backoff arms from the second
+        // consecutive failure (1 s doubling, 60 s cap).
+        if (client.failedLogins >= 2) {
+            const auto stepMs = std::min<std::int64_t>(
+                1000 << (client.failedLogins - 2), 60000);
+            client.loginLockedUntil = std::chrono::steady_clock::now()
+                + std::chrono::milliseconds(stepMs);
+        }
+        sendTo(client, chess::net::ErrorMsg{why});
+    };
+
     auto existing = players->byName(login.name);
     if (existing.has_value()) {
         if (login.password.empty()) {
@@ -175,12 +203,13 @@ static void handleLogin(Client& client, const chess::net::LoginMsg& login,
             return;
         }
         if (!players->authenticate(login.name, login.password)) {
-            sendTo(client, chess::net::ErrorMsg{
-                "Wrong password for account '" + existing->name + "'"});
+            failLogin("Wrong password for account '" + existing->name + "'");
             return;
         }
         client.playerId = existing->id;
         client.name = existing->name;
+        client.failedLogins = 0;
+        client.loginLockedUntil = {};
         // Glicko-2 idle periods grow RD since the last rated game; the
         // profile is sent from the freshly grown row.
         auto fresh = players->applyIdleGrowth(existing->id, chess::db::nowSeconds());
@@ -200,7 +229,7 @@ static void handleLogin(Client& client, const chess::net::LoginMsg& login,
     }
     auto created = players->registerPlayer(login.name, login.password);
     if (!created.has_value()) {
-        sendTo(client, chess::net::ErrorMsg{players->errorMessage()});
+        failLogin(players->errorMessage());
         return;
     }
     client.playerId = created->id;

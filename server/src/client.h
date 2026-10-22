@@ -27,4 +27,10 @@ struct Client {
     // Time-control string agreed at JoinMsg ("5+3" canonical, or empty =
     // unlimited). Pairing matches only equal strings (11.1).
     std::string timeControl;
+    // Login-throttle bookkeeping (R2): consecutive LoginMsg failures (wrong
+    // password, rejected registration) back off exponentially — armed from
+    // the second failure, 1 s doubling capped at 60 s — until the
+    // connection succeeds or is dropped. Reset on a successful login.
+    int failedLogins = 0;
+    std::chrono::steady_clock::time_point loginLockedUntil{};
 };

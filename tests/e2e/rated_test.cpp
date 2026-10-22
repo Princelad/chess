@@ -4,6 +4,7 @@
 
 #include <atomic>
 #include <filesystem>
+#include <thread>
 #include <variant>
 
 #include <SFML/Network/TcpSocket.hpp>
@@ -490,4 +491,35 @@ TEST_F(RatedE2eTest, TimedGameRatesItsOwnClass)
     ASSERT_TRUE(bAgain.has_value());
     EXPECT_DOUBLE_EQ(bAgain->rating, bProfile->rating);
     EXPECT_DOUBLE_EQ(bAgain->deviation, bProfile->deviation);
+}
+
+TEST_F(RatedE2eTest, LoginThrottleBlocksRapidFailures)
+{
+    // R2: consecutive wrong passwords back off exponentially per connection.
+    auto c = connectClient();
+    sendMsg(c, chess::net::LoginMsg{"Ada", "pw"});
+    ASSERT_TRUE(await<chess::net::ProfileMsg>(c).has_value());
+
+    // Three wrong passwords: failures 2 and 3 set 1 s and 2 s locks, so the
+    // lock held at the fourth attempt is 2 s.
+    for (int i = 0; i < 3; ++i) {
+        sendMsg(c, chess::net::LoginMsg{"Ada", "wrong"});
+        ASSERT_TRUE(await<chess::net::ErrorMsg>(c).has_value());
+    }
+    sendMsg(c, chess::net::LoginMsg{"Ada", "pw"});
+    auto locked = await<chess::net::ErrorMsg>(c);
+    ASSERT_TRUE(locked.has_value());
+    EXPECT_NE(locked->message.find("Too many failed logins"), std::string::npos)
+        << "got: " << locked->message;
+
+    // Once the 2 s lock expires the correct password logs in (and resets
+    // the count — a next failure would start from the 1 s lock again).
+    std::this_thread::sleep_for(2400ms);
+    sendMsg(c, chess::net::LoginMsg{"Ada", "pw"});
+    ASSERT_TRUE(await<chess::net::ProfileMsg>(c).has_value());
+
+    // The throttle is per connection: a fresh connection logs in instantly.
+    auto fresh = connectClient();
+    sendMsg(fresh, chess::net::LoginMsg{"Bob", "pw"});
+    ASSERT_TRUE(await<chess::net::ProfileMsg>(fresh).has_value());
 }

@@ -674,6 +674,9 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
 - [x] **11.8 Chat polish**
   - [x] Timestamps, name colors, per-player mute (client-local only: pure `client/src/chat_log.h` — `chatTimestamp` renders local "HH:MM" via `strftime`; `chatNameColor` picks a light-on-dark palette entry by FNV-1a over the name (own line fixed gold, system lines gray); mute list persists as `chat.muted` CSV in Config, managed from the chat input with `/mute <name>` and `/unmute <name>` slash commands (feedback lands as system lines; unknown commands get a usage line), and incoming `ServerChatMsg` from a muted name never enters the log — zero protocol/server changes)
 
+- [x] **11.9 Login rate limiting (review follow-up R2)**
+  - [x] Per-connection exponential backoff on consecutive `LoginMsg` failures (`server/src/client.h` gains `failedLogins`/`loginLockedUntil`; `handleLogin` refuses attempts inside the lock with "Too many failed logins — try again in N seconds"; wrong passwords and rejected registrations count, success resets; the lock arms from the SECOND failure so a single typo + immediate correct retry stays instant — 1 s doubling, 60 s cap; per connection, so reconnecting sidesteps it by design). E2e `RatedE2eTest.LoginThrottleBlocksRapidFailures` (throttled correct password, expiry + reset, fresh connection unthrottled)
+
 ---
 
 ## Phase 12 — Variants & community
