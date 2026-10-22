@@ -441,6 +441,10 @@ void GameScreen::sendChat()
         while (!name.empty() && (name.back() == ' ' || name.back() == '\t'))
             name.pop_back();
         if ((cmd == "/mute" || cmd == "/unmute") && !name.empty()) {
+            if (!chatMuteNamePersistable(name)) {
+                addSystemChat("That name can't be muted safely");
+                return;
+            }
             const bool muted = chatToggleMute(config, name);
             config.save();
             addSystemChat(name + (muted ? " muted" : " unmuted"));

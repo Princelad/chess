@@ -112,5 +112,23 @@ TEST(ChatMute, CsvParsingSkipsBlanks)
     std::filesystem::remove(path);
 }
 
+// 11.8 audit: a name the INI store would rewrite on reload must never
+// persist — Config::load strips #/; comments, splits on '=' and trims edge
+// blanks, so such a name mutes a different string after a restart. The
+// mute command rejects them at the boundary instead.
+TEST(ChatMute, PersistableNameGate)
+{
+    EXPECT_TRUE(chatMuteNamePersistable("Bot-1"));
+    EXPECT_TRUE(chatMuteNamePersistable("Bot (2)"));
+    EXPECT_FALSE(chatMuteNamePersistable(""));
+    EXPECT_FALSE(chatMuteNamePersistable("Bo#t"));   // comment strip
+    EXPECT_FALSE(chatMuteNamePersistable("Bo;t"));   // comment strip
+    EXPECT_FALSE(chatMuteNamePersistable("Bo=t"));   // key=value split
+    EXPECT_FALSE(chatMuteNamePersistable("[section]"));
+    EXPECT_FALSE(chatMuteNamePersistable("Bo\nt"));  // control char
+    EXPECT_FALSE(chatMuteNamePersistable(" Bo"));    // edge blank, trimmed
+    EXPECT_FALSE(chatMuteNamePersistable("Bo "));    // edge blank, trimmed
+}
+
 } // namespace
 } // namespace chess::client

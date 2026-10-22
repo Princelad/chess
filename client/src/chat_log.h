@@ -59,6 +59,28 @@ inline sf::Color chatNameColor(const std::string& name)
 // muted; a muted line simply never enters this client's log.
 using ChatMuteList = std::vector<std::string>;
 
+// A mute name survives the INI store only when load()'s trim and comment
+// rules keep it byte-identical on reload: '#' or ';' start a comment,
+// '=' splits key/value, '[' opens a section header, control characters
+// and edge blanks are trimmed away. The mute command refuses the rest —
+// a silently persisted-but-different name would mute nothing after a
+// restart (audit hardening).
+inline bool chatMuteNamePersistable(const std::string& name)
+{
+    if (name.empty())
+        return false;
+    if (name.front() == '[' || name.front() == '#' || name.front() == ';')
+        return false;
+    for (unsigned char c : name) {
+        if (c == '#' || c == ';' || c == '=' || c < ' ')
+            return false; // covers '\n', '\r', tabs-as-controls
+    }
+    const char front = name.front(), back = name.back();
+    if (front == ' ' || front == '\t' || back == ' ' || back == '\t')
+        return false;
+    return true;
+}
+
 inline ChatMuteList chatMutedFromConfig(const Config& config)
 {
     ChatMuteList names;
