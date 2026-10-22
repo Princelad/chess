@@ -360,20 +360,30 @@ void Match::applyTakeback(std::size_t requesterIdx)
 {
     if (sanHistory_.size() < 2)
         return; // unreachable: every accept path validated the frame first
-    sanHistory_.resize(sanHistory_.size() - 2);
-    takebackPending_.reset();
 
-    board_ = chess::Board::fromStartPos();
-    for (const auto& san : sanHistory_) {
-        auto move = chess::san::fromSan(board_, san);
+    // Audit hardening: replay the truncated chain on a scratch board BEFORE
+    // touching match state — the old form truncated sanHistory_ and reset
+    // board_ first, so a mid-chain replay failure (corrupt entry in an
+    // in-memory list) would have left the match two plies short with no
+    // TakebackAcceptedMsg sent: a silent desync. Rebuild locally, commit all
+    // three only once the whole replay applies.
+    std::vector<std::string> trimmed(sanHistory_.begin(),
+                                     sanHistory_.end() - 2);
+    chess::Board rebuilt = chess::Board::fromStartPos();
+    for (const auto& san : trimmed) {
+        auto move = chess::san::fromSan(rebuilt, san);
         if (!move.has_value()) {
             // Unreachable: every entry was produced by handleMoveSAN's own
-            // legality checks. Bailing here keeps the corrupt board out.
+            // legality checks. Bailing keeps the corrupt board out entirely.
             LOG_ERROR("Takeback replay failed at " + san);
             return;
         }
-        board_.makeMove(*move);
+        rebuilt.makeMove(*move);
     }
+
+    sanHistory_ = std::move(trimmed);
+    takebackPending_.reset();
+    board_ = std::move(rebuilt);
 
     // Both present seats rebuild from the same list; an absent seat gets
     // nothing and catches up through its resume replay of sanHistory_.
