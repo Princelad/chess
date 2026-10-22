@@ -7,9 +7,9 @@
 #include "log.h"
 #include "server.h"
 
-static std::atomic<bool> running{true};
+static std::atomic<bool> shutdownFlag{false};
 
-static void signalHandler(int) { chess::server::stopServer(running); }
+static void signalHandler(int) { chess::server::stopServer(shutdownFlag); }
 
 static void printUsage(const char* prog)
 {
@@ -90,6 +90,6 @@ int main(int argc, char* argv[])
 
     std::signal(SIGINT, signalHandler);
 
-    auto port = chess::server::runServer(config, running);
+    auto port = chess::server::runServer(config, shutdownFlag);
     return port == 0 ? 1 : 0;
 }
