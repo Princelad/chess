@@ -119,7 +119,7 @@ TEST(Database, SchemaVersionStamp)
     Statement stmt;
     ASSERT_TRUE(stmt.prepare(db.handle(), "PRAGMA user_version"));
     ASSERT_EQ(stmt.step(), Statement::Step::Ready);
-    EXPECT_EQ(stmt.columnInt(0), 2);
+    EXPECT_EQ(stmt.columnInt(0), 3);
 }
 
 TEST(Database, MigrationAddsLastRatedColumn)
@@ -127,18 +127,36 @@ TEST(Database, MigrationAddsLastRatedColumn)
     // Simulate a revision-1 database (pre-10.2 layout), then reopen: the
     // migration must add the column without touching existing rows.
     const auto path = tempPath("migrate");
+    std::filesystem::remove(path); // a prior aborted run leaves rev-1 debris
     {
         Database db;
-        ASSERT_TRUE(db.open(path.string()));
+        if (!db.open(path.string()))
+            GTEST_FAIL() << "first open failed: " << db.errorMessage();
         PlayerStore players(db);
         ASSERT_TRUE(players.registerPlayer("Ada", "pw").has_value());
     }
     // Revision-1 shape: rebuild the players table without last_rated_at and
-    // downgrade the stamp so the next open() re-runs the migration.
+    // downgrade the stamp so the next open() re-runs the migration. The
+    // rebuild keeps the original constraints (CREATE TABLE AS SELECT would
+    // strip the primary key, which the revision-3 seed's FK parser rejects
+    // — real revision-1 files kept theirs, so the sim does too).
     {
         Database db;
         ASSERT_TRUE(db.open(path.string()));
-        ASSERT_TRUE(db.exec("CREATE TABLE players_old AS SELECT id, name, "
+        ASSERT_TRUE(db.exec("CREATE TABLE players_old (\n"
+            "    id INTEGER PRIMARY KEY AUTOINCREMENT,\n"
+            "    name TEXT NOT NULL UNIQUE COLLATE NOCASE,\n"
+            "    password_hash TEXT NOT NULL,\n"
+            "    rating REAL NOT NULL DEFAULT 1500.0,\n"
+            "    rating_deviation REAL NOT NULL DEFAULT 350.0,\n"
+            "    volatility REAL NOT NULL DEFAULT 0.06,\n"
+            "    wins INTEGER NOT NULL DEFAULT 0,\n"
+            "    losses INTEGER NOT NULL DEFAULT 0,\n"
+            "    draws INTEGER NOT NULL DEFAULT 0,\n"
+            "    created_at INTEGER NOT NULL,\n"
+            "    last_seen INTEGER NOT NULL\n"
+            ")"));
+        ASSERT_TRUE(db.exec("INSERT INTO players_old SELECT id, name, "
             "password_hash, rating, rating_deviation, volatility, wins, "
             "losses, draws, created_at, last_seen FROM players"));
         ASSERT_TRUE(db.exec("DROP TABLE players"));
@@ -151,12 +169,19 @@ TEST(Database, MigrationAddsLastRatedColumn)
         Statement stmt;
         ASSERT_TRUE(stmt.prepare(db.handle(), "PRAGMA user_version"));
         ASSERT_EQ(stmt.step(), Statement::Step::Ready);
-        EXPECT_EQ(stmt.columnInt(0), 2);
+        EXPECT_EQ(stmt.columnInt(0), 3);
 
         PlayerStore players(db);
         const auto ada = players.byName("Ada");
         ASSERT_TRUE(ada.has_value());
         EXPECT_EQ(ada->lastRatedAt, 0); // revision-1 rows start un-rated
+        // The revision-3 seed materialized the account's unlimited class
+        // row from the flat columns (factory state for a fresh account).
+        const auto row = players.classRatingFor(ada->id, "");
+        ASSERT_TRUE(row.has_value());
+        EXPECT_EQ(row->ratingClass, "unlimited");
+        EXPECT_DOUBLE_EQ(row->rating, 1500.0);
+        EXPECT_EQ(row->wins, 0);
     }
     std::filesystem::remove(path);
 }

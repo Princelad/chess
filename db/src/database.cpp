@@ -5,12 +5,12 @@
 namespace chess::db {
 namespace {
 
-// Schema revision 2 (phase 10.2): accounts and completed games, with
-// last_rated_at for idle-period deviation growth. Players created before
-// revision 2 get the column added by the migration below (default 0 =
-// never rated). Bump SchemaVersion and extend the migration chain when the
-// layout changes.
-constexpr int SchemaVersion = 2;
+// Schema revision 3 (phase 11.1b): per-rating-class rows keyed by
+// classifyTimeControl ("unlimited"/bullet/blitz/rapid/classical). Revision 2
+// (phase 10.2) brought accounts + completed games and last_rated_at for
+// idle-period deviation growth. Bump SchemaVersion and extend the migration
+// chain when the layout changes.
+constexpr int SchemaVersion = 3;
 
 const char* SchemaSql =
     "CREATE TABLE IF NOT EXISTS players (\n"
@@ -42,7 +42,26 @@ const char* SchemaSql =
     "CREATE INDEX IF NOT EXISTS idx_games_played_at ON games (played_at);\n"
     "CREATE INDEX IF NOT EXISTS idx_games_white ON games (white_id);\n"
     "CREATE INDEX IF NOT EXISTS idx_games_black ON games (black_id);\n"
-    "CREATE INDEX IF NOT EXISTS idx_players_rating ON players (rating);\n";
+    "CREATE INDEX IF NOT EXISTS idx_players_rating ON players (rating);\n"
+    // Per-class Glicko-2 bookkeeping (11.1b). The players table above stays
+    // the legacy flat profile: its rating columns keep mirroring the
+    // "unlimited" class exactly, so the flat wire (ProfileMsg/WelcomeMsg,
+    // leaderboard top-N) and every pre-11.1b reader keep their single-number
+    // meaning without protocol churn.
+    "CREATE TABLE IF NOT EXISTS player_ratings (\n"
+    "    player_id INTEGER NOT NULL REFERENCES players(id),\n"
+    "    class TEXT NOT NULL,\n"
+    "    rating REAL NOT NULL DEFAULT 1500.0,\n"
+    "    rating_deviation REAL NOT NULL DEFAULT 350.0,\n"
+    "    volatility REAL NOT NULL DEFAULT 0.06,\n"
+    "    wins INTEGER NOT NULL DEFAULT 0,\n"
+    "    losses INTEGER NOT NULL DEFAULT 0,\n"
+    "    draws INTEGER NOT NULL DEFAULT 0,\n"
+    "    last_rated_at INTEGER NOT NULL DEFAULT 0,\n"
+    "    UNIQUE (player_id, class)\n"
+    ");\n"
+    "CREATE INDEX IF NOT EXISTS idx_player_ratings_board\n"
+    "    ON player_ratings (class, rating);\n";
 
 } // namespace
 
@@ -217,7 +236,9 @@ bool Database::open(const std::string& path)
     }
 
     // Migration chain: revision 1 databases (existing user files) gain the
-    // last_rated_at column via ALTER; fresh databases just get stamped.
+    // last_rated_at column via ALTER; revision 3 seeds one "unlimited"
+    // per-class row per existing player from their single flat rating; fresh
+    // databases just get stamped.
     const int version = readUserVersion();
     if (version > SchemaVersion) {
         errorMessage_ = "database schema revision " + std::to_string(version)
@@ -228,6 +249,24 @@ bool Database::open(const std::string& path)
     if (version < 2) {
         if (!exec("ALTER TABLE players ADD COLUMN "
                   "last_rated_at INTEGER NOT NULL DEFAULT 0")) {
+            std::string message = errorMessage_;
+            close();
+            errorMessage_ = message;
+            return false;
+        }
+    }
+    if (version < 3) {
+        // Seed per-class rows from the flat columns: every existing account
+        // becomes the owner of an "unlimited" class row that exactly mirrors
+        // the players-table snapshot it came from. Revision-2-and-fresh
+        // accounts created later still read defaults when a class row is
+        // missing, so only the historical population needs this.
+        if (!exec(
+                "INSERT INTO player_ratings (player_id, class, rating, "
+                "rating_deviation, volatility, wins, losses, draws, "
+                "last_rated_at) "
+                "SELECT id, 'unlimited', rating, rating_deviation, volatility, "
+                "wins, losses, draws, COALESCE(last_rated_at, 0) FROM players")) {
             std::string message = errorMessage_;
             close();
             errorMessage_ = message;

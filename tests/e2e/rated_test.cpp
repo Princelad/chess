@@ -443,3 +443,51 @@ TEST_F(RatedE2eTest, ArchiveRequestBeyondClampStillDeserializes)
     EXPECT_TRUE(list->games[0].rated);
 }
 
+
+TEST_F(RatedE2eTest, TimedGameRatesItsOwnClass)
+{
+    // 11.1b: a "5+3" join classifies blitz, so the class rows (not the flat
+    // players mirror) move — and the flat wire still shows them, since there
+    // is no per-class field yet.
+    auto white = connectClient();
+    auto black = connectClient();
+
+    sendMsg(white, chess::net::LoginMsg{"Ada", "pw"});
+    sendMsg(black, chess::net::LoginMsg{"Bob", "pw"});
+    ASSERT_TRUE(await<chess::net::ProfileMsg>(white).has_value());
+    ASSERT_TRUE(await<chess::net::ProfileMsg>(black).has_value());
+
+    sendMsg(white, chess::net::JoinMsg{"Ada", "5+3"});
+    sendMsg(black, chess::net::JoinMsg{"Bob", "5+3"});
+
+    auto wWelcome = await<chess::net::WelcomeMsg>(white);
+    auto bWelcome = await<chess::net::WelcomeMsg>(black);
+    ASSERT_TRUE(wWelcome.has_value());
+    ASSERT_TRUE(bWelcome.has_value());
+    EXPECT_TRUE(wWelcome->rated);
+    // Welcome figures come from the match's class rows (factory: no blitz
+    // history in this fresh database).
+    EXPECT_DOUBLE_EQ(bWelcome->rating, 1500.0);
+    EXPECT_DOUBLE_EQ(bWelcome->deviation, 350.0);
+
+    sendMsg(white, chess::net::ResignMsg{});
+    ASSERT_TRUE(await<chess::net::GameOverMsg>(white).has_value());
+    ASSERT_TRUE(await<chess::net::GameOverMsg>(black).has_value());
+
+    auto wProfile = await<chess::net::ProfileMsg>(white);
+    auto bProfile = await<chess::net::ProfileMsg>(black);
+    ASSERT_TRUE(wProfile.has_value());
+    ASSERT_TRUE(bProfile.has_value());
+    EXPECT_LT(wProfile->rating, 1500.0);
+    EXPECT_GT(bProfile->rating, 1500.0);
+    EXPECT_LT(wProfile->deviation, 350.0);
+
+    // The class figures survive a fresh login AND idle growth (elapsed 0 =
+    // nothing to grow): the newest-rated class supplies the flat display.
+    auto again = connectClient();
+    sendMsg(again, chess::net::LoginMsg{"Bob", "pw"});
+    auto bAgain = await<chess::net::ProfileMsg>(again);
+    ASSERT_TRUE(bAgain.has_value());
+    EXPECT_DOUBLE_EQ(bAgain->rating, bProfile->rating);
+    EXPECT_DOUBLE_EQ(bAgain->deviation, bProfile->deviation);
+}

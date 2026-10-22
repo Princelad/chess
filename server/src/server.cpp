@@ -320,12 +320,14 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
                 LOG_INFO("Game archived (plies=" + std::to_string(match.sanHistory().size()) + ")");
         }
 
-        // Rated update (phase 10.2): both participants must be registered;
-        // guests and bots keep unrated games.
+        // Rated update (phase 10.2, per class since 11.1b): both
+        // participants must be registered; guests and bots keep unrated
+        // games. The time control keys the rating class.
         if (players == nullptr || !white.playerId.has_value()
             || !black.playerId.has_value())
             return;
-        auto update = players->applyRatedGame(*white.playerId, *black.playerId, result);
+        auto update = players->applyRatedGame(*white.playerId, *black.playerId,
+                                              result, match.timeControl());
         if (!update.has_value()) {
             LOG_WARN("Rated update failed: " + players->errorMessage());
             return;
@@ -395,16 +397,23 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
 
         const bool rated = players != nullptr
             && first.playerId.has_value() && second.playerId.has_value();
-        auto opponentRow = [&](const Client& c) -> std::pair<double, double> {
+        auto opponentRow = [&](const Client& c,
+                               const std::string& timeControl)
+            -> std::pair<double, double> {
             if (players != nullptr && c.playerId.has_value()) {
-                auto row = players->byId(*c.playerId);
-                if (row.has_value())
+                // Per class (11.1b): the match's time control selects the
+                // rating figures the opponents see on the welcome line.
+                if (auto row =
+                        players->classRatingFor(*c.playerId, timeControl);
+                    row.has_value())
                     return {row->rating, row->ratingDeviation};
             }
             return {1500.0, 350.0};
         };
-        const auto [firstRating, firstDeviation] = opponentRow(first);
-        const auto [secondRating, secondDeviation] = opponentRow(second);
+        const auto [firstRating, firstDeviation] =
+            opponentRow(first, first.timeControl);
+        const auto [secondRating, secondDeviation] =
+            opponentRow(second, second.timeControl);
         // Stamps the resolved pairing figures onto the seats: welcome and
         // later resume resyncs then agree on the same numbers.
         match->seedRatings({firstRating, firstDeviation}, {secondRating, secondDeviation});

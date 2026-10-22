@@ -213,11 +213,16 @@ TEST(PlayerStore, IdleGrowthGrowsDeviationOnly)
     const double ratedRd = update->white.ratingDeviation;
     ASSERT_LT(ratedRd, 350.0); // one rated period moved RD off the cap
 
-    // Wind the clock back 30 days and grow again on "arrival".
+    // Wind the clock back 30 days and grow again on "arrival". The idle
+    // driver lives in the class row (11.1b) — the players column is the
+    // mirror — so both move together here.
     const int64_t goneBack = update->white.lastRatedAt - 30 * 86400;
     EXPECT_TRUE(db.exec("UPDATE players SET last_rated_at = "
         + std::to_string(goneBack) + " WHERE id = "
         + std::to_string(white->id)));
+    EXPECT_TRUE(db.exec("UPDATE player_ratings SET last_rated_at = "
+        + std::to_string(goneBack) + " WHERE player_id = "
+        + std::to_string(white->id) + " AND class = 'unlimited'"));
     const auto now = static_cast<std::int64_t>(update->white.lastRatedAt) + 300;
 
     const auto fresh = players.applyIdleGrowth(white->id, now);
@@ -255,6 +260,9 @@ TEST(PlayerStore, IdleGrowthCapsAtThreeFiftyAndHandlesEdges)
     const auto ancient = rated->white.lastRatedAt - 5000 * 86400;
     EXPECT_TRUE(db.exec("UPDATE players SET last_rated_at = "
         + std::to_string(ancient) + " WHERE id = " + std::to_string(white->id)));
+    EXPECT_TRUE(db.exec("UPDATE player_ratings SET last_rated_at = "
+        + std::to_string(ancient) + " WHERE player_id = "
+        + std::to_string(white->id) + " AND class = 'unlimited'"));
     fresh = players.applyIdleGrowth(white->id, now);
     ASSERT_TRUE(fresh.has_value());
     EXPECT_DOUBLE_EQ(fresh->ratingDeviation, 350.0);
@@ -355,6 +363,149 @@ TEST(PlayerStore, TopPlayersLimitClampsAndEmptyStore)
     EXPECT_EQ(single[0].name, "Alice");
     EXPECT_TRUE(players.topPlayers(0).empty());
     EXPECT_TRUE(players.topPlayers(-3).empty());
+}
+
+// ── 11.1b per-class ratings ─────────────────────────────────────────────────
+
+TEST(PlayerStore, ClassKeysIsolateBookkeeping)
+{
+    Database db;
+    ASSERT_TRUE(db.open(":memory:"));
+    PlayerStore players(db);
+    const auto white = players.registerPlayer("Ada", "pw");
+    const auto black = players.registerPlayer("Bob", "pw");
+    ASSERT_TRUE(white && black);
+
+    // A blitz win ("5+3" classifies blitz) touches blitz only.
+    const auto update = players.applyRatedGame(
+        white->id, black->id, chess::net::GameResult::WhiteWins, "5+3");
+    ASSERT_TRUE(update.has_value());
+    EXPECT_GT(update->white.rating, 1500.0);
+    EXPECT_LT(update->white.ratingDeviation, 350.0);
+    EXPECT_EQ(update->white.wins, 1);
+
+    const auto whiteBlitz = players.classRatingFor(white->id, "5+3");
+    ASSERT_TRUE(whiteBlitz.has_value());
+    EXPECT_EQ(whiteBlitz->ratingClass, "blitz");
+    EXPECT_DOUBLE_EQ(whiteBlitz->rating, update->white.rating);
+    EXPECT_DOUBLE_EQ(whiteBlitz->ratingDeviation, update->white.ratingDeviation);
+    EXPECT_EQ(whiteBlitz->wins, 1);
+    EXPECT_GT(whiteBlitz->lastRatedAt, 0);
+
+    // The unlimited class row does not exist and the flat players mirror is
+    // untouched: blitz figures never bleed into either.
+    auto whiteUnlimited = players.classRatingFor(white->id, "");
+    ASSERT_TRUE(whiteUnlimited.has_value());
+    EXPECT_EQ(whiteUnlimited->ratingClass, "unlimited");
+    EXPECT_DOUBLE_EQ(whiteUnlimited->rating, 1500.0);
+    EXPECT_DOUBLE_EQ(whiteUnlimited->ratingDeviation, 350.0);
+    EXPECT_EQ(whiteUnlimited->wins, 0);
+    const auto whiteFlat = players.byId(white->id).value();
+    EXPECT_DOUBLE_EQ(whiteFlat.rating, 1500.0);
+    EXPECT_DOUBLE_EQ(whiteFlat.ratingDeviation, 350.0);
+    EXPECT_EQ(whiteFlat.wins, 0);
+}
+
+TEST(PlayerStore, UnlimitedKeepsMirroringFlatColumns)
+{
+    Database db;
+    ASSERT_TRUE(db.open(":memory:"));
+    PlayerStore players(db);
+    const auto white = players.registerPlayer("Ada", "pw");
+    const auto black = players.registerPlayer("Bob", "pw");
+    ASSERT_TRUE(white && black);
+
+    const auto update = players.applyRatedGame(
+        white->id, black->id, chess::net::GameResult::WhiteWins, "");
+    ASSERT_TRUE(update.has_value());
+
+    // The explicit "unlimited" class row exists next to the legacy mirror
+    // and both hold the very same figures (10.2 behavior preserved exactly).
+    const auto row = players.classRatingFor(white->id, "");
+    const auto flat = players.byId(white->id);
+    ASSERT_TRUE(row && flat);
+    EXPECT_EQ(row->ratingClass, "unlimited");
+    EXPECT_DOUBLE_EQ(row->rating, flat->rating);
+    EXPECT_DOUBLE_EQ(row->ratingDeviation, flat->ratingDeviation);
+    EXPECT_EQ(row->wins, flat->wins);
+    EXPECT_EQ(row->lastRatedAt, flat->lastRatedAt);
+    // Unparsable strings classify unlimited, matching the wire canonicalizer.
+    auto junk = players.classRatingFor(white->id, "5+a");
+    ASSERT_TRUE(junk.has_value());
+    EXPECT_EQ(junk->ratingClass, "unlimited");
+}
+
+TEST(PlayerStore, MigrationSeedsUnlimitedRowFromFlatColumns)
+{
+    // Build a rev-2-shaped file state: a real DB file with an unlimited
+    // rated game already mirror-written, then pretend the class table did
+    // not exist yet (delete rows + stamp user_version 2). The next open()
+    // runs the 3-migration and re-seeds every account's unlimited row.
+    const auto path = tempPath("migration_seed");
+    std::filesystem::remove(path); // a prior aborted run leaves debris
+    std::int64_t whiteId = 0;
+    double mirrorRating = 0.0;
+    {
+        Database db;
+        ASSERT_TRUE(db.open(path.string()));
+        PlayerStore players(db);
+        const auto white = players.registerPlayer("Ada", "pw");
+        const auto black = players.registerPlayer("Bob", "pw");
+        ASSERT_TRUE(white && black);
+        whiteId = white->id;
+        const auto update = players.applyRatedGame(
+            whiteId, black->id, chess::net::GameResult::WhiteWins);
+        ASSERT_TRUE(update.has_value());
+        mirrorRating = update->white.rating;
+    }
+    {
+        Database db;
+        ASSERT_TRUE(db.open(path.string()));
+        ASSERT_TRUE(db.exec("DELETE FROM player_ratings"));
+        ASSERT_TRUE(db.exec("PRAGMA user_version = 2"));
+    }
+    {
+        Database db;
+        ASSERT_TRUE(db.open(path.string()));
+        PlayerStore players(db);
+        const auto row = players.classRatingFor(whiteId, "");
+        ASSERT_TRUE(row.has_value());
+        EXPECT_EQ(row->ratingClass, "unlimited");
+        EXPECT_DOUBLE_EQ(row->rating, mirrorRating)
+            << "seed copies the flat mirror verbatim";
+        EXPECT_EQ(row->wins, 1);
+        EXPECT_GT(row->lastRatedAt, 0);
+    }
+    std::filesystem::remove(path);
+}
+
+TEST(PlayerStore, IdleGrowthPerClassIndependently)
+{
+    Database db;
+    ASSERT_TRUE(db.open(":memory:"));
+    PlayerStore players(db);
+    const auto white = players.registerPlayer("Ada", "pw");
+    const auto black = players.registerPlayer("Bob", "pw");
+    ASSERT_TRUE(white && black);
+
+    // One blitz game only: the blitz row idles afterwards, the flat mirror
+    // (no unlimited history at all) stays factory.
+    const auto blitz = players.applyRatedGame(
+        white->id, black->id, chess::net::GameResult::WhiteWins, "1+0");
+    ASSERT_TRUE(blitz.has_value());
+    ASSERT_LT(blitz->white.ratingDeviation, 350.0);
+
+    const auto grown = players.applyIdleGrowth(
+        white->id, blitz->white.lastRatedAt + 3 * 86400);
+    ASSERT_TRUE(grown.has_value());
+    // Idle growth still touches RD only.
+    EXPECT_GT(grown->ratingDeviation, blitz->white.ratingDeviation);
+    EXPECT_EQ(grown->rating, blitz->white.rating);
+    // The flat-wire display follows the newest-rated class: blitz here.
+    EXPECT_EQ(grown->wins, 1);
+    const auto flat = players.byId(white->id).value();
+    EXPECT_DOUBLE_EQ(flat.rating, 1500.0) << "mirror untouched by blitz";
+    EXPECT_EQ(flat.wins, 0);
 }
 
 } // namespace

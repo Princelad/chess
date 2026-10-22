@@ -12,8 +12,10 @@
 namespace chess::db {
 
 // A registered account. The rating columns already carry the Glicko-2
-// defaults; phase 10.2 fills them on completed rated games. Guests never get
-// rows in this table — games reference them by name only.
+// defaults; phase 10.2 filled them on completed rated games; since 11.1b
+// they mirror the "unlimited" class row exactly (per-class truth lives in
+// the player_ratings table). Guests never get rows in this table — games
+// reference them by name only.
 struct Player {
     std::int64_t id = 0;
     std::string name;
@@ -27,6 +29,21 @@ struct Player {
     std::int64_t lastSeen = 0;
     // Unix time of the last rated game (0 = never rated), feeding idle-period
     // deviation growth on the next login.
+    std::int64_t lastRatedAt = 0;
+};
+
+// One rating class's bookkeeping (11.1b), keyed by classifyTimeControl
+// ("unlimited"/bullet/blitz/rapid/classical). A missing row reads as the
+// factory defaults — accounts own rows only for classes they actually rated.
+struct ClassRating {
+    std::int64_t playerId = 0;
+    std::string ratingClass;
+    double rating = 1500.0;
+    double ratingDeviation = 350.0;
+    double volatility = 0.06;
+    int wins = 0;
+    int losses = 0;
+    int draws = 0;
     std::int64_t lastRatedAt = 0;
 };
 
@@ -58,25 +75,45 @@ public:
     // Applies one completed rated game atomically: both rows are read,
     // Glicko-2 updates them in one transaction, and wins/losses/draws counters
     // move with the result. Only WhiteWins/BlackWins/Draw are rated.
-    // Returns post-update snapshots of both players; std::nullopt when the
-    // result is not rated or a player id does not exist.
-    std::optional<RatedUpdate> applyRatedGame(
-        std::int64_t whiteId, std::int64_t blackId, chess::net::GameResult result);
+    // Since 11.1b the update is keyed to the rating class of the game's
+    // time control string (classifyTimeControl; empty = "unlimited") — each
+    // class rates independently in the player_ratings table, and the
+    // "unlimited" class additionally keeps the legacy players-table columns
+    // mirrored (that mirror is what the flat wire and old readers see).
+    // Returns
+    // post-update snapshots of both players (rating figures from the game's
+    // class); std::nullopt when the result is not rated or a player id does
+    // not exist.
+    std::optional<RatedUpdate> applyRatedGame(std::int64_t whiteId,
+        std::int64_t blackId, chess::net::GameResult result,
+        const std::string& timeControl = {});
 
-    // Applies Glicko-2 idle-period deviation growth (10.2): one growth step
-    // per full rating period (day) since last_rated_at, capped at 5000
-    // periods (≈13.7 years of absence per login pass) and an RD of 350. Rating and volatility are untouched. Returns the
-    // fresh row (whether or not anything grew); std::nullopt when the id is
-    // unknown or a statement fails. Players never rated grow nothing — their
-    // RD already sits at the cap.
+    // Per-class rating read (11.1b): the exact row for the class the time
+    // control classifies into, factory defaults when the player has not
+    // rated there yet. Used by the server to stamp match ratings and the
+    // richer WelcomeMsg with figures matching the game about to be played.
+    std::optional<ClassRating> classRatingFor(
+        std::int64_t playerId, const std::string& timeControl);
+
+    // Applies Glicko-2 idle-period deviation growth (10.2, extended 11.1b):
+    // each class row the player owns grows independently — one growth step
+    // per full rating period (day) since that row's last_rated_at, capped at
+    // 5000 periods (≈13.7 years of absence per login pass) and an RD of 350.
+    // Rating and volatility are untouched. Returns the fresh players row with
+    // the FLAT-WIRE display figures: the newest-rated class supplies
+    // rating/deviation/counters (the login ProfileMsg has no time control to
+    // resolve a class with), falling back to the mirrored "unlimited" row
+    // when nothing was ever rated in any class. std::nullopt when the id is
+    // unknown or a statement fails.
     std::optional<Player> applyIdleGrowth(std::int64_t playerId, std::int64_t now);
 
     // Top-N accounts by rating for the leaderboard (10.4). Only accounts that
     // finished at least minGames rated games are listed — fresh accounts sit
     // at the factory 1500 ± 350 and would bury real players otherwise.
     // Ordered by rating descending, name ascending (deterministic tie-break);
-    // limit <= 0 yields an empty list. The single "unlimited" rating class is
-    // served here; per-time-control boards wait for 11.1 clocks.
+    // limit <= 0 yields an empty list. The flat leaderboard (10.4, wire has
+    // no class field yet) serves the mirrored "unlimited" class; per-class
+    // boards wait for the phase 12 wire.
     std::vector<Player> topPlayers(int limit, int minGames = 1);
 
     const std::string& errorMessage() const { return errorMessage_; }

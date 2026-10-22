@@ -2,6 +2,7 @@
 
 #include <chess/db/auth.h>
 #include <chess/db/glicko2.h>
+#include <chess/db/rating_class.h>
 
 namespace chess::db {
 
@@ -10,6 +11,10 @@ namespace {
 constexpr const char* SelectColumns =
     "SELECT id, name, rating, rating_deviation, volatility, "
     "wins, losses, draws, created_at, last_seen, last_rated_at FROM players";
+
+constexpr const char* SelectClassColumns =
+    "SELECT player_id, class, rating, rating_deviation, volatility, "
+    "wins, losses, draws, last_rated_at FROM player_ratings";
 
 // One idle rating period = one day (Glicko-2 periods are arbitrary; daily is
 // the usual server convention). Glickman's no-game period grows RD by
@@ -143,6 +148,43 @@ std::optional<Player> PlayerStore::rowBy(Statement& stmt)
     return player;
 }
 
+std::optional<ClassRating> PlayerStore::classRatingFor(
+    std::int64_t playerId, const std::string& timeControl)
+{
+    errorMessage_.clear();
+    const std::string ratingClass = classifyTimeControl(timeControl);
+
+    Statement stmt;
+    if (!stmt.prepare(db_.handle(),
+            std::string(SelectClassColumns)
+            + " WHERE player_id = ? AND class = ?")
+        || !stmt.bind(1, playerId) || !stmt.bind(2, ratingClass)) {
+        errorMessage_ = stmt.errorMessage();
+        return std::nullopt;
+    }
+    auto step = stmt.step();
+    if (step == Statement::Step::Error) {
+        errorMessage_ = stmt.errorMessage();
+        return std::nullopt;
+    }
+    if (step == Statement::Step::Done) {
+        // No rated history in this class: factory defaults (11.1b keeps
+        // missing rows implicit instead of materializing them).
+        return ClassRating{playerId, ratingClass};
+    }
+    ClassRating row;
+    row.playerId = stmt.columnInt64(0);
+    row.ratingClass = stmt.columnText(1);
+    row.rating = stmt.columnDouble(2);
+    row.ratingDeviation = stmt.columnDouble(3);
+    row.volatility = stmt.columnDouble(4);
+    row.wins = stmt.columnInt(5);
+    row.losses = stmt.columnInt(6);
+    row.draws = stmt.columnInt(7);
+    row.lastRatedAt = stmt.columnInt64(8);
+    return row;
+}
+
 void PlayerStore::scanRow(const Statement& stmt, Player& player)
 {
     player.id = stmt.columnInt64(0);
@@ -185,7 +227,8 @@ std::vector<Player> PlayerStore::topPlayers(int limit, int minGames)
 }
 
 std::optional<RatedUpdate> PlayerStore::applyRatedGame(
-    std::int64_t whiteId, std::int64_t blackId, chess::net::GameResult result)
+    std::int64_t whiteId, std::int64_t blackId, chess::net::GameResult result,
+    const std::string& timeControl)
 {
     errorMessage_.clear();
 
@@ -199,6 +242,8 @@ std::optional<RatedUpdate> PlayerStore::applyRatedGame(
             errorMessage_ = "game result is not rateable";
             return std::nullopt;
     }
+
+    const std::string ratingClass = classifyTimeControl(timeControl);
 
     // One transaction covers both reads and both writes so a game can never
     // be half-rated when the server dies mid-update.
@@ -216,57 +261,127 @@ std::optional<RatedUpdate> PlayerStore::applyRatedGame(
             : "white player for rated game not found";
         return std::nullopt;
     }
+    auto whiteClass = classRatingFor(whiteId, timeControl);
+    auto blackClass = classRatingFor(blackId, timeControl);
+    if (!whiteClass.has_value() || !blackClass.has_value()) {
+        errorMessage_ = "rating class row lookup failed";
+        return std::nullopt;
+    }
 
-    // Both sides read pre-period (pre-update) values, per the paper.
+    // Both sides read pre-period (pre-update) values, per the paper — now
+    // per class (11.1b): a blitz game rates blitz bookkeeping only.
     const auto whitePrime = applyGames(
-        Glicko2 {white->rating, white->ratingDeviation, white->volatility},
-        {{black->rating, black->ratingDeviation, whiteScore}});
+        Glicko2 {whiteClass->rating, whiteClass->ratingDeviation,
+                 whiteClass->volatility},
+        {{blackClass->rating, blackClass->ratingDeviation, whiteScore}});
     const auto blackPrime = applyGames(
-        Glicko2 {black->rating, black->ratingDeviation, black->volatility},
-        {{white->rating, white->ratingDeviation, 1.0 - whiteScore}});
+        Glicko2 {blackClass->rating, blackClass->ratingDeviation,
+                 blackClass->volatility},
+        {{whiteClass->rating, whiteClass->ratingDeviation, 1.0 - whiteScore}});
 
-    Statement stmt;
-    if (!stmt.prepare(db_.handle(),
+    // Upserts the fresh figures into the class row (rows are sparse: a
+    // first game in a class materializes it).
+    Statement upsert;
+    if (!upsert.prepare(db_.handle(),
+            "INSERT INTO player_ratings (player_id, class, rating, "
+            "rating_deviation, volatility, wins, losses, draws, last_rated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(player_id, class) DO UPDATE SET "
+            "rating = excluded.rating, "
+            "rating_deviation = excluded.rating_deviation, "
+            "volatility = excluded.volatility, wins = excluded.wins, "
+            "losses = excluded.losses, draws = excluded.draws, "
+            "last_rated_at = excluded.last_rated_at")) {
+        errorMessage_ = upsert.errorMessage();
+        return std::nullopt;
+    }
+
+    // Legacy players-table mirror (only the "unlimited" class writes it):
+    // the flat wire (ProfileMsg/WelcomeMsg) and topPlayers keep their
+    // pre-11.1b single-number meaning.
+    Statement mirror;
+    if (ratingClass == "unlimited"
+        && !mirror.prepare(db_.handle(),
             "UPDATE players SET rating = ?, rating_deviation = ?, "
             "volatility = ?, wins = ?, losses = ?, draws = ?, "
             "last_rated_at = ? WHERE id = ?")) {
-        errorMessage_ = stmt.errorMessage();
+        errorMessage_ = mirror.errorMessage();
         return std::nullopt;
     }
-    const std::int64_t now = nowSeconds();
-    for (Player* updated : {&*white, &*black}) {
-        const bool whiteSide = updated->id == white->id;
-        const double score = whiteSide ? whiteScore : 1.0 - whiteScore;
-        const int wins = updated->wins + (score == 1.0 ? 1 : 0);
-        const int losses = updated->losses + (score == 0.0 ? 1 : 0);
-        const int draws = updated->draws + (score == 0.5 ? 1 : 0);
-        const auto glicko = whiteSide ? whitePrime : blackPrime;
 
-        stmt.reset();
-        if (!stmt.bind(1, glicko.rating) || !stmt.bind(2, glicko.deviation)
-            || !stmt.bind(3, glicko.volatility) || !stmt.bind(4, std::int64_t(wins))
-            || !stmt.bind(5, std::int64_t(losses))
-            || !stmt.bind(6, std::int64_t(draws))
-            || !stmt.bind(7, now)
-            || !stmt.bind(8, updated->id)
-            || stmt.step() != Statement::Step::Done) {
-            errorMessage_ = stmt.errorMessage();
+    const std::int64_t now = nowSeconds();
+    ClassRating* classRows[2] = {&*whiteClass, &*blackClass};
+    const Player* identity[2] = {&*white, &*black};
+    const Glicko2 glicko[2] = {whitePrime, blackPrime};
+    ClassRating updated[2];
+
+    for (int side = 0; side < 2; ++side) {
+        ClassRating& row = *classRows[side];
+        const double score = side == 0 ? whiteScore : 1.0 - whiteScore;
+        row.wins += score == 1.0 ? 1 : 0;
+        row.losses += score == 0.0 ? 1 : 0;
+        row.draws += score == 0.5 ? 1 : 0;
+        row.rating = glicko[side].rating;
+        row.ratingDeviation = glicko[side].deviation;
+        row.volatility = glicko[side].volatility;
+        row.lastRatedAt = now;
+        updated[side] = row;
+
+        upsert.reset();
+        if (!upsert.bind(1, row.playerId) || !upsert.bind(2, row.ratingClass)
+            || !upsert.bind(3, row.rating)
+            || !upsert.bind(4, row.ratingDeviation)
+            || !upsert.bind(5, row.volatility)
+            || !upsert.bind(6, std::int64_t(row.wins))
+            || !upsert.bind(7, std::int64_t(row.losses))
+            || !upsert.bind(8, std::int64_t(row.draws))
+            || !upsert.bind(9, row.lastRatedAt)
+            || upsert.step() != Statement::Step::Done) {
+            errorMessage_ = upsert.errorMessage();
             return std::nullopt;
         }
-        updated->rating = glicko.rating;
-        updated->ratingDeviation = glicko.deviation;
-        updated->volatility = glicko.volatility;
-        updated->wins = wins;
-        updated->losses = losses;
-        updated->draws = draws;
-        updated->lastRatedAt = now;
+
+        if (ratingClass == "unlimited") {
+            const Player& player = *identity[side];            mirror.reset();
+            if (!mirror.bind(1, row.rating)
+                || !mirror.bind(2, row.ratingDeviation)
+                || !mirror.bind(3, row.volatility)
+                || !mirror.bind(4, std::int64_t(row.wins))
+                || !mirror.bind(5, std::int64_t(row.losses))
+                || !mirror.bind(6, std::int64_t(row.draws))
+                || !mirror.bind(7, now)
+                || !mirror.bind(8, player.id)
+                || mirror.step() != Statement::Step::Done) {
+                errorMessage_ = mirror.errorMessage();
+                return std::nullopt;
+            }
+        }
     }
 
     if (!tx.commit()) {
         errorMessage_ = db_.errorMessage();
         return std::nullopt;
     }
-    return RatedUpdate {*white, *black};
+    // Post-update snapshots: the game's class carries the rating figures;
+    // name comes from the players row.
+    RatedUpdate out;
+    out.white = *identity[0];
+    out.white.rating = updated[0].rating;
+    out.white.ratingDeviation = updated[0].ratingDeviation;
+    out.white.volatility = updated[0].volatility;
+    out.white.wins = updated[0].wins;
+    out.white.losses = updated[0].losses;
+    out.white.draws = updated[0].draws;
+    out.white.lastRatedAt = updated[0].lastRatedAt;
+    out.black = *identity[1];
+    out.black.rating = updated[1].rating;
+    out.black.ratingDeviation = updated[1].ratingDeviation;
+    out.black.volatility = updated[1].volatility;
+    out.black.wins = updated[1].wins;
+    out.black.losses = updated[1].losses;
+    out.black.draws = updated[1].draws;
+    out.black.lastRatedAt = updated[1].lastRatedAt;
+    return out;
 }
 
 std::optional<Player> PlayerStore::applyIdleGrowth(
@@ -279,44 +394,133 @@ std::optional<Player> PlayerStore::applyIdleGrowth(
         return std::nullopt;
     }
 
-    // Never-rated players already sit at the RD cap: growth is a no-op, not
-    // an error (their "last period" is undefined until a first rated game).
-    if (player->lastRatedAt <= 0)
-        return player;
-
-    std::int64_t elapsed = now - player->lastRatedAt;
-    if (elapsed <= 0)
-        return player;
-
-    int periods = static_cast<int>(elapsed / RatingPeriodSec);
-    if (periods <= 0)
-        return player;
-    if (periods > MaxIdlePeriods)
-        periods = MaxIdlePeriods;
-
-    Glicko2 glicko {player->rating, player->ratingDeviation, player->volatility};
-    const double before = glicko.deviation;
-    // Every idle step already converges to the 350 cap; the break keeps an
-    // idle decade from spinning 100 pointless iterations.
-    for (int i = 0; i < periods && glicko.deviation < 350.0; ++i)
-        glicko = applyGames(glicko, {});
-    if (glicko.deviation == before)
-        return player;
-
-    Statement stmt;
-    if (!stmt.prepare(db_.handle(),
-            "UPDATE players SET rating = ?, rating_deviation = ?, "
-            "volatility = ? WHERE id = ?")
-        || !stmt.bind(1, glicko.rating) || !stmt.bind(2, glicko.deviation)
-        || !stmt.bind(3, glicko.volatility) || !stmt.bind(4, playerId)
-        || stmt.step() != Statement::Step::Done) {
-        errorMessage_ = stmt.errorMessage();
+    // Per class (11.1b): every owned row idles independently. One query
+    // scans the (sparse) class rows for the player while a second statement
+    // writes grown rows back.
+    constexpr const char* ClassQuery =
+        "SELECT rating, rating_deviation, volatility, class, last_rated_at, "
+        "wins, losses, draws FROM player_ratings WHERE player_id = ?";
+    Statement query;
+    Statement write;
+    const bool twoStatements =
+        query.prepare(db_.handle(), ClassQuery)
+        && write.prepare(db_.handle(),
+            "UPDATE player_ratings SET rating = ?, rating_deviation = ?, "
+            "volatility = ?, last_rated_at = ? WHERE player_id = ? AND class = ?");
+    if (!twoStatements) {
+        errorMessage_ = query.errorMessage().empty() ? write.errorMessage()
+                                                     : query.errorMessage();
         return std::nullopt;
     }
 
-    player->rating = glicko.rating;
-    player->ratingDeviation = glicko.deviation;
-    player->volatility = glicko.volatility;
+    // The flat wire has no class field, so the login profile shows the
+    // newest-rated class's figures; unlimited rows additionally mirror into
+    // the legacy players columns. Track the freshest row while growing.
+    std::int64_t newestTime = -1;
+    ClassRating newestRow;
+    bool unlimitedGrew = false;
+    Glicko2 unlimitedAfter {};
+
+    if (!query.bind(1, playerId)) {
+        errorMessage_ = query.errorMessage();
+        return std::nullopt;
+    }
+    while (query.step() == Statement::Step::Ready) {
+        ClassRating row;
+        row.playerId = playerId;
+        row.rating = query.columnDouble(0);
+        row.ratingDeviation = query.columnDouble(1);
+        row.volatility = query.columnDouble(2);
+        row.ratingClass = query.columnText(3);
+        row.lastRatedAt = query.columnInt64(4);
+        row.wins = query.columnInt(5);
+        row.losses = query.columnInt(6);
+        row.draws = query.columnInt(7);
+
+        const bool isUnlimited = row.ratingClass == "unlimited";
+        double afterRating = row.rating;
+        if (row.lastRatedAt > 0) {
+            std::int64_t elapsed = now - row.lastRatedAt;
+            if (elapsed > 0) {
+                int periods = static_cast<int>(elapsed / RatingPeriodSec);
+                if (periods > 0) {
+                    if (periods > MaxIdlePeriods)
+                        periods = MaxIdlePeriods;
+                    Glicko2 glicko {row.rating, row.ratingDeviation,
+                                    row.volatility};
+                    // Every idle step already converges to the 350 cap; the
+                    // break keeps an idle decade from spinning 100 pointless
+                    // iterations.
+                    for (int i = 0; i < periods && glicko.deviation < 350.0;
+                         ++i)
+                        glicko = applyGames(glicko, {});
+                    afterRating = glicko.rating;
+                    if (glicko.deviation != row.ratingDeviation
+                        || glicko.rating != row.rating
+                        || glicko.volatility != row.volatility) {
+                        write.reset();
+                        if (!write.bind(1, glicko.rating)
+                            || !write.bind(2, glicko.deviation)
+                            || !write.bind(3, glicko.volatility)
+                            || !write.bind(4, now)
+                            || !write.bind(5, playerId)
+                            || !write.bind(6, row.ratingClass)
+                            || write.step() != Statement::Step::Done) {
+                            errorMessage_ = write.errorMessage();
+                            return std::nullopt;
+                        }
+                        row.rating = glicko.rating;
+                        row.ratingDeviation = glicko.deviation;
+                        row.volatility = glicko.volatility;
+                        row.lastRatedAt = now;
+                        if (isUnlimited) {
+                            unlimitedGrew = true;
+                            unlimitedAfter = glicko;
+                        }
+                    }
+                }
+            }
+        }
+        if (row.lastRatedAt > newestTime) {
+            newestTime = row.lastRatedAt;
+            newestRow = row;
+        }
+    }
+    if (!query.errorMessage().empty()) {
+        errorMessage_ = query.errorMessage();
+        return std::nullopt;
+    }
+
+    if (unlimitedGrew) {
+        // The legacy mirror follows the unlimited class row: same figures,
+        // same freshness, so flat-wire readers (topPlayers) keep honest
+        // numbers without any wire change.
+        Statement legacy;
+        if (!legacy.prepare(db_.handle(),
+                "UPDATE players SET rating = ?, rating_deviation = ?, "
+                "volatility = ?, last_rated_at = ? WHERE id = ?")
+            || !legacy.bind(1, unlimitedAfter.rating)
+            || !legacy.bind(2, unlimitedAfter.deviation)
+            || !legacy.bind(3, unlimitedAfter.volatility)
+            || !legacy.bind(4, now)
+            || !legacy.bind(5, playerId)
+            || legacy.step() != Statement::Step::Done) {
+            errorMessage_ = legacy.errorMessage();
+            return std::nullopt;
+        }
+    }
+
+    // Flat display: the newest-rated class's figures land on the returned
+    // Player (its own last_rated_at included), identity from the players row.
+    if (newestTime >= 0) {
+        player->rating = newestRow.rating;
+        player->ratingDeviation = newestRow.ratingDeviation;
+        player->volatility = newestRow.volatility;
+        player->wins = newestRow.wins;
+        player->losses = newestRow.losses;
+        player->draws = newestRow.draws;
+        player->lastRatedAt = newestRow.lastRatedAt;
+    }
     return player;
 }
 
