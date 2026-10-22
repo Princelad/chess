@@ -186,8 +186,13 @@ static void handleLogin(Client& client, const chess::net::LoginMsg& login,
         // password must stay instant. The backoff arms from the second
         // consecutive failure (1 s doubling, 60 s cap).
         if (client.failedLogins >= 2) {
+            // Clamp the exponent before shifting: the failure count is
+            // unbounded, so the raw shift would run past int width (UB) on a
+            // spammed connection — six steps of doubling (64 s) already hit
+            // the 60 s cap, so nothing past six can be distinguishing anyway.
+            const int exponent = std::min(client.failedLogins - 2, 6);
             const auto stepMs = std::min<std::int64_t>(
-                1000 << (client.failedLogins - 2), 60000);
+                std::int64_t(1000) << exponent, 60000);
             client.loginLockedUntil = std::chrono::steady_clock::now()
                 + std::chrono::milliseconds(stepMs);
         }
