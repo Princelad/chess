@@ -631,7 +631,8 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
 
 **Goal:** smoother, friendlier online play.
 
-**Exit version:** `v1.4.0`
+**Exit version:** `v1.4.0` — clocks, reconnect/resume, premove, ECO names,
+takeback, rematch, chat polish, per-class ratings, login throttling
 
 - [x] **11.1 Chess clocks**
   - [x] Protocol: remaining-time synced with every MOVE broadcast (`JoinMsg.timeControl` + `WelcomeMsg.timeControl` carry the "m+s" strings, empty = unlimited; `ServerMoveMsg.remainingMs` carries the on-move player's fresh remaining; `GameOverReason::Timeout` appended last — parser promoted to `chess::net::parseTimeControl` in messages.h, malformed = unlimited)
