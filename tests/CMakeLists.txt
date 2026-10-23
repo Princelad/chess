@@ -60,9 +60,12 @@ if(BUILD_TESTING)
         e2e/reconnect_test.cpp
         e2e/takeback_test.cpp
         e2e/rematch_test.cpp
-        e2e/chess960_test.cpp)
+        e2e/chess960_test.cpp
+        client/puzzle_test.cpp)
 
     target_link_libraries(chess-tests PRIVATE chesscore chessnet chessclient chessserver chessuci chessdb GTest::gtest_main)
+    target_compile_definitions(chess-tests PRIVATE
+        CHESS_ASSETS_DIR="${CMAKE_SOURCE_DIR}/assets")
 
     include(GoogleTest)
     gtest_discover_tests(chess-tests PROPERTIES

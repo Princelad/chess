@@ -375,4 +375,60 @@ std::optional<Board> replayMoves(const std::vector<Move>& moves,
     return board;
 }
 
+std::vector<PgnGame> parsePgnMulti(std::string_view pgn)
+{
+    std::vector<PgnGame> games;
+
+    std::string chunk;
+    bool sawMovetext = false;
+
+    auto flush = [&] {
+        if (chunk.find_first_not_of(" \t\r\n") == std::string::npos) {
+            chunk.clear();
+            sawMovetext = false;
+            return;
+        }
+        // Best-effort parsing: a malformed game is skipped, the file lives on.
+        if (auto game = parsePgn(chunk))
+            games.push_back(std::move(*game));
+        chunk.clear();
+        sawMovetext = false;
+    };
+
+    std::string_view remaining = pgn;
+    while (!remaining.empty()) {
+        auto lineEnd = remaining.find('\n');
+        std::string_view line = (lineEnd == std::string_view::npos)
+            ? remaining
+            : remaining.substr(0, lineEnd);
+
+        auto trimStart = line.find_first_not_of(" \t\r");
+        const bool headerLine = trimStart != std::string_view::npos
+            && line[trimStart] == '[';
+        const bool movetextLine = trimStart != std::string_view::npos
+            && !headerLine;
+
+        if (headerLine && sawMovetext) {
+            // A header block after movetext has begun: that is the start of
+            // the next game.
+            flush();
+        }
+
+        if (movetextLine)
+            sawMovetext = true;
+
+        chunk.append(line);
+        chunk += '\n';
+
+        if (lineEnd != std::string_view::npos)
+            remaining = remaining.substr(lineEnd + 1);
+        else
+            break;
+    }
+    flush();
+
+    return games;
+}
+
 } // namespace chess
+

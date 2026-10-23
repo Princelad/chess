@@ -19,6 +19,8 @@ src/connection.cpp
     src/screens/history_screen.cpp
     src/screens/leaderboard_screen.cpp
     src/screens/local_game_screen.cpp
+    src/screens/puzzle_screen.cpp
+    src/puzzles.cpp
     src/screens/analysis_screen.cpp
     src/screens/hud.cpp)
 target_include_directories(chessclient PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)

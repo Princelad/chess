@@ -693,9 +693,9 @@ takeback, rematch, chat polish, per-class ratings, login throttling
   - [x] Protocol: `VARIANT` field in JOIN/WELCOME; server-side option
   - [x] Perft spot-checks against known FRC positions
 
-- [ ] **12.2 Puzzle mode**
-  - [ ] Offline mate-in-N set loaded from a bundled PGN file
-  - [ ] Hints/solution reveal; streak counter (uses the 9.1 menu entry)
+- [x] **12.2 Puzzle mode**
+  - [x] Offline mate-in-N set loaded from a bundled PGN file
+  - [x] Hints/solution reveal; streak counter (uses the 9.1 menu entry)
 
 - [ ] **12.3 Arena tournaments**
   - [ ] Server periodically pairs all queued players; standings broadcast
