@@ -164,43 +164,54 @@ void genSliding(Square from, Color color, const Board& board, MoveFilter filter,
     }
 }
 
-constexpr Square kingHome(Color color) { return color == Color::White ? 4 : 116; }
-constexpr Square rookHomeKs(Color color) { return color == Color::White ? 7 : 119; }
-constexpr Square rookHomeQs(Color color) { return color == Color::White ? 0 : 112; }
-constexpr Square kingDestKs(Color color) { return color == Color::White ? 6 : 118; }
-constexpr Square kingDestQs(Color color) { return color == Color::White ? 2 : 114; }
 constexpr CastlingRights ksRight(Color color) { return color == Color::White ? WhiteKingSide : BlackKingSide; }
 constexpr CastlingRights qsRight(Color color) { return color == Color::White ? WhiteQueenSide : BlackQueenSide; }
 
-bool squaresEmpty(const Board& board, Square from, Square to)
+// Chess960 castling is a simultaneous king/rook jump: the king finishes on the
+// g/c-file and the rook on the f/d-file of the same rank, whichever square they
+// started on. Emptiness rule (X-FEN/FRC): every square on the king's path
+// (origin excluded, destination included) and the rook's path (same) must be
+// empty — the two castling pieces themselves may obstruct each other, so their
+// origin squares are exempt.
+
+bool castleCellClear(const Board& board, Square sq, Square kingFrom, Square rookFrom)
 {
-    const int step = (to > from) ? 1 : -1;
-    for (Square sq = from + step; sq != to; sq += step) {
-        if (!board.isEmpty(sq)) return false;
-    }
-    return true;
+    return board.isEmpty(sq) || sq == kingFrom || sq == rookFrom;
+}
+
+bool castlePathsClear(const Board& board, Square kingFrom, Square kingTo,
+                      Square rookFrom, Square rookTo)
+{
+    auto pathClear = [&](Square from, Square to) {
+        if (from == to) return true;
+        const int step = (to > from) ? 1 : -1;
+        for (Square sq = from + step; sq != to + step; sq += step) {
+            if (!castleCellClear(board, sq, kingFrom, rookFrom)) return false;
+        }
+        return true;
+    };
+    return pathClear(kingFrom, kingTo) && pathClear(rookFrom, rookTo);
 }
 
 void genCastling(Square from, Color color, const Board& board, MoveFilter filter,
                  std::vector<Move>& moves)
 {
     if (filter == MoveFilter::CapturesOnly) return;
-    if (from != kingHome(color)) return;
-
     const int rights = board.castlingRights();
+    const int rankBase = (color == Color::White) ? 0 : 112;
 
-    if (canCastle(rights, ksRight(color))
-        && !board.isEmpty(rookHomeKs(color))
-        && squaresEmpty(board, from, rookHomeKs(color)))
-    {
-        moves.push_back(castleMove(from, kingDestKs(color)));
-    }
+    for (int wing = 0; wing < 2; ++wing) {
+        const CastlingRights right = (wing == 0) ? ksRight(color) : qsRight(color);
+        if (!canCastle(rights, right)) continue;
 
-    if (canCastle(rights, qsRight(color))
-        && !board.isEmpty(rookHomeQs(color))
-        && squaresEmpty(board, rookHomeQs(color), from))
-    {
-        moves.push_back(castleMove(from, kingDestQs(color)));
+        const Square rookFrom = board.castlingRookSquare(right);
+        if (board.pieceAt(rookFrom) != Piece::of(color, PieceType::Rook)) continue;
+
+        const Square kingTo = rankBase + (wing == 0 ? 6 : 2);
+        const Square rookTo = rankBase + (wing == 0 ? 5 : 3);
+        if (!castlePathsClear(board, from, kingTo, rookFrom, rookTo)) continue;
+
+        moves.push_back(castleMove(from, kingTo));
     }
 }
 
@@ -328,9 +339,29 @@ std::vector<Move> generateLegalMoves(const Board& board, MoveFilter filter)
     for (const auto& m : pseudo) {
         if (m.isCastle()) {
             if (inCheck(b, side)) continue;
-            const Square transit = (m.to > m.from) ? m.from + 1 : m.from - 1;
-            if (isAttacked(b, transit, enemy)) continue;
-            if (isAttacked(b, m.to, enemy)) continue;
+            // FRC: check every square on the king's hop (origin excluded, destination
+            // included) with the castling king AND rook lifted off the board — in
+            // Chess960 both pieces can sit on the path, and an attacker may see
+            // through their vacated squares.
+            const bool kingside = (m.to & 7) == 6;
+            const CastlingRights right = kingside
+                ? (side == Color::White ? WhiteKingSide : BlackKingSide)
+                : (side == Color::White ? WhiteQueenSide : BlackQueenSide);
+            Square rookFrom = b.castlingRookSquare(right);
+            Board lifted = b;
+            lifted.clearSquare(m.from);
+            lifted.clearSquare(rookFrom);
+            const int step = (m.to > m.from) ? 1 : -1;
+            Square sq = m.from;
+            bool attacked = false;
+            while (sq != m.to) {
+                sq += step;
+                if (isAttacked(lifted, sq, enemy)) {
+                    attacked = true;
+                    break;
+                }
+            }
+            if (attacked) continue;
         } else {
             b.makeMove(m);
             bool leftInCheck = inCheck(b, side);

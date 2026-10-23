@@ -34,22 +34,22 @@ void Board::makeMove(const Move& m)
     // --- Move piece(s) based on flags ---
 
     if (m.isCastle()) {
-        // Move king
-        setPiece(m.to, movingPiece);
-        clearSquare(m.from);
-
-        // Move rook — derive from king destination file
-        const int destFile = m.to & 7;
+        // FRC castling: the king finishes on the g/c-file of its own rank and the
+        // rook on the f/d-file. King and rook may pass over each other's start
+        // squares, so all four set/clear calls are ordered to tolerate overlap.
+        const bool kingside = (m.to & 7) == 6;
+        const CastlingRights right = kingside
+            ? (side == Color::White ? WhiteKingSide : BlackKingSide)
+            : (side == Color::White ? WhiteQueenSide : BlackQueenSide);
+        const Square rookFrom = m_state.castlingRooksFrom[castlingRightIndex(right)];
         const int rankBase = m.to & 0xF0;
-        if (destFile == 6) {
-            // King-side: rook h→f
-            setPiece(rankBase + 5, pieceAt(rankBase + 7));
-            clearSquare(rankBase + 7);
-        } else {
-            // Queen-side: rook a→d
-            setPiece(rankBase + 3, pieceAt(rankBase + 0));
-            clearSquare(rankBase + 0);
-        }
+        const Square rookTo = kingside ? rankBase + 5 : rankBase + 3;
+
+        const Piece rook = pieceAt(rookFrom);
+        clearSquare(rookFrom);      // rook vacates (square may be the king's destination)
+        clearSquare(m.from);        // king vacates (square may be the rook's destination)
+        setPiece(m.to, movingPiece);
+        setPiece(rookTo, rook);
     } else if (m.isEnPassant()) {
         // Move pawn to target, remove captured pawn (same rank as from, same file as to)
         setPiece(m.to, movingPiece);
@@ -78,20 +78,24 @@ void Board::makeMove(const Move& m)
         }
     }
 
-    // Rook moved from home square
+    // Rook moved from its owning-right home square (per rook array, not fixed files)
     if (movingPiece.type == PieceType::Rook) {
-        if (m.from == squareOf(7, 0))  newRights &= ~WhiteKingSide;
-        if (m.from == squareOf(0, 0))  newRights &= ~WhiteQueenSide;
-        if (m.from == squareOf(7, 7))  newRights &= ~BlackKingSide;
-        if (m.from == squareOf(0, 7))  newRights &= ~BlackQueenSide;
+        const int base = (side == Color::White) ? 0 : 2;
+        for (int i = base; i < base + 2; ++i) {
+            if (m_state.castlingRooksFrom[i] == m.from) {
+                newRights &= ~(1 << i);
+            }
+        }
     }
 
-    // Capture on rook home square
+    // Capture on a rook home square
     if (m.isCapture() && !m.isEnPassant()) {
-        if (m.to == squareOf(7, 0))  newRights &= ~WhiteKingSide;
-        if (m.to == squareOf(0, 0))  newRights &= ~WhiteQueenSide;
-        if (m.to == squareOf(7, 7))  newRights &= ~BlackKingSide;
-        if (m.to == squareOf(0, 7))  newRights &= ~BlackQueenSide;
+        const int base = (side == Color::White) ? 2 : 0;  // the captured (opponent's) rooks
+        for (int i = base; i < base + 2; ++i) {
+            if (m_state.castlingRooksFrom[i] == m.to) {
+                newRights &= ~(1 << i);
+            }
+        }
     }
 
     m_state.castlingRights = newRights;

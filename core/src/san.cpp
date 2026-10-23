@@ -143,17 +143,14 @@ std::optional<Move> fromSan(const Board& board, const std::string& san)
 
     if (s.size() < 2) return std::nullopt;
 
-    // Castling (check before destination parsing since O-O has no square suffix)
-    if (s == "O-O" || s == "O-O-O") {
-        Color side = board.sideToMove();
-        Square from = squareOf(File::E, side == Color::White ? Rank::R1 : Rank::R8);
-        Square to = (s == "O-O")
-            ? squareOf(File::G, side == Color::White ? Rank::R1 : Rank::R8)
-            : squareOf(File::C, side == Color::White ? Rank::R1 : Rank::R8);
-        Move target = castleMove(from, to);
+    // Castling (check before destination parsing since O-O has no square suffix).
+    // Chess960: the king may start on any back-rank square, so match any legal
+    // castle move landing on the requested destination file.
+    if (s == "O-O" || s == "O-O-O" || s == "0-0" || s == "0-0-0") {
+        const int wantFile = (s == "O-O" || s == "0-0") ? 6 : 2;
         auto legal = generateLegalMoves(board);
         for (const auto& m : legal) {
-            if (m.isCastle() && m.from == from && m.to == to) return m;
+            if (m.isCastle() && (m.to & 7) == wantFile) return m;
         }
         return std::nullopt;
     }
@@ -222,6 +219,10 @@ std::optional<Move> fromSan(const Board& board, const std::string& san)
     int matchCount = 0;
 
     for (const auto& m : legal) {
+        // Castle moves are named O-O/O-O-O only; a plain token such as "Kg1"
+        // refers to a king walk, never to the castling jump landing there.
+        if (m.isCastle()) continue;
+
         // Destination
         if (m.to != dest) continue;
 

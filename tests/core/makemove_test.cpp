@@ -326,6 +326,9 @@ TEST(MakeMove, CaptureOnA1RevokesWhiteQueenSide)
     Square b3 = squareOf(File::B, Rank::R3);
     Square a1 = squareOf(File::A, Rank::R1);
     board.setPiece(b3, Piece::of(Color::Black, PieceType::Knight));
+    // Rights are attributed per mover color, so the fixture must treat the
+    // knight capture as Black's move.
+    board.setSideToMove(Color::Black);
     board.makeMove(captureMove(b3, a1));
 
     EXPECT_FALSE(canCastle(board.castlingRights(), WhiteQueenSide));

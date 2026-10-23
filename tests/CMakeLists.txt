@@ -24,6 +24,7 @@ if(BUILD_TESTING)
         core/movegen_test.cpp
         core/makemove_test.cpp
         core/san_test.cpp
+        core/chess960_test.cpp
         core/perft_test.cpp
         core/endgame_test.cpp
         core/uci_move_test.cpp

@@ -34,9 +34,33 @@ constexpr bool canCastle(int rights, CastlingRights side) noexcept
     return (rights & static_cast<int>(side)) != 0;
 }
 
+// Index of a castling right inside State::castlingRooksFrom.
+// Order follows the bit values: WhiteKs, WhiteQs, BlackKs, BlackQs.
+constexpr int castlingRightIndex(CastlingRights right) noexcept
+{
+    switch (right) {
+        case WhiteKingSide:  return 0;
+        case WhiteQueenSide: return 1;
+        case BlackKingSide:  return 2;
+        case BlackQueenSide: return 3;
+    }
+    return 0;
+}
+
+// Back-rank file of a granted-but-not-yet-traditionally-placed rook to support
+// Chess960 castling (rooks start on arbitrary back-rank files; the king still
+// finishes on the g/c-file and the rook on the f/d-file, per FRC rules).
 struct State {
     Color sideToMove = Color::White;
     int castlingRights = NoCastling;
+    // Origin square (per color) of the rook owning each castling right. Only meaningful
+    // for granted rights; defaults mirror the standard geometry (h1/a1/h8/a8).
+    std::array<Square, 4> castlingRooksFrom = {
+        squareOf(7, 0),
+        squareOf(0, 0),
+        squareOf(7, 7),
+        squareOf(0, 7),
+    };
     Square enPassant = SquareNone;
     int halfmoveClock = 0;
     int fullmoveNumber = 1;
@@ -69,6 +93,16 @@ public:
     int fullmoveNumber() const { return m_state.fullmoveNumber; }
 
     const State& state() const { return m_state; }
+
+    // Origin square of the rook that owns `right` (valid for granted rights).
+    Square castlingRookSquare(CastlingRights right) const
+    {
+        return m_state.castlingRooksFrom[castlingRightIndex(right)];
+    }
+    void setCastlingRookSquare(CastlingRights right, Square sq)
+    {
+        m_state.castlingRooksFrom[castlingRightIndex(right)] = sq;
+    }
 
     void setSideToMove(Color color) { m_state.sideToMove = color; }
     void setCastlingRights(int rights) { m_state.castlingRights = rights; }

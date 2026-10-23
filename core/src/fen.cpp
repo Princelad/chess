@@ -104,6 +104,37 @@ std::optional<std::vector<std::string_view>> splitFields(std::string_view fen)
     return fields;
 }
 
+// File of `color`'s king on back rank `rank`, or -1 when absent.
+int kingFileOnRank(const Board& board, Color color, int rank)
+{
+    for (int file = 0; file < 8; ++file) {
+        const Piece p = board.pieceAt(squareOf(file, rank));
+        if (p.color == color && p.type == PieceType::King) return file;
+    }
+    return -1;
+}
+
+// Outermost rook of `color` between the king and the board corner on back rank
+// `rank`. Scans from the corner inward; returns -1 if the king is not on rank or
+// no rook is found on the king's side of the corner.
+int outermostRookFile(const Board& board, Color color, int rank, bool kingSide)
+{
+    const int kingFile = kingFileOnRank(board, color, rank);
+    if (kingFile < 0) return -1;
+    if (kingSide) {
+        for (int file = 7; file > kingFile; --file) {
+            const Piece p = board.pieceAt(squareOf(file, rank));
+            if (p.color == color && p.type == PieceType::Rook) return file;
+        }
+    } else {
+        for (int file = 0; file < kingFile; ++file) {
+            const Piece p = board.pieceAt(squareOf(file, rank));
+            if (p.color == color && p.type == PieceType::Rook) return file;
+        }
+    }
+    return -1;
+}
+
 } // namespace
 
 std::optional<Board> fromFen(std::string_view fen)
@@ -153,38 +184,61 @@ std::optional<Board> fromFen(std::string_view fen)
         return std::nullopt;
     }
 
+    // Castling field: traditional KQkq plus X-FEN/Chess960 file letters. Letters
+    // 'A'..'H' / 'a'..'h' name the rook's back-rank file (case = color). Rook-less
+    // or king-less positions remain parseable: when inference is impossible the
+    // right still grants, keyed to its standard home square (castling simply
+    // never becomes playable, exactly like before Chess960 support).
     if ((*fields)[2] == "-") {
         board.setCastlingRights(NoCastling);
     } else {
         int rights = NoCastling;
-        bool seenWhiteK = false;
-        bool seenWhiteQ = false;
-        bool seenBlackK = false;
-        bool seenBlackQ = false;
+        bool seen[4] = {false, false, false, false};
+        auto grant = [&](CastlingRights right, Square rookFrom) -> bool {
+            const int idx = castlingRightIndex(right);
+            if (seen[idx]) return false;
+            seen[idx] = true;
+            rights |= static_cast<int>(right);
+            board.setCastlingRookSquare(right, rookFrom);
+            return true;
+        };
         for (char ch : (*fields)[2]) {
             switch (ch) {
-                case 'K':
-                    if (seenWhiteK) return std::nullopt;
-                    seenWhiteK = true;
-                    rights |= WhiteKingSide;
+                case 'K': case 'Q':
+                case 'k': case 'q': {
+                    const Color color = (ch == 'K' || ch == 'Q')
+                        ? Color::White : Color::Black;
+                    const int rank = (color == Color::White) ? 0 : 7;
+                    const bool kingSide = (ch == 'K' || ch == 'k');
+                    const CastlingRights right = kingSide
+                        ? (color == Color::White ? WhiteKingSide : BlackKingSide)
+                        : (color == Color::White ? WhiteQueenSide : BlackQueenSide);
+                    int file = outermostRookFile(board, color, rank, kingSide);
+                    if (file < 0) {
+                        // Fall back to the traditional corner when the position
+                        // carries no decisive king/rook layout.
+                        file = kingSide ? 7 : 0;
+                    }
+                    if (!grant(right, squareOf(file, rank))) return std::nullopt;
                     break;
-                case 'Q':
-                    if (seenWhiteQ) return std::nullopt;
-                    seenWhiteQ = true;
-                    rights |= WhiteQueenSide;
-                    break;
-                case 'k':
-                    if (seenBlackK) return std::nullopt;
-                    seenBlackK = true;
-                    rights |= BlackKingSide;
-                    break;
-                case 'q':
-                    if (seenBlackQ) return std::nullopt;
-                    seenBlackQ = true;
-                    rights |= BlackQueenSide;
-                    break;
+                }
                 default:
-                    return std::nullopt;
+                    if ((ch >= 'A' && ch <= 'H')
+                        || (ch >= 'a' && ch <= 'h')) {
+                        const Color color = (ch <= 'H')
+                            ? Color::White : Color::Black;
+                        const int rank = (color == Color::White) ? 0 : 7;
+                        const int file = (color == Color::White)
+                            ? ch - 'A' : ch - 'a';
+                        const int kingFile = kingFileOnRank(board, color, rank);
+                        const int split = (kingFile >= 0) ? kingFile : 3;
+                        const CastlingRights right = (file > split)
+                            ? (color == Color::White ? WhiteKingSide : BlackKingSide)
+                            : (color == Color::White ? WhiteQueenSide : BlackQueenSide);
+                        if (!grant(right, squareOf(file, rank))) return std::nullopt;
+                    } else {
+                        return std::nullopt;
+                    }
             }
         }
         board.setCastlingRights(rights);
@@ -228,10 +282,36 @@ std::string toFen(const Board& board)
     if (rights == NoCastling) {
         fen += '-';
     } else {
-        if (canCastle(rights, WhiteKingSide)) fen += 'K';
-        if (canCastle(rights, WhiteQueenSide)) fen += 'Q';
-        if (canCastle(rights, BlackKingSide)) fen += 'k';
-        if (canCastle(rights, BlackQueenSide)) fen += 'q';
+        // Traditional corner file → legacy letter; otherwise X-FEN file letter
+        // naming the rook's back-rank square (Chess960).
+        auto writeSide = [&](Color color) {
+            const CastlingRights kSide = color == Color::White ? WhiteKingSide : BlackKingSide;
+            const CastlingRights qSide = color == Color::White ? WhiteQueenSide : BlackQueenSide;
+            const char kBase = color == Color::White ? 'K' : 'k';
+            const char qBase = color == Color::White ? 'Q' : 'q';
+            if (canCastle(rights, kSide)) {
+                const int file = board.castlingRookSquare(kSide) & 7;
+                if (file == 7) {
+                    fen += kBase;
+                } else if (color == Color::White) {
+                    fen += static_cast<char>('A' + file);
+                } else {
+                    fen += static_cast<char>('a' + file);
+                }
+            }
+            if (canCastle(rights, qSide)) {
+                const int file = board.castlingRookSquare(qSide) & 7;
+                if (file == 0) {
+                    fen += qBase;
+                } else if (color == Color::White) {
+                    fen += static_cast<char>('A' + file);
+                } else {
+                    fen += static_cast<char>('a' + file);
+                }
+            }
+        };
+        writeSide(Color::White);
+        writeSide(Color::Black);
     }
 
     fen += ' ';

@@ -688,10 +688,10 @@ takeback, rematch, chat polish, per-class ratings, login throttling
 
 ▶ [Chess960](https://www.chessprogramming.org/Chess960)
 
-- [ ] **12.1 Chess960**
-  - [ ] Core: 960 start-position generator + flexible castling rules
+- [~] **12.1 Chess960**
+  - [x] Core: 960 start-position generator + flexible castling rules
   - [ ] Protocol: `VARIANT` field in JOIN/WELCOME; server-side option
-  - [ ] Perft spot-checks against known FRC positions
+  - [x] Perft spot-checks against known FRC positions
 
 - [ ] **12.2 Puzzle mode**
   - [ ] Offline mate-in-N set loaded from a bundled PGN file
