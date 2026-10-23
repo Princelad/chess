@@ -5,6 +5,7 @@
 #include <string>
 #include <type_traits>
 
+#include <chess/fen.h>
 #include <chess/movegen.h>
 #include <chess/san.h>
 #include <chess/uci/engine.h>
@@ -15,6 +16,21 @@
 
 static constexpr std::size_t MaxChatLength = 500;
 static constexpr std::size_t MaxSanLength = 10;
+
+// The match's starting board (12.1): standard position unless a Chess960
+// SP FEN was carried in. The server generates its own start positions, so
+// a parse failure here is unreachable — but a misbehaving startFen must
+// never take the pairing sequence down, so fall back to the standard board.
+static chess::Board startBoardFrom(const std::string& startFen)
+{
+    if (startFen.empty())
+        return chess::Board::fromStartPos();
+    auto board = chess::fromFen(startFen);
+    if (board.has_value())
+        return *board;
+    LOG_ERROR("Unparseable start FEN — falling back to the standard position");
+    return chess::Board::fromStartPos();
+}
 
 // The one server-side monotonic time source for clocks. Matches replace the
 // steady wall by it; e2e/unit tests inject their own timestamps into
@@ -52,9 +68,10 @@ static void sendToPresent(Client* present, const T& msg)
 }
 
 Match::Match(Client& white, Client& black, const std::string& timeControl,
-             std::int64_t graceMs)
+             const std::string& startFen, std::int64_t graceMs)
     : timeControl_(timeControl)
-    , board_(chess::Board::fromStartPos())
+    , startFen_(startFen)
+    , board_(startBoardFrom(startFen))
     , seats_{}
     , graceMs_(graceMs)
 {
@@ -369,7 +386,9 @@ void Match::applyTakeback(std::size_t requesterIdx)
     // three only once the whole replay applies.
     std::vector<std::string> trimmed(sanHistory_.begin(),
                                      sanHistory_.end() - 2);
-    chess::Board rebuilt = chess::Board::fromStartPos();
+    // Rebuild from THIS game's starting position (12.1): a Chess960 match
+    // must never re-chain its SAN history from the standard board.
+    chess::Board rebuilt = startBoardFrom(startFen_);
     for (const auto& san : trimmed) {
         auto move = chess::san::fromSan(rebuilt, san);
         if (!move.has_value()) {

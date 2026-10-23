@@ -12,6 +12,7 @@
 #include <SFML/Network/TcpListener.hpp>
 #include <SFML/Network/TcpSocket.hpp>
 
+#include <chess/chess960.h>
 #include <chess/db/database.h>
 #include <chess/db/game_store.h>
 #include <chess/db/player_store.h>
@@ -341,6 +342,7 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
             row.result = static_cast<int>(result);
             row.reason = static_cast<int>(reason);
             row.timeControl = match.timeControl();
+            row.startFen = match.startFen();  // empty = standard start (12.1)
             std::string sanJoined;
             for (const auto& san : match.sanHistory()) {
                 if (!sanJoined.empty()) sanJoined += ' ';
@@ -422,7 +424,18 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
     startMatch = [&](Client& first, Client& second) -> Match* {
         first.state = ClientState::InMatch;
         second.state = ClientState::InMatch;
+        // Chess960 (12.1): every fresh pairing rolls a random Start
+        // Position number and carries its FEN through Match + both
+        // WelcomeMsgs — including rematches, which deliberately regenerate
+        // (fresh position, same variant).
+        std::string startFen;
+        if (!first.variant.empty()) {
+            auto fen = chess960StartFen(chess960RandomId());
+            if (fen.has_value())
+                startFen = *fen;
+        }
         auto match = std::make_unique<Match>(first, second, first.timeControl,
+                                             startFen,
                                              config.reconnectGraceMs);
         match->setGameOverCallback(onGameOver);
         match->setRematchCallback(onRematch);
@@ -454,10 +467,14 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
 
         sendTo(first, chess::net::WelcomeMsg{
             chess::Color::White, second.name, secondRating, secondDeviation, rated,
-            first.timeControl, match->resumeToken(chess::Color::White)});
+            first.timeControl, match->resumeToken(chess::Color::White),
+            first.variant, std::move(startFen)});
+        // Black's seat must see the same rolled position — a copy, since
+        // first's message already consumed the value via std::move above.
         sendTo(second, chess::net::WelcomeMsg{
             chess::Color::Black, first.name, firstRating, firstDeviation, rated,
-            first.timeControl, match->resumeToken(chess::Color::Black)});
+            first.timeControl, match->resumeToken(chess::Color::Black),
+            first.variant, match->startFen()});
         Match* rawMatch = match.get();
         matches.push_back(std::move(match));
         return rawMatch;
@@ -569,7 +586,10 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
         // iterating it reallocates the vector and invalidates the loop's
         // own iterator (a fresh bot is the classic trigger — one join, two
         // Clients).
-        std::vector<std::string> botSpawnQueue;
+        std::vector<std::pair<std::string, std::string>> botSpawnQueue;
+        // ^ {time control, variant} requested by the human the bot pairs
+        // with (12.1): the spawn loop already runs post-loop, so the pair
+        // must survive that hop.
         for (auto it = clients.begin(); it != clients.end(); ) {
             Client& client = **it;
             if (client.isBot) {
@@ -695,6 +715,11 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
                                 // re-joining after a finished game.
                                 client.timeControl =
                                     canonicalTimeControl(join->timeControl);
+                                // 12.1: the variant tag is sanitized once at
+                                // join; pairing and Start-Position rolling
+                                // both key off this string.
+                                client.variant =
+                                    chess::net::sanitizeVariant(join->variant);
                                 client.state = ClientState::Queued;
                                 auto pair = matchmaker.enqueue(client);
                                 if (pair.has_value()) {
@@ -708,7 +733,8 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
                                         // vector mid-iteration and invalidate
                                         // this very loop's iterator (the bot
                                         // spawn runs after the loop instead).
-                                        botSpawnQueue.push_back(client.timeControl);
+                                        botSpawnQueue.emplace_back(
+                                            client.timeControl, client.variant);
                                     }
                                 }
                             } else if (std::get_if<chess::net::ResumeMsg>(&*msg)) {
@@ -767,7 +793,7 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
         // resolves against whatever is waiting — its requesting human has
         // already been queued, so the pairing outcome matches the old
         // mid-loop form.
-        for (const auto& botTimeControl : botSpawnQueue) {
+        for (const auto& [botTimeControl, botVariant] : botSpawnQueue) {
             auto botCount = std::count_if(clients.begin(), clients.end(),
                 [](const auto& c) { return c->isBot; });
             if (static_cast<std::size_t>(botCount) >= config.maxBots)
@@ -776,9 +802,10 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
             bot->isBot = true;
             bot->name = "Bot-" + std::to_string(++botNameCounter);
             bot->state = ClientState::Queued;
-            // Bot mirrors the waiting human's time control so it can pair
-            // and play a clocked game.
+            // Bots mirror the waiting human's time control (11.1) and game
+            // variant (12.1: a Chess960 request pairs a Chess960 bot game).
             bot->timeControl = botTimeControl;
+            bot->variant = botVariant;
             bot->lastActivity = std::chrono::steady_clock::now();
             Client* botPtr = bot.get();
             clients.push_back(std::move(bot));

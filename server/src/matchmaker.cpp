@@ -14,12 +14,14 @@ std::optional<std::pair<Client*, Client*>> Matchmaker::enqueue(Client& client)
 
     queue_.push_back(&client);
 
-    // Pair the first queued player with the same time control (11.1); one
-    // with a different "5+3"≠"10+0" (or unlimited≠timed) stays queued. The
+    // Pair the first queued player with the same time control (11.1) and
+    // the same game variant (12.1: standard and Chess960 never cross); a
+    // "5+3"≠"10+0" or standard≠chess960 disagreement stays queued. The
     // earlier entry plays White, as before.
     Client* other = nullptr;
     for (auto* c : queue_)
-        if (c != &client && c->timeControl == client.timeControl) {
+        if (c != &client && c->timeControl == client.timeControl
+            && c->variant == client.variant) {
             other = c;
             break;
         }
@@ -35,7 +37,9 @@ std::optional<std::pair<Client*, Client*>> Matchmaker::enqueue(Client& client)
     LOG_INFO("Matched: " + other->name + " (White) vs " + client.name
              + " (Black)" + (other->timeControl.empty()
                 ? " (unlimited)"
-                : " (" + other->timeControl + ")"));
+                : " (" + other->timeControl + ")")
+             + (other->variant.empty() ? std::string()
+                : " [" + other->variant + "]"));
 
     return std::make_pair(other, &client);
 }

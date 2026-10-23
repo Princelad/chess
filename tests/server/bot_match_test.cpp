@@ -154,7 +154,7 @@ TEST_F(BotMatchTest, HumanDisconnectEndsGame)
 
     // Zero grace (11.2): the dropped human still loses the game on the
     // reconnect window's expiry, exactly the pre-11.2 outcome but delayed.
-    Match match(human_, bot_, {}, 0);
+    Match match(human_, bot_, {}, {}, 0);
     match.startBot(chess::Color::Black, 1, enginePath_);
 
     match.handleDisconnect(human_);

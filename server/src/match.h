@@ -20,10 +20,12 @@ class Match {
 public:
     // An empty timeControl keeps the legacy unlimited game; otherwise it
     // must parse ("5+3" style) and both sides are clocked from game start.
-    // graceMs is the reconnect window (11.2): a mid-game drop holds the
-    // match open that long before the absent seat loses on disconnection.
+    // An empty startFen (12.1) is the standard start position; otherwise it
+    // must parse into a legal board (Chess960 SP). graceMs is the reconnect
+    // window (11.2): a mid-game drop holds the match open that long before
+    // the absent seat loses on disconnection.
     Match(Client& white, Client& black, const std::string& timeControl = {},
-          std::int64_t graceMs = 30000);
+          const std::string& startFen = {}, std::int64_t graceMs = 30000);
 
     // Read-only seat snapshot for observers (rated/archive hooks, logs).
     // Presence is a moment-in-time fact; ids/names survive a disconnect.
@@ -120,6 +122,11 @@ public:
     // Agreed time control string ("" = unlimited), for the archive row.
     const std::string& timeControl() const { return timeControl_; }
 
+    // The exact starting FEN the game was played from (12.1): empty = the
+    // standard start position. Feeds the archive row and every SAN-chain
+    // replay (takeback rollback); the board itself is built from it.
+    const std::string& startFen() const { return startFen_; }
+
     // Current position for a full ResumeStateMsg resync (11.2).
     std::string currentFen() const { return board_.toFen(); }
 
@@ -191,6 +198,9 @@ private:
     void applyTakeback(std::size_t requesterIdx);
 
     std::string timeControl_;
+    // The game's starting FEN (12.1), empty for the standard start; drives
+    // every SAN-chain reconstruction (takeback rollback) beside the board.
+    std::string startFen_;
     chess::server::MatchClock clock_;
 
     chess::Board board_;

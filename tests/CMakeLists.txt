@@ -59,7 +59,8 @@ if(BUILD_TESTING)
         e2e/rated_test.cpp
         e2e/reconnect_test.cpp
         e2e/takeback_test.cpp
-        e2e/rematch_test.cpp)
+        e2e/rematch_test.cpp
+        e2e/chess960_test.cpp)
 
     target_link_libraries(chess-tests PRIVATE chesscore chessnet chessclient chessserver chessuci chessdb GTest::gtest_main)
 

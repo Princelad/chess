@@ -45,13 +45,22 @@ struct TimeControl {
 // never trust the payload.
 TimeControl parseTimeControl(std::string_view tc);
 
+// Game-variant tag carried by JoinMsg/WelcomeMsg (12.1). Exactly
+// "chess960" selects the Chess960 Start Position game; anything else —
+// including a hostile or future-unknown string — is the standard game,
+// never trust the payload.
+constexpr const char* Chess960Variant = "chess960";
+std::string sanitizeVariant(std::string_view variant);
+
 // ── Client → Server ─────────────────────────────────────────────────────────
 
 // The time control requested at pairing ("5+3" style, or empty for the
-// legacy unlimited game). Pairing only matches equal strings.
+// legacy unlimited game) plus the game variant (sanitizeVariant form).
+// Pairing only matches clients equal on both strings.
 struct JoinMsg {
     std::string name;
     std::string timeControl;
+    std::string variant;  // empty = standard (12.1; trailing, append-only)
 };
 
 struct MoveMsg {
@@ -162,6 +171,12 @@ struct WelcomeMsg {
     // Per-seat rejoin credential (11.2): a mid-game drop is recovered on a
     // fresh connection by sending it back in ResumeMsg.
     std::string resumeToken;
+    // Game variant (12.1, sanitizeVariant form) and the Chess960 start
+    // position the server rolled at pairing; both empty = standard start.
+    // Trailing appended fields — legacy-shaped packets fail to deserialize
+    // as intended.
+    std::string variant;
+    std::string startFen;
 };
 
 struct OpponentJoinedMsg {

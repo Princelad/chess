@@ -91,7 +91,7 @@ bool readFlag(sf::Packet& packet, bool& value)
 bool writeClient(sf::Packet& packet, const JoinMsg& msg)
 {
     packet << static_cast<uint8_t>(ClientMsgType::Join) << msg.name
-           << msg.timeControl;
+           << msg.timeControl << msg.variant;
     return static_cast<bool>(packet);
 }
 
@@ -213,7 +213,8 @@ bool writeServer(sf::Packet& packet, const WelcomeMsg& msg)
            << static_cast<int>(msg.color) << msg.opponent
            << msg.rating << msg.deviation;
     writeFlag(packet, msg.rated);
-    packet << msg.timeControl << msg.resumeToken;
+    packet << msg.timeControl << msg.resumeToken
+           << msg.variant << msg.startFen;
     return static_cast<bool>(packet);
 }
 
@@ -492,6 +493,15 @@ TimeControl parseTimeControl(std::string_view tc)
     return out;
 }
 
+std::string sanitizeVariant(std::string_view variant)
+{
+    // Exact match only — an alias, casing variation, or unknown future tag
+    // degrades to the standard game rather than guessing.
+    if (variant == Chess960Variant)
+        return std::string(Chess960Variant);
+    return {};
+}
+
 bool serialize(sf::Packet& packet, const ClientMessage& msg)
 {
     packet << ProtocolVersion;
@@ -519,7 +529,7 @@ std::optional<ClientMessage> deserializeClient(sf::Packet& packet)
     switch (static_cast<ClientMsgType>(tag)) {
         case ClientMsgType::Join: {
             JoinMsg msg;
-            packet >> msg.name >> msg.timeControl;
+            packet >> msg.name >> msg.timeControl >> msg.variant;
             if (!static_cast<bool>(packet)) return std::nullopt;
             return msg;
         }
@@ -619,7 +629,8 @@ std::optional<ServerMessage> deserializeServer(sf::Packet& packet)
             if (!static_cast<bool>(packet)) return std::nullopt;
             if (!validColor(color)) return std::nullopt;
             if (!readFlag(packet, msg.rated)) return std::nullopt;
-            packet >> msg.timeControl >> msg.resumeToken;
+            packet >> msg.timeControl >> msg.resumeToken
+                   >> msg.variant >> msg.startFen;
             if (!static_cast<bool>(packet)) return std::nullopt;
             msg.color = static_cast<Color>(color);
             return msg;
@@ -798,7 +809,8 @@ std::string debugString(const ClientMessage& msg)
         using T = std::decay_t<decltype(m)>;
         if constexpr (std::is_same_v<T, JoinMsg>)
             return "Join{name=\"" + escape(m.name) + "\", tc=\""
-                + escape(m.timeControl) + "\"}";
+                + escape(m.timeControl) + "\", variant=\""
+                + escape(m.variant) + "\"}";
         else if constexpr (std::is_same_v<T, MoveMsg>)
             return "Move{san=\"" + escape(m.san) + "\"}";
         else if constexpr (std::is_same_v<T, DrawOfferMsg>)
@@ -849,7 +861,9 @@ std::string debugString(const ServerMessage& msg)
         if constexpr (std::is_same_v<T, WelcomeMsg>)
             return "Welcome{color=" + std::string(colorStr(m.color))
                 + ", opponent=\"" + escape(m.opponent) + "\", tc=\""
-                + escape(m.timeControl) + "\"}";
+                + escape(m.timeControl) + "\", variant=\""
+                + escape(m.variant) + "\", startFen=\""
+                + escape(m.startFen) + "\"}";
         else if constexpr (std::is_same_v<T, OpponentJoinedMsg>)
             return "OpponentJoined{name=\"" + escape(m.name) + "\"}";
         else if constexpr (std::is_same_v<T, OpponentLeftMsg>)

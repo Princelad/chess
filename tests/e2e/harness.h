@@ -166,6 +166,16 @@ protected:
         }));
     }
 
+    // Guest join with the 12.1 variant tag ("chess960", empty = standard);
+    // returns the welcome, nullopt if none arrived (e.g. no pairing twin).
+    std::optional<chess::net::WelcomeMsg> joinVariant(
+        sf::TcpSocket& sock, const std::string& name,
+        const std::string& variant)
+    {
+        sendMsg(sock, chess::net::JoinMsg{name, "", variant});
+        return await<chess::net::WelcomeMsg>(sock);
+    }
+
     // Sends one SAN move and waits until the server echoes it back to the
     // sender. This synchronizes play with server processing: the next move
     // is never sent before the previous one was applied, so the select

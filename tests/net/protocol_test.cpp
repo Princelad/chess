@@ -421,6 +421,79 @@ TEST(ProtocolRoundTrip, ServerWelcomeCarriesResumeToken)
     EXPECT_EQ(m->resumeToken, "deadbeefcafe");
 }
 
+// ── 12.1 variant fields ─────────────────────────────────────────────────────
+
+TEST(ProtocolRoundTrip, ClientJoinCarriesVariant)
+{
+    ClientMessage msg = JoinMsg{"Alice", "5+3", "chess960"};
+    sf::Packet p = freshPacket(serializeClient(msg));
+    auto result = deserializeClient(p);
+    ASSERT_TRUE(result.has_value());
+    auto* m = std::get_if<JoinMsg>(&*result);
+    ASSERT_NE(m, nullptr);
+    EXPECT_EQ(m->name, "Alice");
+    EXPECT_EQ(m->timeControl, "5+3");
+    EXPECT_EQ(m->variant, "chess960");
+}
+
+TEST(ProtocolRoundTrip, ClientJoinVariantDefaultsEmpty)
+{
+    ClientMessage msg = JoinMsg{"Alice", "5+3"};
+    sf::Packet p = freshPacket(serializeClient(msg));
+    auto result = deserializeClient(p);
+    ASSERT_TRUE(result.has_value());
+    auto* m = std::get_if<JoinMsg>(&*result);
+    ASSERT_NE(m, nullptr);
+    EXPECT_EQ(m->variant, "");
+}
+
+TEST(ProtocolRoundTrip, ServerWelcomeCarriesVariantAndStartFen)
+{
+    ServerMessage msg = WelcomeMsg{Color::White, "Bob", 1500.0, 350.0, true,
+                                   "10+0", "deadbeefcafe", "chess960",
+                                   "bqnb1rkr/pppppppp/8/8/8/8/PPPPPPPP/BQNB1RKR w KQkq - 0 1"};
+    sf::Packet p = freshPacket(serializeServer(msg));
+    auto result = deserializeServer(p);
+    ASSERT_TRUE(result.has_value());
+    auto* m = std::get_if<WelcomeMsg>(&*result);
+    ASSERT_NE(m, nullptr);
+    EXPECT_EQ(m->variant, "chess960");
+    EXPECT_EQ(m->startFen,
+              "bqnb1rkr/pppppppp/8/8/8/8/PPPPPPPP/BQNB1RKR w KQkq - 0 1");
+}
+
+TEST(ProtocolGarbage, ClientJoinLegacyShapeFails)
+{
+    // Append-only v2: a pre-12.1 Join packet (no variant field) must fail
+    // to deserialize, never parse as a standard-shape message.
+    sf::Packet p;
+    p << ProtocolVersion << static_cast<uint8_t>(0) << std::string("Alice")
+      << std::string("5+3");
+    EXPECT_FALSE(deserializeClient(p).has_value());
+}
+
+TEST(ProtocolGarbage, ServerWelcomeLegacyShapeFails)
+{
+    sf::Packet p;
+    p << ProtocolVersion << static_cast<uint8_t>(0) << static_cast<int>(0)
+      << std::string("Bob") << 1500.0 << 350.0 << uint8_t{0}
+      << std::string("10+0") << std::string("deadbeef");
+    EXPECT_FALSE(deserializeServer(p).has_value());
+}
+
+TEST(SanitizeVariant, ExactMatchOnly)
+{
+    EXPECT_EQ(sanitizeVariant("chess960"), "chess960");
+    EXPECT_EQ(sanitizeVariant(""), "");
+    EXPECT_EQ(sanitizeVariant("Chess960"), "");   // casing is not an alias
+    EXPECT_EQ(sanitizeVariant("chess 960"), "");
+    EXPECT_EQ(sanitizeVariant("960"), "");
+    EXPECT_EQ(sanitizeVariant("atomic"), "");
+    EXPECT_EQ(sanitizeVariant("chess960x"), "");
+}
+
+// ── 11.2 resume ─────────────────────────────────────────────────────────────
+
 TEST(ProtocolRoundTrip, ClientResume)
 {
     ClientMessage msg = ResumeMsg{"deadbeefcafe"};

@@ -27,6 +27,10 @@ struct Client {
     // Time-control string agreed at JoinMsg ("5+3" canonical, or empty =
     // unlimited). Pairing matches only equal strings (11.1).
     std::string timeControl;
+    // Game-variant tag agreed at JoinMsg (sanitizeVariant form, 12.1:
+    // empty = standard, "chess960"). Pairing matches only equal values; a
+    // Chess960 match rolls a random Start Position at pairing.
+    std::string variant;
     // Login-throttle bookkeeping (R2): consecutive LoginMsg failures (wrong
     // password, rejected registration) back off exponentially — armed from
     // the second failure, 1 s doubling capped at 60 s — until the

@@ -5,8 +5,13 @@
 #include <SFML/Network/TcpListener.hpp>
 #include <SFML/Network/TcpSocket.hpp>
 
+#include <chess/board.h>
+#include <chess/chess960.h>
+#include <chess/fen.h>
+#include <chess/movegen.h>
 #include <chess/net/messages.h>
 #include <chess/net/protocol.h>
+#include <chess/san.h>
 
 #include "client.h"
 #include "match.h"
@@ -43,7 +48,7 @@ protected:
         // Zero grace makes the 11.2 reconnect window deterministic in unit
         // tests: the seat is absent and the next pollReconnect expires it.
         match_ = std::make_unique<Match>(white_, black_, std::string(),
-                                         testGraceMs_);
+                                         std::string(), testGraceMs_);
     }
 
     void sendFromClient(sf::TcpSocket& sock, const chess::net::ClientMessage& msg) {
@@ -601,4 +606,99 @@ TEST_F(MatchTest, TakebackWhileOpponentAwayFailsFast)
     ASSERT_NE(err, nullptr);
     EXPECT_EQ(err->message, "The opponent is away");
     EXPECT_FALSE(match_->takebackPending());
+}
+
+// ── 12.1: Chess960 start positions ──────────────────────────────────────────
+
+namespace {
+
+// First legal SAN in `match`'s current position (arbitrary but stable).
+std::string firstLegalSan(const Match& match)
+{
+    auto board = chess::fromFen(match.currentFen());
+    for (const auto& m : chess::generateLegalMoves(*board)) {
+        std::string san = chess::san::toSan(*board, m);
+        if (chess::san::fromSan(*board, san).has_value()) return san;
+    }
+    return {};
+}
+
+} // namespace
+
+class Chess960MatchTest : public MatchTest {
+protected:
+    // SP 3 = "BQNNRKRB": inner rooks around a king already on the f-file —
+    // exercise letters-castling geometry end to end through the match.
+    static constexpr int kStartId = 3;
+
+    void SetUp() override {
+        MatchTest::SetUp();  // wires the sockets; replaces the standard match
+        auto fen = chess::chess960StartFen(kStartId);
+        ASSERT_TRUE(fen.has_value());
+        startFen_ = *fen;
+        match_ = std::make_unique<Match>(white_, black_, std::string(),
+                                         startFen_, testGraceMs_);
+    }
+
+    std::string startFen_;
+};
+
+TEST_F(Chess960MatchTest, BoardStartsFromCarriedStartFen)
+{
+    EXPECT_EQ(match_->currentFen(), startFen_);
+    EXPECT_EQ(match_->startFen(), startFen_);
+    EXPECT_TRUE(match_->isActive());
+}
+
+TEST_F(Chess960MatchTest, LegalMovePlaysAndRecomputesPosition)
+{
+    const std::string san = firstLegalSan(*match_);
+    ASSERT_FALSE(san.empty());
+
+    match_->handleMessage(white_, chess::net::MoveMsg{san});
+
+    auto bMsg = recvOnClient(*clientBlack_);
+    ASSERT_TRUE(bMsg.has_value());
+    auto* move = std::get_if<chess::net::ServerMoveMsg>(&*bMsg);
+    ASSERT_NE(move, nullptr);
+    EXPECT_EQ(move->san, san);
+
+    // The server's board equals the same SAN replayed on a scratch FRC
+    // seed board.
+    auto scratch = chess::fromFen(startFen_);
+    auto moveObj = chess::san::fromSan(*scratch, san);
+    ASSERT_TRUE(moveObj.has_value());
+    scratch->makeMove(*moveObj);
+    EXPECT_EQ(match_->currentFen(), scratch->toFen());
+}
+
+TEST_F(Chess960MatchTest, TakebackRollbackRechainsFromFrcStart)
+{
+    const std::string whiteSan = firstLegalSan(*match_);
+    ASSERT_FALSE(whiteSan.empty());
+    match_->handleMessage(white_, chess::net::MoveMsg{whiteSan});
+    const std::string blackSan = firstLegalSan(*match_);
+    ASSERT_FALSE(blackSan.empty());
+    match_->handleMessage(black_, chess::net::MoveMsg{blackSan});
+    for (auto sock : {clientWhite_.get(), clientBlack_.get()}) {
+        tryRecvOnClient(*sock);
+        tryRecvOnClient(*sock);
+    }
+    ASSERT_EQ(match_->sanHistory().size(), 2u);
+
+    match_->handleMessage(white_, chess::net::TakebackRequestMsg{});
+    tryRecvOnClient(*clientBlack_); // ServerTakebackRequestMsg
+    match_->handleMessage(black_, chess::net::TakebackAcceptMsg{});
+
+    for (auto& sock : {clientWhite_.get(), clientBlack_.get()}) {
+        auto msg = tryRecvOnClient(*sock);
+        ASSERT_TRUE(msg.has_value());
+        auto* accepted = std::get_if<chess::net::TakebackAcceptedMsg>(&*msg);
+        ASSERT_NE(accepted, nullptr);
+        ASSERT_EQ(accepted->sans.size(), 0u);
+    }
+    // The two-ply retraction rebuilt the board from the FRC SP — a replay
+    // seeded from the standard start position would diverge (and desync).
+    EXPECT_EQ(match_->currentFen(), startFen_);
+    EXPECT_TRUE(match_->isActive());
 }
