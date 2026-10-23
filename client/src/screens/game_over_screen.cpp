@@ -353,7 +353,8 @@ void GameOverScreen::update(float /*dtSec*/)
             setStatusText("");
             app_.switchScreen(std::make_unique<GameScreen>(
                 app_, welcome->color, welcome->opponent, opponentRating,
-                welcome->rated, welcome->timeControl, welcome->resumeToken));
+                welcome->rated, welcome->timeControl, welcome->resumeToken,
+                welcome->startFen));
             return;
         }
         if (std::holds_alternative<chess::net::ServerRematchRequestMsg>(msg)) {

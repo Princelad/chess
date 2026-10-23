@@ -32,7 +32,8 @@ public:
                std::optional<std::pair<double, double>> opponentRating = {},
                bool rated = false,
                const std::string& timeControl = {},
-               const std::string& resumeToken = {});
+               const std::string& resumeToken = {},
+               const std::string& startFen = {});
     void handleEvent(const sf::Event& event) override;
     void update(float dtSec) override;
     void draw(sf::RenderWindow& window) override;
@@ -72,6 +73,12 @@ private:
     void updateReconnect(float dtSec);
     void giveUpReconnect();
     void applyResume(const chess::net::ResumeStateMsg& msg);
+
+    // The board every SAN-chain reconstruction starts from (12.1): the
+    // welcome's Start Position when the match is a Chess960 game, else the
+    // standard start. Junk FENs fall back to the standard board rather
+    // than crash the screen.
+    Board startBoard() const;
 
     App& app_;
     Color myColor_;
@@ -120,6 +127,10 @@ private:
     Button acceptBtn_;
     std::string timeControl_;
     std::string resumeToken_;
+    // 12.1: the game's own Start Position FEN (empty = standard start).
+    // Every SAN-chain reconstruction — token resume, takeback replay —
+    // must chain from HERE, never from fromStartPos().
+    std::string startFen_;
 
     // Reconnect state machine (11.2). Idle until a real connection loss;
     // each step re-arms on new drops. RebindResumeFailed = token rejected

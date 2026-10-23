@@ -32,6 +32,9 @@ private:
     static constexpr std::size_t FieldCount = 4;
     // Time-control presets before pairing (11.1); first entry = unlimited.
     static constexpr int TimeControlCount = 7;
+    // Game variant presets before pairing (12.1); first entry = the standard
+    // game, second the exact "chess960" tag the server sanitizes.
+    static constexpr int VariantCount = 2;
 
     void tryConnectOrRetry();
     void startBrowse(BrowseTarget target);
@@ -39,10 +42,13 @@ private:
     void cycleField(bool backward);
     void selectTimeControl();
     void updateTimeControlLabel();
+    void selectVariant();
+    void updateVariantLabel();
     void layoutWidgets();
     const std::string& name() const;
     const std::string& password() const;
     const std::string& timeControl() const { return timeControls_[tcIndex_]; }
+    const std::string& variant() const { return variants_[variantIndex_]; }
 
     App& app_;
     ConnectPhase phase_ = ConnectPhase::Idle;
@@ -52,11 +58,15 @@ private:
     std::size_t activeField_ = 0;
     std::array<std::string, TimeControlCount> timeControls_;
     std::size_t tcIndex_ = 0;
+    std::array<std::string, VariantCount> variants_;
+    std::size_t variantIndex_ = 0;
     Button connectBtn_;
     Button archiveBtn_;
     Button leaderboardBtn_;
     Button tcBtn_;
     Label tcLabel_;
+    Button variantBtn_;
+    Label variantLabel_;
     Label title_;
     Label hint_;
     Label status_;

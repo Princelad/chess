@@ -28,13 +28,15 @@ constexpr std::size_t MaxChatInput = 200;
 GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName,
                        std::optional<std::pair<double, double>> opponentRating,
                        bool rated, const std::string& timeControl,
-                       const std::string& resumeToken)
+                       const std::string& resumeToken,
+                       const std::string& startFen)
     : app_(app)
     , myColor_(myColor)
     , opponentName_(opponentName)
     , opponentRating_(std::move(opponentRating))
     , rated_(rated)
     , resumeToken_(resumeToken)
+    , startFen_(startFen)
     , boardView_(static_cast<float>(App::WindowWidth),
                  static_cast<float>(App::WindowHeight),
                  myColor,
@@ -44,7 +46,9 @@ GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName,
            static_cast<float>(App::WindowWidth) - boardView_.panelX() - 8.f)
     , myTurn_(myColor == Color::White)
 {
-    hud_.setGame(Board::fromStartPos(), {}, {});
+    // 12.1: a Chess960 welcome carries the Start Position the server rolled
+    // at pairing; empty = standard start, junk = fall back (never crash).
+    hud_.setGame(startBoard(), {}, {});
     hud_.setInfo(opponentName_, myColor_, myTurn_, gameOver_);
     refreshRatingsHud();
 
@@ -913,6 +917,18 @@ void GameScreen::giveUpReconnect()
         hud_.navigator().sans()));
 }
 
+// The board every SAN-chain reconstruction starts from (12.1): the welcome's
+// Start Position when the match is a Chess960 game, else the standard start.
+// Mirrors the server's startBoardFrom fallback — a malformed FEN
+// never crashes the screen, it degrades to the standard game.
+Board GameScreen::startBoard() const
+{
+    if (startFen_.empty())
+        return Board::fromStartPos();
+    auto fromFen = Board::fromFen(startFen_);
+    return fromFen.has_value() ? *fromFen : Board::fromStartPos();
+}
+
 // Rebuilds this screen from a full ResumeStateMsg (11.2): SAN replay for the
 // board, refreshed identity/opponent/ratings, both clock figures. No move
 // animation — the missing moves are history, not action.
@@ -924,10 +940,10 @@ void GameScreen::applyResume(const chess::net::ResumeStateMsg& msg)
     timeControl_ = msg.timeControl;
     opponentRating_ = std::make_pair(msg.rating, msg.deviation);
 
-    // Replay the SAN chain over the standard start position (the archive
-    // replay uses the same reconstruction; `fen` is accepted for forward
-    // compatibility but is always the start position today).
-    Board board = Board::fromStartPos();
+    // Replay the SAN chain over the game's own start board (12.1: Chess960
+    // matches chain from the rolled SP — NOT the standard start, and
+    // ResumeStateMsg.fen is the current snapshot, not the chain's origin).
+    Board board = startBoard();
     std::vector<chess::Move> moves;
     moves.reserve(msg.sans.size());
     for (const auto& san : msg.sans) {
@@ -937,7 +953,7 @@ void GameScreen::applyResume(const chess::net::ResumeStateMsg& msg)
         moves.push_back(*mv);
         board.makeMove(*mv);
     }
-    hud_.setGame(Board::fromStartPos(), moves, msg.sans);
+    hud_.setGame(startBoard(), moves, msg.sans);
     hud_.navigator().goEnd(); // show the live position, not ply zero
 
     // Drop leftover interaction state from before the drop.
@@ -968,7 +984,7 @@ void GameScreen::applyResume(const chess::net::ResumeStateMsg& msg)
 // plays, the retracted moves were already aired once.
 void GameScreen::applyTakeback(const std::vector<std::string>& sans)
 {
-    Board board = Board::fromStartPos();
+    Board board = startBoard();
     std::vector<chess::Move> moves;
     moves.reserve(sans.size());
     for (const auto& san : sans) {
@@ -978,7 +994,7 @@ void GameScreen::applyTakeback(const std::vector<std::string>& sans)
         moves.push_back(*mv);
         board.makeMove(*mv);
     }
-    hud_.setGame(Board::fromStartPos(), moves, sans);
+    hud_.setGame(startBoard(), moves, sans);
     hud_.navigator().goEnd();
 
     // Stale interaction state pointing at the retracted plies.

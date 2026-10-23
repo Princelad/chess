@@ -35,18 +35,28 @@ public:
 
         steps_.push_back({move.from, move.to, board.pieceAt(move.from)});
         if (move.isCastle()) {
+            // FRC-aware (12.1): the king always lands on the g-file
+            // (king-side) or c-file (queen-side) and the rook on the
+            // adjacent f-file / d-file — derivable from the king's
+            // DESTINATION, not its origin, which sits anywhere in 960 (and
+            // can be its own landing square: king-at-g1 castles are legal
+            // Move{from == to, Castle}).
             const int rank = static_cast<int>(chess::rankOf(move.from));
-            const int fromFile = static_cast<int>(chess::fileOf(move.from));
-            if (static_cast<int>(chess::fileOf(move.to)) > fromFile) {
-                // King castled kingside: rook from h-file to the king's old file.
-                const chess::Square rookFrom = chess::squareOf(7, rank);
-                steps_.push_back({rookFrom, chess::squareOf(fromFile + 1, rank),
-                                  board.pieceAt(rookFrom)});
-            } else {
-                // Queenside: rook from a-file to the king's old file - 1.
-                const chess::Square rookFrom = chess::squareOf(0, rank);
-                steps_.push_back({rookFrom, chess::squareOf(fromFile - 1, rank),
-                                  board.pieceAt(rookFrom)});
+            const int kingFromFile = static_cast<int>(chess::fileOf(move.from));
+            const int kingDestFile = static_cast<int>(chess::fileOf(move.to));
+            const bool kingSide = kingDestFile >= 6;
+            const int rookToFile = kingSide ? 5 : 3; // f- or d-file
+            // The participating rook flanks the king on the castling wing:
+            // scan outward from the king for the first same-color rook.
+            const chess::Piece king = board.pieceAt(move.from);
+            const int dir = kingSide ? 1 : -1;
+            for (int f = kingFromFile + dir; f >= 0 && f <= 7; f += dir) {
+                const chess::Square rookFrom = chess::squareOf(f, rank);
+                const chess::Piece piece = board.pieceAt(rookFrom);
+                if (piece.type == PieceType::Rook && piece.color == king.color) {
+                    steps_.push_back({rookFrom, chess::squareOf(rookToFile, rank), piece});
+                    break;
+                }
             }
         }
     }

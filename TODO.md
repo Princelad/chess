@@ -688,7 +688,7 @@ takeback, rematch, chat polish, per-class ratings, login throttling
 
 ▶ [Chess960](https://www.chessprogramming.org/Chess960)
 
-- [~] **12.1 Chess960**
+- [x] **12.1 Chess960**
   - [x] Core: 960 start-position generator + flexible castling rules
   - [x] Protocol: `VARIANT` field in JOIN/WELCOME; server-side option
   - [x] Perft spot-checks against known FRC positions

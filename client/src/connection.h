@@ -35,7 +35,8 @@ public:
 
     void connect(const std::string& host, unsigned short port);
     void disconnect();
-    void join(const std::string& name, const std::string& timeControl = {});
+    void join(const std::string& name, const std::string& timeControl = {},
+              const std::string& variant = {});
     // Token rejoin (11.2): after a mid-game drop, reclaim the seat on a
     // fresh connection. The server answers with ResumeStateMsg or ErrorMsg.
     void resume(const std::string& token);

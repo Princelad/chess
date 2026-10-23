@@ -201,7 +201,8 @@ void LeaderboardScreen::update(float)
                     std::make_pair(welcome->rating, welcome->deviation);
             app_.switchScreen(std::make_unique<GameScreen>(
                 app_, welcome->color, welcome->opponent, opponentRating,
-                welcome->rated));
+                welcome->rated, welcome->timeControl, welcome->resumeToken,
+                welcome->startFen));
             return;
         }
     }

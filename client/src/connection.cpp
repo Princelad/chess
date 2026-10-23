@@ -72,9 +72,10 @@ void Connection::disconnect()
     error_.clear();
 }
 
-void Connection::join(const std::string& name, const std::string& timeControl)
+void Connection::join(const std::string& name, const std::string& timeControl,
+                      const std::string& variant)
 {
-    send(chess::net::JoinMsg{name, timeControl});
+    send(chess::net::JoinMsg{name, timeControl, variant});
 }
 
 void Connection::resume(const std::string& token)
