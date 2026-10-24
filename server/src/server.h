@@ -23,6 +23,9 @@ struct ServerConfig {
     // the retention window for finished matches (late resume replays the
     // final state + outcome).
     long long reconnectGraceMs = 30000;
+    // Arena (12.3): fixed rounds per entrant; the arena ends once every
+    // member has played this many games, then broadcasts the final table.
+    int arenaRounds = 3;
 };
 
 // Runs the server event loop on the calling thread. Blocks until stopped.

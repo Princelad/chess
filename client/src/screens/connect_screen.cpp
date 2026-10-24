@@ -2,6 +2,7 @@
 #include "game_screen.h"
 #include "history_screen.h"
 #include "leaderboard_screen.h"
+#include "tournament_lobby_screen.h"
 
 #include <chess/net/messages.h>
 
@@ -122,6 +123,16 @@ ConnectScreen::ConnectScreen(App& app)
                               sf::Color(180, 235, 205));
     leaderboardBtn_.setOnClick([this] { startBrowse(BrowseTarget::Leaderboard); });
 
+    // Arena (12.3): a third browse-style entry — connect, optionally log
+    // in, then switch into the tournament lobby for this tc/variant.
+    arenaBtn_.setLabel("Arena");
+    arenaBtn_.setColors(sf::Color(96, 74, 50), sf::Color(118, 92, 60),
+                        sf::Color(80, 62, 42), sf::Color(66, 52, 35),
+                        sf::Color(150, 150, 150), sf::Color(255, 250, 240),
+                        sf::Color(70, 110, 90), sf::Color(140, 200, 170),
+                        sf::Color(180, 235, 205));
+    arenaBtn_.setOnClick([this] { startBrowse(BrowseTarget::Arena); });
+
     title_.setText("Chess");
     title_.setFontSize(36);
     title_.setColor(sf::Color(255, 255, 255));
@@ -161,6 +172,9 @@ void ConnectScreen::layoutWidgets()
     // Row two: leaderboard browsing, same connect-without-queueing flow.
     leaderboardBtn_.setRect(sf::FloatRect(sf::Vector2f(FieldX, BtnY + 50.f),
                                           sf::Vector2f(200.f, 40.f)));
+    // Row two, beside it: the arena lobby (12.3).
+    arenaBtn_.setRect(sf::FloatRect(sf::Vector2f(FieldX + 210.f, BtnY + 50.f),
+                                    sf::Vector2f(170.f, 40.f)));
     // TC picker picks up the row after the last field, buttons shifted one
     // row down: the preset is chosen before pairing, so it needs a slot of
     // its own among the fields. The variant picker (12.1) rides the row
@@ -280,7 +294,14 @@ void ConnectScreen::openBrowseTarget()
     // switch (Idle-state entry point only).
     if (browseTarget_ == BrowseTarget::Leaderboard)
         app_.switchScreen(std::make_unique<LeaderboardScreen>(app_));
-    else
+    else if (browseTarget_ == BrowseTarget::Arena) {
+        // Guests send the field name; the server ignores it on
+        // authenticated connections (it keeps the account name).
+        std::string joinName = mine && app_.profile().has_value()
+            ? app_.profile()->name : name();
+        app_.switchScreen(std::make_unique<TournamentLobbyScreen>(
+            app_, timeControl(), variant(), std::move(joinName)));
+    } else
         app_.switchScreen(std::make_unique<HistoryScreen>(app_, mine));
 }
 
@@ -352,6 +373,7 @@ void ConnectScreen::handleEvent(const sf::Event& event)
     if (phase_ == ConnectPhase::Idle && !name().empty()) {
         archiveBtn_.handleEvent(event, local);
         leaderboardBtn_.handleEvent(event, local);
+        arenaBtn_.handleEvent(event, local);
         tcBtn_.handleEvent(event, local);
         variantBtn_.handleEvent(event, local);
     }
@@ -376,7 +398,7 @@ void ConnectScreen::update(float dtSec)
             app_.switchScreen(std::make_unique<GameScreen>(
                 app_, welcome->color, welcome->opponent, opponentRating,
                 welcome->rated, welcome->timeControl, welcome->resumeToken,
-                welcome->startFen));
+                welcome->startFen, welcome->arena));
             return;
         }
         if (auto* profileMsg = std::get_if<chess::net::ProfileMsg>(&msg)) {
@@ -475,6 +497,7 @@ void ConnectScreen::draw(sf::RenderWindow& window)
     if (phase_ == ConnectPhase::Idle && !name().empty()) {
         archiveBtn_.draw(window, font);
         leaderboardBtn_.draw(window, font);
+        arenaBtn_.draw(window, font);
     }
     tcLabel_.draw(window, font);
     if (phase_ == ConnectPhase::Idle)

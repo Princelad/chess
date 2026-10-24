@@ -122,6 +122,11 @@ void Match::seedRatings(const std::pair<double, double>& whiteRd,
     seats_[1].deviation = blackRd.second;
 }
 
+void Match::setArenaKey(std::string key)
+{
+    arenaKey_ = std::move(key);
+}
+
 Client* Match::white() const { return seats_[0].present; }
 
 Client* Match::black() const { return seats_[1].present; }
@@ -139,6 +144,19 @@ void Match::handleMessage(Client& sender, const chess::net::ClientMessage& msg)
     if (std::get_if<chess::net::PingMsg>(&msg)) {
         handlePing(sender);
         return;
+    }
+
+    // Arena games (12.3) never rematch: the lobby's next pairing IS the
+    // "again" channel, so all three rematch verbs answer with the same
+    // refusal whether the game is live or already finished.
+    if (isArena()) {
+        if (std::get_if<chess::net::RematchRequestMsg>(&msg)
+            || std::get_if<chess::net::RematchAcceptMsg>(&msg)
+            || std::get_if<chess::net::RematchDeclineMsg>(&msg)) {
+            sendTo(sender, chess::net::ErrorMsg{
+                "Arena games can't be rematched — the lobby pairs you next"});
+            return;
+        }
     }
 
     // Rematch (11.7) is heard on finished matches (that is its home) but

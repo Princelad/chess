@@ -20,6 +20,8 @@ static void printUsage(const char* prog)
               "  --timeout <secs>  Idle timeout in seconds (default: 0 = disabled)\n"
               "  --grace-ms <ms>   Reconnect grace for dropped players (11.2,\n"
               "                    default: 30000)\n"
+              "  --arena-rounds <N> Games per entrant before the arena ends\n"
+              "                    (12.3, default: 3)\n"
               "  --log-file <path> Log to file in addition to stdout\n"
               "  --db <path>       SQLite file for accounts/games (default: off)\n"
               "  --log-level <L>   Min log level: info, warn, error (default: info)\n"
@@ -63,6 +65,12 @@ int main(int argc, char* argv[])
             config.reconnectGraceMs = std::atoll(argv[++i]);
             if (config.reconnectGraceMs < 0) {
                 LOG_ERROR("Grace must be non-negative");
+                return 1;
+            }
+        } else if (arg == "--arena-rounds" && i + 1 < argc) {
+            config.arenaRounds = std::atoi(argv[++i]);
+            if (config.arenaRounds < 1) {
+                LOG_ERROR("Arena rounds must be at least 1");
                 return 1;
             }
         } else if (arg == "--log-file" && i + 1 < argc) {

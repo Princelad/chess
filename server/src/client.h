@@ -37,4 +37,9 @@ struct Client {
     // connection succeeds or is dropped. Reset on a successful login.
     int failedLogins = 0;
     std::chrono::steady_clock::time_point loginLockedUntil{};
+    // Arena membership (12.3): which lobby this connection belongs to and
+    // its entrant-row id there. Both empty/cleared on leave/disconnect;
+    // `state` stays in its normal values (arena members idle in Connected).
+    std::string arenaKey;
+    std::int64_t arenaEntrantId = 0;
 };

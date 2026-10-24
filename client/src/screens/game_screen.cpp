@@ -29,7 +29,8 @@ GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName,
                        std::optional<std::pair<double, double>> opponentRating,
                        bool rated, const std::string& timeControl,
                        const std::string& resumeToken,
-                       const std::string& startFen)
+                       const std::string& startFen,
+                       bool arena)
     : app_(app)
     , myColor_(myColor)
     , opponentName_(opponentName)
@@ -37,6 +38,7 @@ GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName,
     , rated_(rated)
     , resumeToken_(resumeToken)
     , startFen_(startFen)
+    , arena_(arena)
     , boardView_(static_cast<float>(App::WindowWidth),
                  static_cast<float>(App::WindowHeight),
                  myColor,
@@ -1014,10 +1016,16 @@ void GameScreen::applyTakeback(const std::vector<std::string>& sans)
 
 void GameScreen::finishGameOver()
 {
+    // The arena flag rides along so the result screen can hand us back to
+    // the lobby (12.3). The variant is reconstructed from the Start
+    // Position: a Chess960 welcome always carries a (rolled) FEN, the
+    // standard game never does.
+    const std::string variant = startFen_.empty()
+        ? std::string() : std::string(chess::net::Chess960Variant);
     app_.switchScreen(std::make_unique<GameOverScreen>(
         app_, gameOverTransition_.result(), gameOverTransition_.reason(),
         hud_.navigator().initialBoard(), hud_.navigator().moves(),
-        hud_.navigator().sans()));
+        hud_.navigator().sans(), arena_, timeControl_, variant));
 }
 
 void GameScreen::refreshRatingsHud()

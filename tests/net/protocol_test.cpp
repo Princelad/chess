@@ -1238,6 +1238,7 @@ TEST(ProtocolDebug, ServerMessages)
         1, "Ada", "Bob", static_cast<int>(GameResult::Draw),
         static_cast<int>(GameOverReason::AgreedDraw), "", "", "e4 e5", 0, false}}).empty());
     EXPECT_FALSE(debugString(ServerMessage{LeaderboardListMsg{}}).empty());
+    EXPECT_FALSE(debugString(ServerMessage{TournamentStateMsg{}}).empty());
 }
 
 TEST(ProtocolDebug, LoginMasksPassword)
@@ -1257,6 +1258,102 @@ TEST(ProtocolDebug, ServerContainsTypeName)
     EXPECT_NE(debugString(ServerMessage{WelcomeMsg{Color::White, "x"}}).find("Welcome"), std::string::npos);
     EXPECT_NE(debugString(ServerMessage{GameOverMsg{GameResult::Draw, GameOverReason::Checkmate}}).find("GameOver"), std::string::npos);
     EXPECT_NE(debugString(ServerMessage{ErrorMsg{"x"}}).find("Error"), std::string::npos);
+}
+
+// ── 12.3 arena tournament messages ──────────────────────────────────────────
+
+TEST(ProtocolRoundTrip, ClientTournamentJoin)
+{
+    ClientMessage msg = TournamentJoinMsg{"Alice", "5+3", "chess960"};
+    sf::Packet p = freshPacket(serializeClient(msg));
+    auto result = deserializeClient(p);
+    ASSERT_TRUE(result.has_value());
+    auto* m = std::get_if<TournamentJoinMsg>(&*result);
+    ASSERT_NE(m, nullptr);
+    EXPECT_EQ(m->name, "Alice");
+    EXPECT_EQ(m->timeControl, "5+3");
+    EXPECT_EQ(m->variant, "chess960");
+}
+
+TEST(ProtocolRoundTrip, ClientTournamentLeave)
+{
+    ClientMessage msg = TournamentLeaveMsg{};
+    sf::Packet p = freshPacket(serializeClient(msg));
+    auto result = deserializeClient(p);
+    ASSERT_TRUE(result.has_value());
+    EXPECT_NE(std::get_if<TournamentLeaveMsg>(&*result), nullptr);
+}
+
+TEST(ProtocolRoundTrip, ClientTournamentStandingsRequest)
+{
+    ClientMessage msg = TournamentStandingsRequestMsg{};
+    sf::Packet p = freshPacket(serializeClient(msg));
+    auto result = deserializeClient(p);
+    ASSERT_TRUE(result.has_value());
+    EXPECT_NE(std::get_if<TournamentStandingsRequestMsg>(&*result), nullptr);
+}
+
+TEST(ProtocolRoundTrip, ServerTournamentState)
+{
+    ServerMessage msg = TournamentStateMsg{
+        0, 3,
+        {TournamentRowMsg{"Alice", 4, 2, 0, 0, true, false},
+         TournamentRowMsg{"Bob", 1, 0, 1, 1, false, true}}};
+    sf::Packet p = freshPacket(serializeServer(msg));
+    auto result = deserializeServer(p);
+    ASSERT_TRUE(result.has_value());
+    auto* m = std::get_if<TournamentStateMsg>(&*result);
+    ASSERT_NE(m, nullptr);
+    EXPECT_EQ(m->phase, 0);
+    EXPECT_EQ(m->roundsTarget, 3);
+    ASSERT_EQ(m->rows.size(), 2u);
+    EXPECT_EQ(m->rows[0].name, "Alice");
+    EXPECT_EQ(m->rows[0].points, 4);
+    EXPECT_EQ(m->rows[0].wins, 2);
+    EXPECT_EQ(m->rows[0].self, true);
+    EXPECT_EQ(m->rows[1].name, "Bob");
+    EXPECT_EQ(m->rows[1].draws, 1);
+    EXPECT_EQ(m->rows[1].playing, true);
+}
+
+TEST(ProtocolGarbage, TournamentStatePhaseOutOfRangeFails)
+{
+    ServerMessage msg = TournamentStateMsg{
+        5, 3, {TournamentRowMsg{"Alice", 0, 0, 0, 0, false, false}}};
+    sf::Packet p = freshPacket(serializeServer(msg));
+    EXPECT_FALSE(deserializeServer(p).has_value());
+}
+
+TEST(ProtocolGarbage, TournamentStateRowOverflowFails)
+{
+    // Raw packet: the wire type lives inside protocol.cpp. Tag 22 is
+    // TournamentState; a row count above MaxArenaEntrants (100) is hostile
+    // input the deserializer refuses before allocating.
+    sf::Packet p;
+    p << ProtocolVersion << static_cast<uint8_t>(22)
+      << static_cast<int32_t>(0) << static_cast<int32_t>(3)
+      << static_cast<int32_t>(101);
+    EXPECT_FALSE(deserializeServer(p).has_value());
+}
+
+TEST(ProtocolGarbage, TournamentRowNegativeCountersFail)
+{
+    ServerMessage msg = TournamentStateMsg{
+        0, 3, {TournamentRowMsg{"Alice", -1, 0, 0, 0, false, false}}};
+    sf::Packet p = freshPacket(serializeServer(msg));
+    EXPECT_FALSE(deserializeServer(p).has_value());
+}
+
+TEST(ProtocolRoundTrip, ServerWelcomeCarriesArenaFlag)
+{
+    ServerMessage msg = WelcomeMsg{Color::White, "Bob", 1500.0, 350.0, false,
+                                   "", "tok", "", "", true};
+    sf::Packet p = freshPacket(serializeServer(msg));
+    auto result = deserializeServer(p);
+    ASSERT_TRUE(result.has_value());
+    auto* m = std::get_if<WelcomeMsg>(&*result);
+    ASSERT_NE(m, nullptr);
+    EXPECT_TRUE(m->arena);
 }
 
 } // namespace

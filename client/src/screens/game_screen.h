@@ -33,7 +33,8 @@ public:
                bool rated = false,
                const std::string& timeControl = {},
                const std::string& resumeToken = {},
-               const std::string& startFen = {});
+               const std::string& startFen = {},
+               bool arena = false);
     void handleEvent(const sf::Event& event) override;
     void update(float dtSec) override;
     void draw(sf::RenderWindow& window) override;
@@ -131,6 +132,10 @@ private:
     // Every SAN-chain reconstruction — token resume, takeback replay —
     // must chain from HERE, never from fromStartPos().
     std::string startFen_;
+    // Arena game (12.3): its game-over screen swaps the rematch row for
+    // "return to arena" instead (the server refuses rematch offers on
+    // arena games anyway).
+    bool arena_ = false;
 
     // Reconnect state machine (11.2). Idle until a real connection loss;
     // each step re-arms on new drops. RebindResumeFailed = token rejected

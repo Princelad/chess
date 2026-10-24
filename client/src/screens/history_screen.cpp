@@ -334,7 +334,7 @@ void HistoryScreen::update(float)
             app_.switchScreen(std::make_unique<GameScreen>(
                 app_, welcome->color, welcome->opponent, opponentRating,
                 welcome->rated, welcome->timeControl, welcome->resumeToken,
-                welcome->startFen));
+                welcome->startFen, welcome->arena));
             return;
         }
     }

@@ -19,7 +19,10 @@ public:
                    net::GameOverReason reason,
                    Board initialBoard,
                    std::vector<chess::Move> moves,
-                   std::vector<std::string> sanMoves);
+                   std::vector<std::string> sanMoves,
+                   bool arena = false,
+                   const std::string& arenaTimeControl = {},
+                   const std::string& arenaVariant = {});
     void handleEvent(const sf::Event& event) override;
     void update(float dtSec) override;
     void draw(sf::RenderWindow& window) override;
@@ -35,6 +38,10 @@ private:
     void activateMenu();
     void activateArchive();
     void activateAnalyze();
+    // Arena games (12.3) run their own post-game flow: the rematch button
+    // becomes the return-to-the-lobby switch (the lobby re-affirms the
+    // membership and shows the standings; the next pairing arrives there.
+    void activateArenaLobby();
     void acceptRematch();
     void declineRematch();
     void cycleFocus();
@@ -49,6 +56,11 @@ private:
     std::vector<chess::Move> moves_;
     std::vector<std::string> sanMoves_;
     RematchPhase rematchPhase_ = RematchPhase::Idle;
+    // Arena game (12.3): true when the finished game was a tournament
+    // pairing; its tc/variant re-enter the lobby.
+    bool arena_ = false;
+    std::string arenaTimeControl_;
+    std::string arenaVariant_;
 
     Button rematchBtn_;
     Button offerAcceptBtn_;

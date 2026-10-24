@@ -697,9 +697,9 @@ takeback, rematch, chat polish, per-class ratings, login throttling
   - [x] Offline mate-in-N set loaded from a bundled PGN file
   - [x] Hints/solution reveal; streak counter (uses the 9.1 menu entry)
 
-- [ ] **12.3 Arena tournaments**
-  - [ ] Server periodically pairs all queued players; standings broadcast
-  - [ ] Client tournament lobby + standings table
+- [x] **12.3 Arena tournaments**
+  - [x] Server periodically pairs all queued players; standings broadcast
+  - [x] Client tournament lobby + standings table
 
 - [ ] **12.4 Spectators**
   - [ ] Server relays moves to observers watching a live match

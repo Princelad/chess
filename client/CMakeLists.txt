@@ -20,6 +20,7 @@ src/connection.cpp
     src/screens/leaderboard_screen.cpp
     src/screens/local_game_screen.cpp
     src/screens/puzzle_screen.cpp
+    src/screens/tournament_lobby_screen.cpp
     src/puzzles.cpp
     src/screens/analysis_screen.cpp
     src/screens/hud.cpp)

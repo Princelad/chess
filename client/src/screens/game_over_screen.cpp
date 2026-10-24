@@ -3,6 +3,7 @@
 #include "game_screen.h"
 #include "history_screen.h"
 #include "menu_screen.h"
+#include "tournament_lobby_screen.h"
 #include "widgets/layout.h"
 
 namespace chess::client {
@@ -26,11 +27,17 @@ GameOverScreen::GameOverScreen(App& app,
                                net::GameOverReason reason,
                                Board initialBoard,
                                std::vector<chess::Move> moves,
-                               std::vector<std::string> sanMoves)
+                               std::vector<std::string> sanMoves,
+                               bool arena,
+                               const std::string& arenaTimeControl,
+                               const std::string& arenaVariant)
     : app_(app)
     , initialBoard_(std::move(initialBoard))
     , moves_(std::move(moves))
     , sanMoves_(std::move(sanMoves))
+    , arena_(arena)
+    , arenaTimeControl_(arenaTimeControl)
+    , arenaVariant_(arenaVariant)
 {
     std::string reasonStr;
     switch (reason) {
@@ -92,6 +99,15 @@ GameOverScreen::GameOverScreen(App& app,
                           sf::Color(100, 100, 100), sf::Color(200, 200, 200),
                           sf::Color(160, 160, 160));
     rematchBtn_.setOnClick([this] { activateRematch(); });
+
+    // Arena game (12.3): the rematch row is the lobby return instead —
+    // the server refuses rematch offers on tournament games; the next
+    // arena pairing is the "again" channel and arrives in the lobby (or
+    // right here, pulling this seat back into GameScreen automatically).
+    if (arena_) {
+        rematchBtn_.setLabel("Return to arena");
+        rematchBtn_.setOnClick([this] { activateArenaLobby(); });
+    }
 
     offerAcceptBtn_.setLabel("Accept");
     offerAcceptBtn_.setColors(sf::Color(60, 130, 60), sf::Color(80, 160, 80),
@@ -236,6 +252,20 @@ void GameOverScreen::activateRematch()
     }
 }
 
+void GameOverScreen::activateArenaLobby()
+{
+    if (!arena_) return;
+    // The join name rides along for guests (the server ignores it on
+    // authenticated connections); members re-affirm idempotently.
+    std::string joinName;
+    if (app_.profile().has_value() && !app_.profile()->isGuest)
+        joinName = app_.profile()->name;
+    else
+        joinName = app_.lastName();
+    app_.switchScreen(std::make_unique<TournamentLobbyScreen>(
+        app_, arenaTimeControl_, arenaVariant_, std::move(joinName)));
+}
+
 void GameOverScreen::activateMenu()
 {
     app_.connection().disconnect();
@@ -354,7 +384,7 @@ void GameOverScreen::update(float /*dtSec*/)
             app_.switchScreen(std::make_unique<GameScreen>(
                 app_, welcome->color, welcome->opponent, opponentRating,
                 welcome->rated, welcome->timeControl, welcome->resumeToken,
-                welcome->startFen));
+                welcome->startFen, welcome->arena));
             return;
         }
         if (std::holds_alternative<chess::net::ServerRematchRequestMsg>(msg)) {

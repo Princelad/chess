@@ -50,6 +50,14 @@ public:
     void seedRatings(const std::pair<double, double>& whiteRd,
                      const std::pair<double, double>& blackRd);
 
+    // Arena games (12.3): the game carries its arena's key ("tc|variant",
+    // same form the server's lobby map uses) so the game-over hook can
+    // update the right standings, and rematch offers never fire — the
+    // arena's_next pairing IS the "again" channel.
+    void setArenaKey(std::string key);
+    bool isArena() const { return !arenaKey_.empty(); }
+    const std::string& arenaKey() const { return arenaKey_; }
+
     // Currently connected player of a color, or nullptr while absent —
     // the pre-seats API shape callers know (server loop, hooks).
     Client* white() const;
@@ -65,7 +73,6 @@ public:
 
     void handleMessage(Client& sender, const chess::net::ClientMessage& msg);
     void handleDisconnect(const Client& client);
-
     // Token rejoin (11.2): binds a returning connection to one absent seat
     // of a live game, or delivers the finished game's outcome as a ghost.
     // On Rebound, reboundColorOut tells the server whose state to resync.
@@ -216,6 +223,10 @@ private:
     // a finished match (retention window). The fresh match on acceptance
     // is built by the server-side rematch callback, never here.
     std::optional<std::size_t> rematchPending_;
+
+    // Arena membership (12.3): set by the server at pairing for tournament
+    // games. Empty = a normal queue/rating game.
+    std::string arenaKey_;
 
     // Releases the pending rematch with a decline notice to the offer's
     // asker; withdrawn=true when the asker themself is the one leaving.

@@ -137,6 +137,28 @@ struct RematchRequestMsg {};
 struct RematchAcceptMsg {};
 struct RematchDeclineMsg {};
 
+// Arena (12.3): join the tournament lobby for one (timeControl, variant)
+// combination. The name rides along only for guest connections (the same
+// validation JoinMsg applies server-side); logged-in players leave it
+// empty — the server keeps the account name. Joining an arena already
+// joined by this connection is an idempotent re-affirmation; joining a
+// different arena silently moves this connection over.
+struct TournamentJoinMsg {
+    std::string name;
+    std::string timeControl;
+    std::string variant;
+};
+
+// Stop pairing me in the arena: the row (and its scores) drops and no
+// further pairing includes this connection. Refused while a game is still
+// being played — finish it first.
+struct TournamentLeaveMsg {};
+
+// Standings refresh for the arena the connection belongs to. Answered in
+// any connection state, like the archive/leaderboard reads; a connection
+// without arena membership gets an ErrorMsg.
+struct TournamentStandingsRequestMsg {};
+
 using ClientMessage = std::variant<
     JoinMsg,
     MoveMsg,
@@ -156,7 +178,10 @@ using ClientMessage = std::variant<
     TakebackDeclineMsg,
     RematchRequestMsg,
     RematchAcceptMsg,
-    RematchDeclineMsg
+    RematchDeclineMsg,
+    TournamentJoinMsg,
+    TournamentLeaveMsg,
+    TournamentStandingsRequestMsg
 >;
 
 // ── Server → Client ─────────────────────────────────────────────────────────
@@ -177,6 +202,11 @@ struct WelcomeMsg {
     // as intended.
     std::string variant;
     std::string startFen;
+    // Arena game (12.3): the pairing came from a tournament lobby rather
+    // than the matchmaking queue. Arena games never rate; the client's
+    // game-over screen swaps its rematch controls for "return to arena".
+    // Trailing appended — legacy-shaped packets fail to deserialize.
+    bool arena = false;
 };
 
 struct OpponentJoinedMsg {
@@ -327,6 +357,32 @@ struct ServerRematchDeclineMsg {
     bool withdrawn = false;
 };
 
+// ── Arena (12.3) ────────────────────────────────────────────────────────────
+
+// One row of the arena standings. Points run W=2 / D=1 / L=0; rows are
+// ordered points-DESC, then name ASC (server-side sort, deterministic).
+// `self` marks the recipient's own row; `playing` marks a row whose player
+// is seated in a live game right now.
+struct TournamentRowMsg {
+    std::string name;
+    int points = 0;
+    int wins = 0;
+    int losses = 0;
+    int draws = 0;
+    bool self = false;
+    bool playing = false;
+};
+
+// Full standings snapshot: broadcast to every arena member after joins,
+// leaves and finished games, and answered single-copy to
+// TournamentStandingsRequestMsg. phase: 0 = running, 1 = final (the fixed
+// rounds-per-player quota is met; the lobby shows the end table).
+struct TournamentStateMsg {
+    int phase = 0;
+    int roundsTarget = 0;
+    std::vector<TournamentRowMsg> rows;
+};
+
 using ServerMessage = std::variant<
     WelcomeMsg,
     OpponentJoinedMsg,
@@ -349,7 +405,8 @@ using ServerMessage = std::variant<
     TakebackAcceptedMsg,
     ServerTakebackDeclineMsg,
     ServerRematchRequestMsg,
-    ServerRematchDeclineMsg
+    ServerRematchDeclineMsg,
+    TournamentStateMsg
 >;
 
 } // namespace net
