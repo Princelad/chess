@@ -32,6 +32,22 @@ public:
                  bool myTurn, bool gameOver);
     void setRatings(std::optional<std::pair<double, double>> local,
                     std::optional<std::pair<double, double>> opponent);
+    // Spectator view (12.4): both name cards speak in seat names (no
+    // "You"/turn ownership) and the watcher count annotates the white
+    // card. ratingsSuffix reuse: localRating_ renders on the WHITE card
+    // and opponentRating_ on the BLACK one — the screen maps both seats
+    // accordingly.
+    void setSpectatorMode(bool on) { spectatorMode_ = on; }
+    void setSpectatorNames(const std::string& whiteName,
+                           const std::string& blackName)
+    {
+        spectatorWhite_ = whiteName;
+        spectatorBlack_ = blackName;
+    }
+    void setWatcherCount(int count)
+    {
+        watcherCount_ = count > 0 ? count : 0;
+    }
     // Re-sync point from the (authoritative) server: `sideToMove` now owns
     // `sideRemainingMs` (11.1). Unlimited games feed 0, which disables the
     // display until the first clocked sync arrives.
@@ -71,6 +87,12 @@ private:
     Color myColor_ = Color::White;
     bool myTurn_ = false;
     bool gameOver_ = false;
+
+    // Spectator view (12.4).
+    bool spectatorMode_ = false;
+    std::string spectatorWhite_;
+    std::string spectatorBlack_;
+    int watcherCount_ = 0;
 
     // Chess clocks (11.1). remainingMs_[0]=White, [1]=Black, values sampled
     // at the last server move; the side on the move ticks locally in

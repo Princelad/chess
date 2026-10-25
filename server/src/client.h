@@ -42,4 +42,10 @@ struct Client {
     // `state` stays in its normal values (arena members idle in Connected).
     std::string arenaKey;
     std::int64_t arenaEntrantId = 0;
+    // Spectator membership (12.4): the live match this connection is
+    // watching (nullptr = not watching). The connection keeps its
+    // Connected state while spectating — it owns no seat and answers play
+    // verbs with the ordinary in-match errors. Cleared on SpectateStop,
+    // disconnect, and by the watched match itself when it ends.
+    Match* spectating = nullptr;
 };

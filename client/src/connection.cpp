@@ -83,6 +83,16 @@ void Connection::resume(const std::string& token)
     send(chess::net::ResumeMsg{token});
 }
 
+void Connection::spectate(const std::string& name)
+{
+    send(chess::net::SpectateMsg{name});
+}
+
+void Connection::spectateStop()
+{
+    send(chess::net::SpectateStopMsg{});
+}
+
 Connection::~Connection()
 {
     if (connectThread_.joinable()) connectThread_.join();

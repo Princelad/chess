@@ -701,9 +701,9 @@ takeback, rematch, chat polish, per-class ratings, login throttling
   - [x] Server periodically pairs all queued players; standings broadcast
   - [x] Client tournament lobby + standings table
 
-- [ ] **12.4 Spectators**
-  - [ ] Server relays moves to observers watching a live match
-  - [ ] Spectator list/count surfaced to players (optional)
+- [x] **12.4 Spectators**
+  - [x] Server relays moves to observers watching a live match
+  - [x] Spectator list/count surfaced to players (optional)
 
 ---
 

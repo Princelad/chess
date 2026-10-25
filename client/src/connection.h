@@ -40,6 +40,12 @@ public:
     // Token rejoin (11.2): after a mid-game drop, reclaim the seat on a
     // fresh connection. The server answers with ResumeStateMsg or ErrorMsg.
     void resume(const std::string& token);
+    // Spectator view (12.4): watch a live game — `name` follows that
+    // player's ongoing game (either seat), empty picks any game in
+    // progress. The server answers with SpectateStateMsg or ErrorMsg.
+    void spectate(const std::string& name);
+    // Leave the stands; the connection itself stays open.
+    void spectateStop();
 
     void poll();
     bool send(const chess::net::ClientMessage& msg);

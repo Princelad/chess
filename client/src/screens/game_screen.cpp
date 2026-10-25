@@ -1,5 +1,6 @@
 #include "game_screen.h"
 #include "game_over_screen.h"
+#include "connect_screen.h"
 #include "keyboard.h"
 #include "ui_helpers.h"
 #include "widgets/layout.h"
@@ -30,7 +31,7 @@ GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName,
                        bool rated, const std::string& timeControl,
                        const std::string& resumeToken,
                        const std::string& startFen,
-                       bool arena)
+                       bool arena, bool spectator)
     : app_(app)
     , myColor_(myColor)
     , opponentName_(opponentName)
@@ -39,6 +40,7 @@ GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName,
     , resumeToken_(resumeToken)
     , startFen_(startFen)
     , arena_(arena)
+    , spectator_(spectator)
     , boardView_(static_cast<float>(App::WindowWidth),
                  static_cast<float>(App::WindowHeight),
                  myColor,
@@ -153,7 +155,97 @@ GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName,
         addSystemChat("Takeback requested");
     });
 
+    // Spectator mode (12.4): the action buttons give way to one Leave
+    // button; the chat input is disabled (watchers may not talk).
+    leaveBtn_.setLabel("Leave");
+    leaveBtn_.setColors(sf::Color(70, 90, 70), sf::Color(85, 110, 85),
+                        sf::Color(55, 72, 55), sf::Color(42, 55, 42),
+                        sf::Color(105, 125, 105), sf::Color(235, 240, 235),
+                        sf::Color(75, 95, 75), sf::Color(140, 165, 140),
+                        sf::Color(175, 200, 175));
+    leaveBtn_.setOnClick([this] { leaveWatch(); });
+
+    if (spectator_) {
+        chatInput_.setEnabled(false);
+        chatInput_.setPlaceholder("Spectators can't chat");
+    }
+
     layoutPanel();
+}
+
+// The spectator view (12.4): a White-oriented read-only window on the live
+// game. Delegation wires all the widgets; the snapshot then paints names,
+// clocks and the SAN chain.
+GameScreen::GameScreen(App& app, const chess::net::SpectateStateMsg& snapshot)
+    : GameScreen(app, Color::White, snapshot.blackName,
+                 std::make_pair(snapshot.blackRating, snapshot.blackDeviation),
+                 false, snapshot.timeControl, {}, snapshot.startFen, false,
+                 true)
+{
+    applySpectateState(snapshot);
+}
+
+void GameScreen::applySpectateState(const chess::net::SpectateStateMsg& msg)
+{
+    spectator_ = true;
+    whiteName_ = msg.whiteName;
+    spectatorCount_ = msg.spectators;
+    opponentName_ = msg.blackName;
+    opponentRating_ = std::make_pair(msg.blackRating, msg.blackDeviation);
+    rated_ = false;
+    timeControl_ = msg.timeControl;
+
+    hud_.setSpectatorMode(true);
+    hud_.setSpectatorNames(msg.whiteName, msg.blackName);
+    hud_.setWatcherCount(msg.spectators);
+    // localRating_ renders the WHITE card's suffix and opponentRating_ the
+    // BLACK one — with the White orientation both land on the right seat,
+    // so the player-flow refreshRatingsHud is deliberately NOT called.
+    hud_.setRatings(std::make_pair(msg.whiteRating, msg.whiteDeviation),
+                    std::make_pair(msg.blackRating, msg.blackDeviation));
+
+    // The live chain: identical SAN replay to applyResume (12.4), from the
+    // game's own Start Position rather than the snapshot FEN.
+    Board board = startBoard();
+    std::vector<chess::Move> moves;
+    moves.reserve(msg.sans.size());
+    for (const auto& san : msg.sans) {
+        auto mv = chess::san::fromSan(board, san);
+        if (!mv.has_value())
+            break;
+        moves.push_back(*mv);
+        board.makeMove(*mv);
+    }
+    hud_.setGame(startBoard(), moves, msg.sans);
+    hud_.navigator().goEnd(); // the live position, not ply zero
+
+    // Any staged interaction state from construction is stale by definition.
+    anim_.cancel();
+    hl_.selectedSquare.reset();
+    hl_.legalMoveTargets.clear();
+    dragFrom_.reset();
+    rightPress_.reset();
+    promo_.reset();
+    premove_.reset();
+    keyCursor_ = {4, 4};
+    annotations_.clear();
+    gameOver_ = false;
+    myTurn_ = false; // a watcher never has the move
+    hud_.setInfo(opponentName_, myColor_, myTurn_, gameOver_);
+    hud_.setGameOver(false);
+    hud_.syncClocks(msg.whiteRemainingMs, msg.blackRemainingMs,
+                    board.sideToMove());
+    hud_.setStatus("Watching " + whiteName_ + " vs " + opponentName_, 4.f);
+}
+
+void GameScreen::leaveWatch()
+{
+    // Tell the server to release the watch (its count relays on the next
+    // move), then back to the connect screen for another pick.
+    if (app_.connection().state() == ConnectionState::Connected)
+        app_.connection().spectateStop();
+    app_.connection().disconnect();
+    app_.switchScreen(std::make_unique<ConnectScreen>(app_));
 }
 
 void GameScreen::layoutPanel()
@@ -168,6 +260,10 @@ void GameScreen::layoutPanel()
                                         sf::Vector2f(96.f, BtnH)));
     takebackBtn_.setRect(sf::FloatRect(sf::Vector2f(px + 204.f, hud_.contentBottom()),
                                        sf::Vector2f(96.f, BtnH)));
+
+    // The spectator leave button takes the first slot (12.4).
+    leaveBtn_.setRect(sf::FloatRect(sf::Vector2f(px, hud_.contentBottom()),
+                                    sf::Vector2f(96.f, BtnH)));
 
     declineBtn_.setRect(sf::FloatRect(sf::Vector2f(px, hud_.contentBottom()),
                                       sf::Vector2f(90.f, BtnH)));
@@ -428,6 +524,7 @@ void GameScreen::addSystemChat(const std::string& text)
 
 void GameScreen::sendChat()
 {
+    if (spectator_) return; // watchers may not talk (12.4)
     if (chatInput_.text().empty()) return;
     const std::string text = chatInput_.text();
     chatInput_.setText("");
@@ -479,6 +576,7 @@ void GameScreen::handleEvent(const sf::Event& event)
         if (kp->code == sf::Keyboard::Key::Escape) {
             if (showingHelp_) { showingHelp_ = false; return; }
             if (promo_) { cancelPromotion(); return; }
+            if (spectator_) { leaveWatch(); return; } // leave the stands
             clearBoardInput();
             premove_.reset();
             deselect();
@@ -496,6 +594,7 @@ void GameScreen::handleEvent(const sf::Event& event)
 
         switch (keyToAction(kp->code, kp->shift)) {
             case KeyboardAction::Deselect:
+                if (spectator_) return; // nothing selected to clear
                 clearBoardInput();
                 premove_.reset();
                 deselect();
@@ -515,11 +614,21 @@ void GameScreen::handleEvent(const sf::Event& event)
                 clearBoardInput();
                 return;
             case KeyboardAction::MoveCursor: {
+                // Keyboard play is seat-only (9.6): a watcher's arrows do
+                // nothing — there is no cursor commit to give a move to.
+                if (spectator_) return;
                 auto [df, dr] = cursorDelta(kp->code);
                 keyCursor_ = moveCursorStep(keyCursor_.first, keyCursor_.second, df, dr);
                 return;
             }
             case KeyboardAction::Enter: {
+                if (spectator_) {
+                    // Reaching the live position is a watcher's only use
+                    // for Enter (the navigator stepper above is shared).
+                    if (!hud_.navigator().atEnd())
+                        hud_.navigator().goEnd();
+                    return;
+                }
                 if (!hud_.navigator().atEnd()) {
                     hud_.navigator().goEnd();
                     deselect();
@@ -602,7 +711,9 @@ void GameScreen::handleEvent(const sf::Event& event)
         return;
     }
 
-    if (!gameOver_) {
+    if (spectator_) {
+        if (leaveBtn_.handleEvent(event, local)) return;
+    } else if (!gameOver_) {
         if (drawOfferPending_ || takebackOfferPending_) {
             if (declineBtn_.handleEvent(event, local)) return;
             if (acceptBtn_.handleEvent(event, local)) return;
@@ -613,6 +724,7 @@ void GameScreen::handleEvent(const sf::Event& event)
         }
     }
 
+    if (spectator_) return; // the board is read-only from here on
     if (const auto* mb = event.getIf<sf::Event::MouseButtonPressed>()) {
         if (mb->button == sf::Mouse::Button::Left) {
             if (promo_) {
@@ -737,10 +849,23 @@ void GameScreen::update(float dtSec)
                                 move->remainingMs);
                 hl_.selectedSquare.reset();
                 hl_.legalMoveTargets.clear();
-                myTurn_ = true;
-                hud_.setInfo(opponentName_, myColor_, myTurn_, gameOver_);
-                // Our premove (if any) auto-sends now, or dies trying (11.4).
-                flushPremove();
+                if (spectator_) {
+                    // The watcher count hops with the move relay (12.4).
+                    if (move->spectators != spectatorCount_) {
+                        spectatorCount_ = move->spectators;
+                        hud_.setWatcherCount(spectatorCount_);
+                        if (spectatorCount_ > 0)
+                            hud_.setStatus(
+                                std::to_string(spectatorCount_) + " watching",
+                                3.f);
+                    }
+                } else {
+                    myTurn_ = true;
+                    hud_.setInfo(opponentName_, myColor_, myTurn_, gameOver_);
+                    // Our premove (if any) auto-sends now, or dies trying
+                    // (11.4).
+                    flushPremove();
+                }
             }
         }
         else if (auto* gameOver = std::get_if<chess::net::GameOverMsg>(&msg)) {
@@ -795,6 +920,10 @@ void GameScreen::update(float dtSec)
             // Token resume (11.2): the full remote state, replayed in place.
             reconnectPhase_ = ReconnectPhase::None;
             applyResume(*resumeState);
+        }
+        else if (auto* spectateState = std::get_if<chess::net::SpectateStateMsg>(&msg)) {
+            // The live view has landed (12.4): repaint as a watcher.
+            applySpectateState(*spectateState);
         }
         else if (auto* reconn = std::get_if<chess::net::OpponentReconnectingMsg>(&msg)) {
             hud_.setStatus("Opponent lost connection",
@@ -1016,6 +1145,14 @@ void GameScreen::applyTakeback(const std::vector<std::string>& sans)
 
 void GameScreen::finishGameOver()
 {
+    if (spectator_) {
+        // A watcher holds no seat: no result screen / rematch flow. The
+        // transition delay above let the finale play out; drop back to
+        // the connect screen.
+        leaveWatch();
+        return;
+    }
+
     // The arena flag rides along so the result screen can hand us back to
     // the lobby (12.3). The variant is reconstructed from the Start
     // Position: a Chess960 welcome always carries a (rolled) FEN, the

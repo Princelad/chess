@@ -40,6 +40,7 @@ if(BUILD_TESTING)
         server/clock_test.cpp
         server/matchmaker_test.cpp
         server/match_test.cpp
+        server/spectator_test.cpp
         server/bot_match_test.cpp
         server/tournament_test.cpp
         client/connection_test.cpp
@@ -63,6 +64,7 @@ if(BUILD_TESTING)
         e2e/rematch_test.cpp
         e2e/chess960_test.cpp
         e2e/arena_test.cpp
+        e2e/spectator_test.cpp
         client/puzzle_test.cpp)
 
     target_link_libraries(chess-tests PRIVATE chesscore chessnet chessclient chessserver chessuci chessdb GTest::gtest_main)

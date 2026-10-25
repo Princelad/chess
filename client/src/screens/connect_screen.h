@@ -18,9 +18,9 @@ enum class ConnectPhase {
 };
 
 // Read-only server browsing targets reachable without joining a queue
-// (10.3 archive, 10.4 leaderboard), plus the arena (12.3): all connect
-// first, then switch screens.
-enum class BrowseTarget { None, Archive, Leaderboard, Arena };
+// (10.3 archive, 10.4 leaderboard), plus the arena (12.3) and the
+// spectator view (12.4): all connect first, then switch screens.
+enum class BrowseTarget { None, Archive, Leaderboard, Arena, Watch };
 
 class ConnectScreen : public Screen {
 public:
@@ -65,6 +65,7 @@ private:
     Button archiveBtn_;
     Button leaderboardBtn_;
     Button arenaBtn_;
+    Button watchBtn_;
     Button tcBtn_;
     Label tcLabel_;
     Button variantBtn_;

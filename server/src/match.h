@@ -58,6 +58,24 @@ public:
     bool isArena() const { return !arenaKey_.empty(); }
     const std::string& arenaKey() const { return arenaKey_; }
 
+    // Spectators (12.4): unbound connections reading the game live. They
+    // receive every move/result relay exactly as the seats do, and their
+    // play verbs are answered by the ordinary in-match errors (they own
+    // no seat). `addSpectator` is refused past the stands cap; the game
+    // end releases everyone by itself.
+    static constexpr std::size_t MaxSpectators = 100;
+    bool addSpectator(Client& spectator);
+    bool removeSpectator(Client& spectator);
+    bool isSpectator(const Client& spectator) const;
+    std::int32_t spectatorCount() const
+    {
+        return static_cast<std::int32_t>(spectators_.size());
+    }
+    // The SpectateStateMsg this match would hand a fresh watcher right
+    // now; applyTakeback re-sends it to current watchers because the
+    // plies the rollback retractes never air as Move broadcasts.
+    chess::net::SpectateStateMsg spectateSnapshot() const;
+
     // Currently connected player of a color, or nullptr while absent —
     // the pre-seats API shape callers know (server loop, hooks).
     Client* white() const;
@@ -227,6 +245,11 @@ private:
     // Arena membership (12.3): set by the server at pairing for tournament
     // games. Empty = a normal queue/rating game.
     std::string arenaKey_;
+
+    // Spectators (12.4): unbound watcher connections, presence-checked on
+    // every relay — the pointers live in the server's clients vector and
+    // leave through removeSpectator before their owner drops.
+    std::vector<Client*> spectators_;
 
     // Releases the pending rematch with a decline notice to the offer's
     // asker; withdrawn=true when the asker themself is the one leaving.

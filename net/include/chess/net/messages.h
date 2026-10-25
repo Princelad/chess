@@ -159,6 +159,20 @@ struct TournamentLeaveMsg {};
 // without arena membership gets an ErrorMsg.
 struct TournamentStandingsRequestMsg {};
 
+// Spectators (12.4): watch a live game. `name` identifies either seat's
+// player name; empty = the server picks any game in progress. A watching
+// connection is read-only over the board — moves, clocks and the result
+// arrive exactly as the seats see them, replies to play verbs are the
+// ordinary in-match errors.
+struct SpectateMsg {
+    std::string name;
+};
+
+// Stop watching the current live game; the connection stays open and may
+// spectate another game (or idle). The game-over broadcast releases every
+// watcher by itself.
+struct SpectateStopMsg {};
+
 using ClientMessage = std::variant<
     JoinMsg,
     MoveMsg,
@@ -181,7 +195,9 @@ using ClientMessage = std::variant<
     RematchDeclineMsg,
     TournamentJoinMsg,
     TournamentLeaveMsg,
-    TournamentStandingsRequestMsg
+    TournamentStandingsRequestMsg,
+    SpectateMsg,
+    SpectateStopMsg
 >;
 
 // ── Server → Client ─────────────────────────────────────────────────────────
@@ -220,6 +236,11 @@ struct ServerMoveMsg {
     // Remaining time of the player now on the move, in milliseconds.
     // 0 = no clock (unlimited game). 11.1: synced with every move broadcast.
     std::int32_t remainingMs = 0;
+    // How many spectators are watching the match (12.4). Trailing appended
+    // — legacy-shaped packets fail to deserialize as intended. The count
+    // rides the move broadcast so seats and watchers refresh it exactly
+    // when the position changes; 0 = nobody watching.
+    std::int32_t spectators = 0;
 };
 
 struct ServerDrawOfferMsg {};
@@ -383,6 +404,27 @@ struct TournamentStateMsg {
     std::vector<TournamentRowMsg> rows;
 };
 
+// ── Spectators (12.4) ───────────────────────────────────────────────────────
+
+// The full live view handed to a fresh watcher: the same SAN-chain replay
+// a resumed seat does (sans chained from startFen; empty = the standard
+// start), both seat names/ratings for the HUD cards, and both clocks'
+// remaining time sampled at the spectate (0 = unlimited).
+struct SpectateStateMsg {
+    std::string whiteName;
+    std::string blackName;
+    double whiteRating = 1500.0;
+    double whiteDeviation = 350.0;
+    double blackRating = 1500.0;
+    double blackDeviation = 350.0;
+    std::string timeControl;
+    std::string startFen;
+    std::vector<std::string> sans;
+    std::int32_t whiteRemainingMs = 0;
+    std::int32_t blackRemainingMs = 0;
+    std::int32_t spectators = 0;
+};
+
 using ServerMessage = std::variant<
     WelcomeMsg,
     OpponentJoinedMsg,
@@ -406,7 +448,8 @@ using ServerMessage = std::variant<
     ServerTakebackDeclineMsg,
     ServerRematchRequestMsg,
     ServerRematchDeclineMsg,
-    TournamentStateMsg
+    TournamentStateMsg,
+    SpectateStateMsg
 >;
 
 } // namespace net

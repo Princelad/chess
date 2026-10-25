@@ -34,14 +34,20 @@ public:
                const std::string& timeControl = {},
                const std::string& resumeToken = {},
                const std::string& startFen = {},
-               bool arena = false);
+               bool arena = false,
+               bool spectator = false);
+    // Spectator view (12.4): built from the live-game sync snapshot — no
+    // seat, read-only board, both cards in seat names. Delegates to the
+    // player ctor (White-oriented view) then replays the SAN chain.
+    GameScreen(App& app, const chess::net::SpectateStateMsg& snapshot);
     void handleEvent(const sf::Event& event) override;
     void update(float dtSec) override;
     void draw(sf::RenderWindow& window) override;
 
 private:
     void selectPiece(int file, int rank);
-    void trySendMove(int targetFile, int targetRank);    void deselect();
+    void trySendMove(int targetFile, int targetRank);
+    void deselect();
     void commitMove(const chess::Move& m);
     void buildPromotion(int fromFile, int fromRank, int toFile, int toRank);
     void sendPromotionMove(chess::PieceType type);
@@ -68,6 +74,11 @@ private:
     void drawChat(sf::RenderWindow& window);
     void drawHelpOverlay(sf::RenderWindow& window);
     void finishGameOver();
+
+    // Spectator mode (12.4): rebuild the empty board from the live-game
+    // sync and leave the watch again. Input stays board-read-only.
+    void applySpectateState(const chess::net::SpectateStateMsg& msg);
+    void leaveWatch();
 
     // Reconnect & resume (11.2): automatic token-based rejoin after a
     // mid-game connection loss, with the game-over screen as the fallback.
@@ -107,6 +118,12 @@ private:
     std::string opponentName_;
     std::optional<std::pair<double, double>> opponentRating_;
     bool rated_ = false;
+    // Spectator view (12.4): when true the screen owns no seat — input is
+    // read-only over the board, the leave button swaps in for the action
+    // buttons, and the game-over switch returns to the connect screen.
+    bool spectator_ = false;
+    std::string whiteName_;
+    int spectatorCount_ = 0;
 
     std::vector<ChatEntry> chatLog_;
     TextField chatInput_;
@@ -120,6 +137,8 @@ private:
     Button resignBtn_;
     Button offerDrawBtn_;
     Button takebackBtn_;
+    // Spectator-mode replacement row (12.4): a single leave button.
+    Button leaveBtn_;
     // 11.3: `takebackOfferPending_` is the opponent's incoming request
     // awaiting the accept/decline prompt; our own request is only a status
     // line (the server already errors on duplicate asks).

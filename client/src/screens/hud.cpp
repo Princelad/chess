@@ -193,19 +193,39 @@ void Hud::draw(sf::RenderWindow& window, const sf::Font& font)
         localClock = clockText(shownRemainingMs(myColor_));
     }
 
-    std::string opponentText = "vs " + opponentName_
-        + ratingSuffix(opponentRating_);
-    drawPlayerCard(window, font, opponentText, opposite(myColor_),
-                   OpponentNameY, OpponentCapturedY, false, opponentClock);
+    if (spectatorMode_) {
+        // Both cards speak in seat names, there is no "You". The view is
+        // White-oriented (the screen forces myColor_ to White), so the
+        // to-move annotation rides the card the navigator shows.
+        const bool whiteToMove =
+            navigator_.finalBoard().sideToMove() == Color::White;
+        std::string blackText = spectatorBlack_ + ratingSuffix(opponentRating_)
+            + (!gameOver_ && !whiteToMove ? " - to move" : "");
+        drawPlayerCard(window, font, blackText, Color::Black,
+                       OpponentNameY, OpponentCapturedY, false, opponentClock);
 
-    std::string colorStr = myColor_ == Color::White ? "White" : "Black";
-    std::string localName = "You - " + colorStr + ratingSuffix(localRating_);
-    if (!gameOver_)
-        localName += myTurn_ ? "  -  Your turn" : "  -  Waiting...";
-    localNameLabel_.setColor(myTurn_ ? sf::Color(76, 175, 80)
-                                     : sf::Color(180, 180, 180));
-    drawPlayerCard(window, font, localName, myColor_,
-                   LocalNameY, LocalCapturedY, true, localClock);
+        std::string whiteText = spectatorWhite_ + ratingSuffix(localRating_)
+            + (!gameOver_ && whiteToMove ? " - to move" : "")
+            + (watcherCount_ > 0
+                   ? " - " + std::to_string(watcherCount_) + " watching"
+                   : "");
+        drawPlayerCard(window, font, whiteText, Color::White,
+                       LocalNameY, LocalCapturedY, true, localClock);
+    } else {
+        std::string opponentText = "vs " + opponentName_
+            + ratingSuffix(opponentRating_);
+        drawPlayerCard(window, font, opponentText, opposite(myColor_),
+                       OpponentNameY, OpponentCapturedY, false, opponentClock);
+
+        std::string colorStr = myColor_ == Color::White ? "White" : "Black";
+        std::string localName = "You - " + colorStr + ratingSuffix(localRating_);
+        if (!gameOver_)
+            localName += myTurn_ ? "  -  Your turn" : "  -  Waiting...";
+        localNameLabel_.setColor(myTurn_ ? sf::Color(76, 175, 80)
+                                         : sf::Color(180, 180, 180));
+        drawPlayerCard(window, font, localName, myColor_,
+                       LocalNameY, LocalCapturedY, true, localClock);
+    }
 
     if (!statusMsg_.empty()) {
         statusLabel_.setText(statusMsg_);

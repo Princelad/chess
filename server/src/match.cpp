@@ -1,5 +1,6 @@
 #include "match.h"
 
+#include <algorithm>
 #include <chrono>
 #include <random>
 #include <string>
@@ -127,6 +128,57 @@ void Match::setArenaKey(std::string key)
     arenaKey_ = std::move(key);
 }
 
+bool Match::addSpectator(Client& spectator)
+{
+    if (spectators_.size() >= MaxSpectators)
+        return false;
+    if (std::find(spectators_.begin(), spectators_.end(), &spectator)
+        != spectators_.end())
+        return true; // already watching — idempotent re-bind
+    spectators_.push_back(&spectator);
+    return true;
+}
+
+bool Match::removeSpectator(Client& spectator)
+{
+    auto it = std::find(spectators_.begin(), spectators_.end(), &spectator);
+    if (it == spectators_.end())
+        return false;
+    spectators_.erase(it);
+    return true;
+}
+
+bool Match::isSpectator(const Client& spectator) const
+{
+    return std::find(spectators_.begin(), spectators_.end(), &spectator)
+        != spectators_.end();
+}
+
+// The SpectateStateMsg this match would hand a fresh watcher now (12.4):
+// names/ratings from the seat stamps — the same figures the seats see —
+// the SAN chain, both clocks sampled now, the watcher count. Ratings come
+// from the pairing-time stamps, not a live PlayerStore lookup.
+chess::net::SpectateStateMsg Match::spectateSnapshot() const
+{
+    chess::net::SpectateStateMsg snapshot;
+    const Seat& white = seats_[0];
+    const Seat& black = seats_[1];
+    snapshot.whiteName = white.name;
+    snapshot.blackName = black.name;
+    snapshot.whiteRating = white.rating;
+    snapshot.whiteDeviation = white.deviation;
+    snapshot.blackRating = black.rating;
+    snapshot.blackDeviation = black.deviation;
+    snapshot.timeControl = timeControl_;
+    snapshot.startFen = startFen_;
+    snapshot.sans = sanHistory_;
+    const auto clocks = clockSnapshotMs(steadyNowMs());
+    snapshot.whiteRemainingMs = clocks.first;
+    snapshot.blackRemainingMs = clocks.second;
+    snapshot.spectators = static_cast<std::int32_t>(spectators_.size());
+    return snapshot;
+}
+
 Client* Match::white() const { return seats_[0].present; }
 
 Client* Match::black() const { return seats_[1].present; }
@@ -251,9 +303,15 @@ bool Match::handleMoveSAN(Client& sender, const std::string& san)
                              steadyNowMs(), moverRemaining);
         serverMove.remainingMs = static_cast<std::int32_t>(moverRemaining);
     }
+    // The watcher count rides the broadcast (12.4): seats and spectators
+    // refresh it exactly when the position changes.
+    serverMove.spectators = static_cast<std::int32_t>(spectators_.size());
     for (auto& seat : seats_)
         if (seat.present)
             sendTo(*seat.present, serverMove);
+    for (Client* spectator : spectators_)
+        if (spectator)
+            sendTo(*spectator, serverMove);
 
     // An accepted move resolves whatever was on the table: the draw offer
     // was for the old position, and the takeback (if one was out and the
@@ -427,6 +485,12 @@ void Match::applyTakeback(std::size_t requesterIdx)
     chess::net::TakebackAcceptedMsg accepted{sanHistory_};
     for (auto& seat : seats_)
         sendToPresent(seat.present, accepted);
+    // Spectators (12.4) have no takeback verb of their own and the two
+    // retracted plies never air as Move broadcasts — re-send the whole
+    // snapshot so their replayed history shrinks with the game's.
+    for (Client* spectator : spectators_)
+        if (spectator)
+            sendTo(*spectator, spectateSnapshot());
     LOG_INFO("Takeback for " + seats_[requesterIdx].name
              + " (" + std::to_string(sanHistory_.size()) + " plies remain)");
 
@@ -754,6 +818,16 @@ void Match::endGame(chess::net::GameResult result, chess::net::GameOverReason re
     // from lastGameOver() with the final state on a late token resume.
     for (auto& seat : seats_)
         sendToPresent(seat.present, *lastGameOver_);
+    // Spectators (12.4) see the result too, then their watch ends with the
+    // game. Release the bindings here so no stale spectating pointer can
+    // outlive this match once retention sweeps it away.
+    for (Client* spectator : spectators_)
+        if (spectator)
+            sendTo(*spectator, *lastGameOver_);
+    for (Client* spectator : spectators_)
+        if (spectator)
+            spectator->spectating = nullptr;
+    spectators_.clear();
     LOG_INFO("Game over: result=" + std::to_string(static_cast<int>(result))
              + " reason=" + std::to_string(static_cast<int>(reason)));
     if (gameOverCallback_)

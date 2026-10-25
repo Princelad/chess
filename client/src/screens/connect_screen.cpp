@@ -133,6 +133,17 @@ ConnectScreen::ConnectScreen(App& app)
                         sf::Color(180, 235, 205));
     arenaBtn_.setOnClick([this] { startBrowse(BrowseTarget::Arena); });
 
+    // Watch (12.4): a fourth browse-style entry — connect, optionally log
+    // in, then spectate. The name field is the spectate target: it follows
+    // that named player's live game on either side.
+    watchBtn_.setLabel("Watch");
+    watchBtn_.setColors(sf::Color(60, 80, 130), sf::Color(74, 98, 160),
+                        sf::Color(50, 68, 110), sf::Color(40, 55, 88),
+                        sf::Color(150, 160, 180), sf::Color(240, 245, 255),
+                        sf::Color(55, 85, 130), sf::Color(130, 170, 230),
+                        sf::Color(180, 210, 250));
+    watchBtn_.setOnClick([this] { startBrowse(BrowseTarget::Watch); });
+
     title_.setText("Chess");
     title_.setFontSize(36);
     title_.setColor(sf::Color(255, 255, 255));
@@ -174,6 +185,10 @@ void ConnectScreen::layoutWidgets()
                                           sf::Vector2f(200.f, 40.f)));
     // Row two, beside it: the arena lobby (12.3).
     arenaBtn_.setRect(sf::FloatRect(sf::Vector2f(FieldX + 210.f, BtnY + 50.f),
+                                    sf::Vector2f(170.f, 40.f)));
+    // Row three: watch a live game without queueing (12.4). Empty name
+    // field = any running game; a typed name follows that player.
+    watchBtn_.setRect(sf::FloatRect(sf::Vector2f(FieldX + 210.f, BtnY + 100.f),
                                     sf::Vector2f(170.f, 40.f)));
     // TC picker picks up the row after the last field, buttons shifted one
     // row down: the preset is chosen before pairing, so it needs a slot of
@@ -291,7 +306,8 @@ void ConnectScreen::openBrowseTarget()
     const bool mine = app_.profile().has_value()
         && !app_.profile()->isGuest;
     // Hand over to the browse target; this screen gets destroyed by the
-    // switch (Idle-state entry point only).
+    // switch (Idle-state entry point only). Everything after a
+    // switchScreen must return immediately (12.3 rule).
     if (browseTarget_ == BrowseTarget::Leaderboard)
         app_.switchScreen(std::make_unique<LeaderboardScreen>(app_));
     else if (browseTarget_ == BrowseTarget::Arena) {
@@ -301,6 +317,16 @@ void ConnectScreen::openBrowseTarget()
             ? app_.profile()->name : name();
         app_.switchScreen(std::make_unique<TournamentLobbyScreen>(
             app_, timeControl(), variant(), std::move(joinName)));
+    } else if (browseTarget_ == BrowseTarget::Watch) {
+        // The name field is the spectate target (empty would mean "any
+        // running game" server-side; the button stays behind the join
+        // gate so it always carries a follow name).
+        const std::string target = name();
+        app_.connection().spectate(target);
+        app_.switchScreen(std::make_unique<GameScreen>(
+            app_, Color::White, std::string{}, std::nullopt, false,
+            std::string{}, std::string{}, std::string{}, false, true));
+        return;
     } else
         app_.switchScreen(std::make_unique<HistoryScreen>(app_, mine));
 }
@@ -374,6 +400,7 @@ void ConnectScreen::handleEvent(const sf::Event& event)
         archiveBtn_.handleEvent(event, local);
         leaderboardBtn_.handleEvent(event, local);
         arenaBtn_.handleEvent(event, local);
+        watchBtn_.handleEvent(event, local);
         tcBtn_.handleEvent(event, local);
         variantBtn_.handleEvent(event, local);
     }
@@ -405,7 +432,10 @@ void ConnectScreen::update(float dtSec)
             app_.setProfile(*profileMsg);
             if (phase_ == ConnectPhase::AwaitingProfile) {
                 if (browseTarget_ != BrowseTarget::None) {
+                    // switchScreen destroys this screen in place (12.3
+                    // rule): nothing of `this` may be touched after.
                     openBrowseTarget();
+                    return;
                 } else {
                     phase_ = ConnectPhase::WaitingForOpponent;
                     status_.setText("Waiting for opponent...");
@@ -465,7 +495,10 @@ void ConnectScreen::update(float dtSec)
             app_.connection().send(
                 chess::net::LoginMsg{name(), password()});
         } else {
+            // switchScreen destroys this screen in place (12.3 rule):
+            // nothing of `this` may be touched after.
             openBrowseTarget();
+            return;
         }
     }
 
@@ -498,6 +531,7 @@ void ConnectScreen::draw(sf::RenderWindow& window)
         archiveBtn_.draw(window, font);
         leaderboardBtn_.draw(window, font);
         arenaBtn_.draw(window, font);
+        watchBtn_.draw(window, font);
     }
     tcLabel_.draw(window, font);
     if (phase_ == ConnectPhase::Idle)
@@ -506,7 +540,7 @@ void ConnectScreen::draw(sf::RenderWindow& window)
     if (phase_ == ConnectPhase::Idle)
         variantBtn_.draw(window, font);
 
-    float statusY = BtnY + 104.f;
+    float statusY = BtnY + 154.f; // row three holds the Watch button now
     if (!error_.text().empty()) {
         error_.setPosition({StartX, statusY});
         error_.draw(window, font);

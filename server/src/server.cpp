@@ -1,6 +1,7 @@
 #include "server.h"
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <ctime>
 #include <functional>
@@ -68,6 +69,10 @@ static ClientVec::iterator disconnectClient(
     else if (client.state == ClientState::InMatch
              || client.state == ClientState::GameOver)
         client.match->handleDisconnect(client);
+    // A dropped watcher (12.4) just leaves the stands; the relay on the
+    // next move carries the shrunk count to everyone else.
+    if (client.spectating)
+        client.spectating->removeSpectator(client);
     return clients.erase(it);
 }
 
@@ -163,6 +168,84 @@ static void sendFreshProfile(Client& rejoiner, const Match& match,
     auto row = players->byId(*seat.playerId);
     if (row.has_value())
         sendProfileTo(rejoiner, *row);
+}
+
+// Case-insensitive seat-name match for spectate lookups (12.4): the same
+// relaxation the account NOCASE checks use, so a typed "alice" finds
+// "Alice" — a watcher should not lose a game over case.
+static bool spectateNameEquals(const std::string& a, const std::string& b)
+{
+    if (a.size() != b.size()) return false;
+    for (std::size_t i = 0; i < a.size(); ++i)
+        if (std::tolower(static_cast<unsigned char>(a[i]))
+            != std::tolower(static_cast<unsigned char>(b[i])))
+            return false;
+    return true;
+}
+
+// The SpectateStateMsg for one match (12.4) — Match owns the snapshot so
+// the takeback path re-sends it identically.
+static chess::net::SpectateStateMsg spectateSnapshotOf(const Match& match)
+{
+    return match.spectateSnapshot();
+}
+
+// Binds a connection as a live-game watcher (12.4): the non-empty name
+// picks the match whose seat carries it (either side), the empty name
+// picks any running game — the first one, deterministic for tests and
+// for the one-click Watch flow. Only idle (Connected) connections may
+// spectate; seated/queued ones have their own game to mind.
+static void handleSpectate(Client& client, const chess::net::SpectateMsg& msg,
+                           const MatchVec& matches)
+{
+    if (client.state != ClientState::Connected) {
+        sendTo(client, chess::net::ErrorMsg{
+            "You have a game of your own — spectate afterwards"});
+        return;
+    }
+
+    // Switching games? Release the current watch first so membership and
+    // the count stay consistent either way the lookup below lands.
+    if (client.spectating) {
+        client.spectating->removeSpectator(client);
+        client.spectating = nullptr;
+    }
+
+    Match* target = nullptr;
+    for (auto& match : matches) {
+        if (!match->isActive())
+            continue;
+        if (msg.name.empty()) {
+            target = match.get(); // any live game: first one wins
+            break;
+        }
+        const auto white = match->seat(chess::Color::White);
+        const auto black = match->seat(chess::Color::Black);
+        if (spectateNameEquals(white.name, msg.name)
+            || spectateNameEquals(black.name, msg.name)) {
+            target = match.get();
+            break;
+        }
+    }
+
+    if (target == nullptr) {
+        sendTo(client, chess::net::ErrorMsg{
+            msg.name.empty() ? "No games in progress"
+                             : "No game in progress for '" + msg.name + "'"});
+        return;
+    }
+    if (!target->addSpectator(client)) {
+        sendTo(client, chess::net::ErrorMsg{
+            "That game's stands are full"});
+        return;
+    }
+
+    client.spectating = target;
+    auto snapshot = spectateSnapshotOf(*target);
+    sendTo(client, snapshot);
+    LOG_INFO("Spectate: " + client.name + " -> " + snapshot.whiteName
+             + " vs " + snapshot.blackName + " (watchers="
+             + std::to_string(target->spectatorCount()) + ")");
 }
 
 // Routes ResumeMsg{token} into the match that owns that seat token.
@@ -925,6 +1008,27 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
                             } else {
                                 sendArenaSnapshot(arenaIt->second, client);
                             }
+                        }
+                        else if (auto* spectate =
+                                     std::get_if<chess::net::SpectateMsg>(&*msg)) {
+                            // Watch a live game (12.4): idle connections
+                            // only — anything else gets a clear refusal.
+                            handleSpectate(client, *spectate, matches);
+                        }
+                        else if (std::get_if<chess::net::SpectateStopMsg>(&*msg)) {
+                            // Leave the stands; the connection stays open
+                            // for spectating something else (or idling).
+                            if (client.spectating) {
+                                client.spectating->removeSpectator(client);
+                                client.spectating = nullptr;
+                            }
+                        }
+                        else if (std::get_if<chess::net::PingMsg>(&*msg)
+                                 && client.spectating) {
+                            // A watcher sits outside the seat routing, so
+                            // its keepalive pings are answered here instead
+                            // of landing in the Connected fallback.
+                            sendTo(client, chess::net::PongMsg{});
                         }
                         else switch (client.state) {
                         case ClientState::Connected:

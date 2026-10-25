@@ -1219,6 +1219,8 @@ TEST(ProtocolDebug, ClientMessages)
     EXPECT_FALSE(debugString(ClientMessage{ArchiveRequestMsg{50, false}}).empty());
     EXPECT_FALSE(debugString(ClientMessage{ArchiveGetMsg{3}}).empty());
     EXPECT_FALSE(debugString(ClientMessage{LeaderboardRequestMsg{64}}).empty());
+    EXPECT_FALSE(debugString(ClientMessage{SpectateMsg{"Alice"}}).empty());
+    EXPECT_FALSE(debugString(ClientMessage{SpectateStopMsg{}}).empty());
 }
 
 TEST(ProtocolDebug, ServerMessages)
@@ -1239,6 +1241,7 @@ TEST(ProtocolDebug, ServerMessages)
         static_cast<int>(GameOverReason::AgreedDraw), "", "", "e4 e5", 0, false}}).empty());
     EXPECT_FALSE(debugString(ServerMessage{LeaderboardListMsg{}}).empty());
     EXPECT_FALSE(debugString(ServerMessage{TournamentStateMsg{}}).empty());
+    EXPECT_FALSE(debugString(ServerMessage{SpectateStateMsg{}}).empty());
 }
 
 TEST(ProtocolDebug, LoginMasksPassword)
@@ -1354,6 +1357,218 @@ TEST(ProtocolRoundTrip, ServerWelcomeCarriesArenaFlag)
     auto* m = std::get_if<WelcomeMsg>(&*result);
     ASSERT_NE(m, nullptr);
     EXPECT_TRUE(m->arena);
+}
+
+// ── 12.4 spectator messages ─────────────────────────────────────────────────
+
+TEST(ProtocolRoundTrip, ClientSpectate)
+{
+    ClientMessage msg = SpectateMsg{"Alice"};
+    sf::Packet p = freshPacket(serializeClient(msg));
+    auto result = deserializeClient(p);
+    ASSERT_TRUE(result.has_value());
+    auto* m = std::get_if<SpectateMsg>(&*result);
+    ASSERT_NE(m, nullptr);
+    EXPECT_EQ(m->name, "Alice");
+}
+
+TEST(ProtocolRoundTrip, ClientSpectateEmptyIsAnyGame)
+{
+    // The empty follow name is the "any running game" sentinel (12.4);
+    // it must survive the wire as an empty string, not be dropped.
+    ClientMessage msg = SpectateMsg{""};
+    sf::Packet p = freshPacket(serializeClient(msg));
+    auto result = deserializeClient(p);
+    ASSERT_TRUE(result.has_value());
+    auto* m = std::get_if<SpectateMsg>(&*result);
+    ASSERT_NE(m, nullptr);
+    EXPECT_EQ(m->name, "");
+}
+
+TEST(ProtocolRoundTrip, ClientSpectateStop)
+{
+    ClientMessage msg = SpectateStopMsg{};
+    sf::Packet p = freshPacket(serializeClient(msg));
+    auto result = deserializeClient(p);
+    ASSERT_TRUE(result.has_value());
+    EXPECT_NE(std::get_if<SpectateStopMsg>(&*result), nullptr);
+}
+
+TEST(ProtocolRoundTrip, ServerSpectateState)
+{
+    SpectateStateMsg snap;
+    snap.whiteName = "Alice";
+    snap.blackName = "Bob";
+    snap.whiteRating = 1500;
+    snap.whiteDeviation = 300;
+    snap.blackRating = 1700;
+    snap.blackDeviation = 45;
+    snap.timeControl = "5+3";
+    snap.startFen = ".StartFen/";
+    snap.sans = {"e4", "e5", "Nf3"};
+    snap.whiteRemainingMs = 300000;
+    snap.blackRemainingMs = 295000;
+    snap.spectators = 1;
+    ServerMessage msg = snap;
+    sf::Packet p = freshPacket(serializeServer(msg));
+    auto result = deserializeServer(p);
+    ASSERT_TRUE(result.has_value());
+    auto* m = std::get_if<SpectateStateMsg>(&*result);
+    ASSERT_NE(m, nullptr);
+    EXPECT_EQ(m->whiteName, "Alice");
+    EXPECT_EQ(m->blackName, "Bob");
+    EXPECT_EQ(m->whiteRating, 1500);
+    EXPECT_EQ(m->whiteDeviation, 300);
+    EXPECT_EQ(m->blackRating, 1700);
+    EXPECT_EQ(m->blackDeviation, 45);
+    EXPECT_EQ(m->timeControl, "5+3");
+    EXPECT_EQ(m->startFen, ".StartFen/");
+    ASSERT_EQ(m->sans.size(), 3u);
+    EXPECT_EQ(m->sans[2], "Nf3");
+    EXPECT_EQ(m->whiteRemainingMs, 300000);
+    EXPECT_EQ(m->blackRemainingMs, 295000);
+    EXPECT_EQ(m->spectators, 1);
+}
+
+TEST(ProtocolRoundTrip, ServerSpectateStateEmptyChain)
+{
+    SpectateStateMsg snap;
+    snap.whiteName = "A";
+    snap.blackName = "B";
+    snap.whiteRating = 0;
+    snap.whiteDeviation = 0;
+    snap.blackRating = 0;
+    snap.blackDeviation = 0;
+    snap.timeControl = "";
+    snap.startFen = "";
+    snap.whiteRemainingMs = 0;
+    snap.blackRemainingMs = 0;
+    snap.spectators = 0;
+    ServerMessage msg = snap;
+    sf::Packet p = freshPacket(serializeServer(msg));
+    auto result = deserializeServer(p);
+    ASSERT_TRUE(result.has_value());
+    auto* m = std::get_if<SpectateStateMsg>(&*result);
+    ASSERT_NE(m, nullptr);
+    EXPECT_TRUE(m->sans.empty());
+    EXPECT_EQ(m->spectators, 0);
+}
+
+TEST(ProtocolRoundTrip, ServerMoveCarriesSpectatorCount)
+{
+    // 12.4: every move broadcast now trails the watcher count, and 0 is
+    // the default a solitaire game keeps seeing.
+    ServerMessage msg = ServerMoveMsg{"Nf3", 300000, 7};
+    sf::Packet p = freshPacket(serializeServer(msg));
+    auto result = deserializeServer(p);
+    ASSERT_TRUE(result.has_value());
+    auto* m = std::get_if<ServerMoveMsg>(&*result);
+    ASSERT_NE(m, nullptr);
+    EXPECT_EQ(m->san, "Nf3");
+    EXPECT_EQ(m->remainingMs, 300000);
+    EXPECT_EQ(m->spectators, 7);
+}
+
+TEST(ProtocolGarbage, ServerMoveLegacyShapeFails)
+{
+    // Raw packet with the pre-12.4 two-field Move shape: trailing fields
+    // must serialize AND deserialize, so the old shape is refused rather
+    // than silently spectating a zero.
+    sf::Packet p;
+    p << ProtocolVersion << static_cast<uint8_t>(3)
+      << std::string("e4") << static_cast<int32_t>(0);
+    EXPECT_FALSE(deserializeServer(p).has_value());
+}
+
+TEST(ProtocolGarbage, ServerMoveNegativeSpectatorCountFails)
+{
+    ServerMessage msg = ServerMoveMsg{"e4", 0, -1};
+    sf::Packet p = freshPacket(serializeServer(msg));
+    EXPECT_FALSE(deserializeServer(p).has_value());
+}
+
+TEST(ProtocolGarbage, ServerMoveSpectatorCountOverflowFails)
+{
+    // Raw packet: a count past MaxSpectatorCount (1024) cannot come from
+    // the server, whose own cap per match is far below.
+    sf::Packet p;
+    p << ProtocolVersion << static_cast<uint8_t>(3)
+      << std::string("e4") << static_cast<int32_t>(0)
+      << static_cast<int32_t>(1025);
+    EXPECT_FALSE(deserializeServer(p).has_value());
+}
+
+TEST(ProtocolGarbage, SpectateStateNegativeRatingFails)
+{
+    SpectateStateMsg snap;
+    snap.whiteName = "A";
+    snap.blackName = "B";
+    snap.whiteRating = -1;
+    snap.whiteDeviation = 350;
+    snap.blackRating = 1500;
+    snap.blackDeviation = 350;
+    snap.whiteRemainingMs = 0;
+    snap.blackRemainingMs = 0;
+    snap.spectators = 0;
+    ServerMessage msg = snap;
+    sf::Packet p = freshPacket(serializeServer(msg));
+    EXPECT_FALSE(deserializeServer(p).has_value());
+}
+
+TEST(ProtocolGarbage, SpectateStateNegativeClockFails)
+{
+    SpectateStateMsg snap;
+    snap.whiteName = "A";
+    snap.blackName = "B";
+    snap.whiteRating = 1500;
+    snap.whiteDeviation = 350;
+    snap.blackRating = 1500;
+    snap.blackDeviation = 350;
+    snap.whiteRemainingMs = -5;
+    snap.blackRemainingMs = 0;
+    snap.spectators = 0;
+    ServerMessage msg = snap;
+    sf::Packet p = freshPacket(serializeServer(msg));
+    EXPECT_FALSE(deserializeServer(p).has_value());
+}
+
+TEST(ProtocolGarbage, SpectateStateNegativeSpectatorCountFails)
+{
+    SpectateStateMsg snap;
+    snap.whiteName = "A";
+    snap.blackName = "B";
+    snap.whiteRating = 1500;
+    snap.whiteDeviation = 350;
+    snap.blackRating = 1500;
+    snap.blackDeviation = 350;
+    snap.whiteRemainingMs = 0;
+    snap.blackRemainingMs = 0;
+    snap.spectators = -2;
+    ServerMessage msg = snap;
+    sf::Packet p = freshPacket(serializeServer(msg));
+    EXPECT_FALSE(deserializeServer(p).has_value());
+}
+
+TEST(ProtocolGarbage, SpectateStateSanOverflowFails)
+{
+    // Raw packet: the same MaxResumeMoves (512) cap the 11.2 resume replay
+    // uses guards the spectator chain against a hostile allocation. Tag 23
+    // is SpectateState; the field order mirrors writeServer's.
+    sf::Packet p;
+    p << ProtocolVersion << static_cast<uint8_t>(23)
+      << std::string("A") << std::string("B")
+      << double(1500) << double(350) << double(1500) << double(350)
+      << std::string("") << std::string("")
+      << static_cast<int32_t>(513);
+    EXPECT_FALSE(deserializeServer(p).has_value());
+}
+
+TEST(ProtocolDebug, SpectateNamesUnmasked)
+{
+    // Unlike passwords, spectator targets are plain names: they travel in
+    // the debug string so server logs can be followed by player name.
+    EXPECT_NE(debugString(ClientMessage{SpectateMsg{"Alice"}}).find("Alice"),
+              std::string::npos);
 }
 
 } // namespace
