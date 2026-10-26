@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  build-and-test:
+    name: ${{ matrix.cc }} build + test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        cc: [gcc, clang]
+    env:
+      CC: ${{ matrix.cc }}
+      CXX: ${{ matrix.cc == 'gcc' && 'g++' || 'clang++' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # SFML dev packages: Ubuntu's libsfml ships 2.x (too old), so the
+      # build falls back to FetchContent SFML 3.1.0 — which needs the
+      # development headers of SFML's own dependencies (window/graphics
+      # backends plus OpenAL+codecs for the 9.8 audio module; network for
+      # net/protocol).
+      - name: Install SFML build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libfreetype-dev \
+            libx11-dev \
+            libxrandr-dev \
+            libxcursor-dev \
+            libxi-dev \
+            libudev-dev \
+            libopenal-dev \
+            libvorbis-dev \
+            libflac-dev
+
+      # The FetchContent fallback owns build/_deps (SFML 3.1.0, GoogleTest
+      # v1.17.0); caching it skips the source checkout + compile on every
+      # run. Key pins the versions so stale caches shuffle out on bumps.
+      - name: Cache FetchContent dependencies
+        uses: actions/cache@v4
+        with:
+          path: build/_deps
+          key: ${{ runner.os }}-${{ matrix.cc }}-sfml3.1.0-gtest1.17.0
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build -j4
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
