@@ -5,7 +5,8 @@
 
 FROM ubuntu:24.04 AS builder
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        build-essential cmake git libsqlite3-dev \
+        build-essential cmake git ca-certificates libsqlite3-dev \
+        libgl1-mesa-dev \
         libfreetype-dev libx11-dev libxrandr-dev libxcursor-dev \
         libxi-dev libudev-dev libopenal-dev libvorbis-dev libflac-dev \
     && rm -rf /var/lib/apt/lists/*

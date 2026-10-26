@@ -1,0 +1,14 @@
+# Phase 13.2: local build/ trees carry absolute-path CMakeCaches that break
+# the COPY-then-configure sequence, and .git/Testing are dead weight in the
+# build context.
+build/
+build-debug/
+build-release/
+build-ci/
+build-warn/
+Testing/
+.git/
+.github/
+.cache/
+.vscode/
+.idea/
