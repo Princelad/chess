@@ -55,7 +55,13 @@ std::string bareKey(const std::string& key)
 
 std::string Config::defaultPath()
 {
+    // Unix convention first; Windows runners have USERPROFILE (and more
+    // rarely APPDATA) instead of HOME, so try both before giving up.
     const char* home = std::getenv("HOME");
+    if (const char* win = std::getenv("APPDATA"); !home && win && *win)
+        return std::string(win) + "/chess/config.ini";
+    if (const char* prof = std::getenv("USERPROFILE"); !home && prof && *prof)
+        return std::string(prof) + "/.config/chess/config.ini";
     if (!home) return {};
     return std::string(home) + "/.config/chess/config.ini";
 }

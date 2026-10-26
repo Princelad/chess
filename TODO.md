@@ -713,17 +713,17 @@ takeback, rematch, chat polish, per-class ratings, login throttling
 
 **Exit version:** `v1.6.0` — CI green, installable, dockerized server
 
-- [ ] **13.1 CI**
-  - [ ] GitHub Actions: Ubuntu matrix (GCC/Clang), cmake configure/build + ctest
-  - [ ] Install SFML via apt; cache FetchContent deps between runs
+- [x] **13.1 CI**
+  - [x] GitHub Actions: Ubuntu matrix (GCC/Clang), cmake configure/build + ctest (`.github/workflows/ci.yml`: `actions/checkout@v4` → cache `build/_deps` keyed on the SFML/GTest pins → Release configure → `-j4` build → `ctest --output-on-failure`; both matrix COMPILE paths verified locally — GCC and Clang, zero warnings, 763/763 green; the suite is fully headless so no xvfb/audio steps needed)
+  - [x] Install SFML build deps via apt (Ubuntu's `libsfml-dev` ships 2.x, so the job installs the SFML **dependency** headers — freetype/X11/udev/OpenAL/vorbis/flac — and lets the documented FetchContent 3.1.0 fallback build SFML itself; source in `.github/workflows/ci.yml`)
 
-- [ ] **13.2 Packaging**
-  - [ ] Headless server Dockerfile + docker-compose example
-  - [ ] CMake install targets (binaries + assets); README install docs
+- [x] **13.2 Packaging**
+  - [x] Headless server Dockerfile + docker-compose example (`Dockerfile` multi-stage: builder = ubuntu:24.04 + toolchain + SFML-dep headers + FetchContent SFML (only `sfml-network` compiles for the server target), runtime = ubuntu:24.04 + libsqlite3-0 + the fetched `libsfml*.so` copied from `_deps/sfml-build/lib` + `ldconfig`; `docker-compose.example.yml` mounts a `/data` volume for `--db`, example port 5555 + `chess-data` named volume; image build NOT verified locally — docker daemon unavailable, YAML parse-checked only)
+  - [x] CMake install targets (binaries + assets); README install docs (top-level `GNUInstallDirs`: both binaries → bindir, whole `assets/` tree → `<prefix>/share/chess/assets`; runtime lookup extended with the `CHESS_ASSETS` env override as the FIRST root — `client/src/asset_paths.h` `assetRoots()` now feeds font loading, piece textures, and the puzzle loader's dirs, replacing the three hand-copied relative-root lists; README gained Installing + Docker sections)
 
-- [ ] **13.3 Portability pass**
-  - [ ] Audit fs paths, signal handling, compiler-specific code
-  - [ ] Windows/macOS build notes (full support if cheap)
+- [x] **13.3 Portability pass**
+  - [x] Audit fs paths, signal handling, compiler-specific code (inventory: `uci/src/engine.cpp` fork/exec/dup2/waitpid/kill + SIGPIPE = the only real "portability wall"; server `std::signal(SIGINT)` compiles everywhere; config default path gained `APPDATA`/`USERPROFILE` fallbacks; `App` font fallback now probes Linux dejavu → Windows arial/consola → macOS Helvetica; Clang build of the full suite verified zero-warning + 763/763 green)
+  - [x] Windows/macOS build notes (full support if cheap) — checked "if cheap": NOT cheap for Windows (engine-bridge rewrite), documented honestly in README's "Platform support" table; macOS in principle supported, not CI-covered. Considered-and-dropped headless build options (server itself links the engine bridge for bots, so an engine-off toggle has no real target) — recorded in the top-level CMakeLists comment
 
 - [ ] **13.4 Performance pass (optional)**
   - [ ] Profile before touching anything; only optimize what's measurably slow
