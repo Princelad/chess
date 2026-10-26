@@ -80,6 +80,12 @@ LocalGameScreen::LocalGameScreen(App& app, Color myColor,
         sf::Vector2f(140.f, BtnH)));
     backBtn_.setOnClick([this] { returnToMenu(); });
 
+    takebackBtn_.setLabel("Takeback");
+    takebackBtn_.setRect(sf::FloatRect(
+        sf::Vector2f(boardView_.panelX() + 148.f, hud_.contentBottom()),
+        sf::Vector2f(140.f, BtnH)));
+    takebackBtn_.setOnClick([this] { takeback(); });
+
     autoQueenCheck_.setOnToggle([this](bool checked) {
         app_.setAutoQueen(checked);
     });
@@ -350,6 +356,33 @@ void LocalGameScreen::returnToMenu()
     app_.switchScreen(std::make_unique<MenuScreen>(app_));
 }
 
+// 8.2 leftover: local takeback vs the engine. Only offered while it is the
+// player's turn (engine search never straddles the rollback, so no stale
+// bestmove can land on the rebuilt position); retracts the engine's reply
+// and the player's own move — the classic two-ply frame, rebuilt through
+// MoveNavigator::setGame like every other history-append/adjustment here.
+void LocalGameScreen::takeback()
+{
+    auto& nav = hud_.navigator();
+    if (gameOver_ || engineThinking_ || engineFailed_ || !myTurn_
+        || nav.totalPlies() < 2)
+        return;
+
+    anim_.cancel();
+    const auto& moves = nav.moves();
+    const auto& sans = nav.sans();
+    nav.setGame(nav.initialBoard(),
+                {moves.begin(), moves.end() - 2},
+                {sans.begin(), sans.end() - 2});
+    nav.goEnd();
+    clearBoardInput();
+    deselect();
+    hl_.lastMoveFrom = nav.lastMoveFrom();
+    hl_.lastMoveTo = nav.lastMoveTo();
+    syncViewHighlights();
+    hud_.setStatus("Takeback — your move", 2.f);
+}
+
 PromoCell LocalGameScreen::promoCell(int index) const
 {
     float sq = boardView_.squareSize();
@@ -481,6 +514,7 @@ void LocalGameScreen::handleEvent(const sf::Event& event)
     }
 
     if (!gameOver_ && backBtn_.handleEvent(event, local)) return;
+    if (takebackBtn_.handleEvent(event, local)) return;
 
     if (const auto* mb = event.getIf<sf::Event::MouseButtonPressed>()) {
         if (mb->button == sf::Mouse::Button::Left) {
@@ -575,6 +609,10 @@ void LocalGameScreen::update(float dtSec)
     hud_.update(0.f);
     anim_.update(dtSec);
 
+    takebackBtn_.setEnabled(!gameOver_ && !engineFailed_ && myTurn_
+                            && !engineThinking_
+                            && hud_.navigator().totalPlies() >= 2);
+
     if (gameOverTransition_.armed()) {
         if (gameOverTransition_.tick(dtSec))
             finishGameOver();
@@ -665,6 +703,7 @@ void LocalGameScreen::draw(sf::RenderWindow& window)
 
     if (!gameOver_)
         backBtn_.draw(window, font);
+    takebackBtn_.draw(window, font);
 
     if (showingHelp_) drawHelpOverlay(window);
 }
@@ -688,6 +727,7 @@ void LocalGameScreen::drawHelpOverlay(sf::RenderWindow& window)
         "[ / ] — previous / next move",
         "Home / End — go to start / end",
         "Q R B N or 1-4 — pick promotion",
+        "Takeback button — undo your move + the engine's reply",
         "? — toggle this help",
     };
     constexpr int Count = static_cast<int>(sizeof(lines) / sizeof(lines[0]));

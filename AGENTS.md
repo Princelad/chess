@@ -116,5 +116,5 @@ SemVer-style, pre-1.0: MINOR bump per phase, PATCH for bugfixes within a phase. 
 | 9 — Client UI/UX overhaul | `v1.2.0` | done |
 | 10 — Persistence & ratings | `v1.3.0` | done |
 | 11 — Multiplayer QoL | `v1.4.0` | done |
-| 12 — Variants & community | `v1.5.0` | in progress |
+| 12 — Variants & community | `v1.5.0` | done |
 | 13 — Release engineering | `v1.6.0` | planned |

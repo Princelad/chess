@@ -525,7 +525,7 @@ moves, game-end detection — with no I/O. Pure C++, tested independently.
   - [x] Screen to pick side + strength preset (depth/movetime mapping)
   - [x] Reuse GameScreen/HUD against a local engine opponent (no server)
   - [x] Engine replies non-blocking (never freeze the render loop)
-  - [ ] Local takeback/undo trivially supported vs CPU (deferred to 9.x)
+  - [x] Local takeback/undo trivially supported vs CPU (Land with 13.0 bookkeeping: LocalGameScreen Takeback button beside Back to Menu — only while it's the player's turn, retracting engine reply + own move via `MoveNavigator::setGame` two-ply rebuild; engine search never straddles the rollback, so no stale-bestmove race)
   - [x] Temporary entry point from the connect screen until the 9.1 menu shell lands
 
 - [x] **8.3 Server-side bots**
@@ -664,11 +664,11 @@ takeback, rematch, chat polish, per-class ratings, login throttling
   - [x] Small bundled ECO table asset; prefix-match on move list (compiled-in `client/src/eco.h` — no I/O, no install rules: ~130 `{sanPrefix, ECO code, name}` literals matched by **longest-prefix-wins** over the SAN history, so e4 → e4 c6 → e4 c6 d4 d5 e5 refines B00 King's Pawn → B10 Caro-Kann → B12 Advance; transposed move orders are covered by listing each spelling; '+'/'#' suffixes are stripped from both sides, so check-diversions still name the family; deliberately shallow — entries only where the ECO code is unambiguous)
   - [x] Show opening name (+ ECO code) in HUD after each move (`Hud::refreshOpening` re-runs `ecoLookup(navigator_.sans())` at both SAN-mutation points — `setGame` and `appendMove` — never `setStatus` (that's the timed message channel); rendered as "B01 - Scandinavian Defence", right-aligned on the "Moves" row; local/engine/analysis games get names for free via the shared `Hud`)
 
-- [ ] **11.6 Themes**
+- [x] **11.6 Themes**
   - [x] Board color palettes + piece sets (`assets/pieces/<set>/`) (palettes enum extended with **Wood** (warm walnut) and **Moss** (gray-green), appended after `Dark` so persisted `board.colors` names stay valid; piece sets restructured into `assets/pieces/{cburnett,merida,chessnut}/` — merida (GPLv2+, Armando Hernandez Marroquin) and chessnut (Apache 2.0, Alexis Luengas) rasterized 160×160 from lichess-org/lila `public/piece/<set>/` per lila COPYING.md, each dir carries a README.md credit)
   - [x] Selected via the 9.5 settings/config file (new config key **`pieces.set`** (default `cburnett`, values = set dir names); Settings screen gains a "Piece set" cycle row right below the theme row (`pieceSetPrev_/Next_`, status text warns when a custom `pieces.path` overrides the named set); loading order in `loadPieceTextures`: custom path → `assets/pieces/<set>/` (all three relative roots) → legacy flat `assets/pieces/` root)
 
-- [ ] **11.7 Rematch flow**
+- [x] **11.7 Rematch flow**
   - [x] Post-game offer/accept starts a new game without reconnecting (protocol v2 append-only: client tags `RematchRequest = 16`/`RematchAccept = 17`/`RematchDecline = 18`, server tags `ServerRematchRequest = 20`/`ServerRematchDecline = 21` (carries `withdrawn` 0/1 for the self-cancel path); there is NO `RematchAccepted` — the fresh `WelcomeMsg` of the new match is the acceptance signal for both seats; `GameOverScreen` pumps/drains its own connection now, rebuilds a `GameScreen` from the rematch `WelcomeMsg`, hosts the offer prompt (Accept/Decline replace the Rematch row) and maps every `ErrorMsg` into its status line; the old fake-"Rematch" button became a real `Menu` button)
   - [x] Colors swapped on rematch (a finished match keeps both game-over seats **attached** for exactly its retention window (= reconnect grace, 11.2) via new `ClientState::GameOver`; the rematch callback fires from `Match::handleRematchAccept` with both clients referenced through the seats, the server dissolves the old match's seats (`detachAllSeats`) and pairs the same two clients again with colors swapped; bots auto-accept inside the request handler and are `startBot`-'d against their swapped color in the server's `onRematch`)
 

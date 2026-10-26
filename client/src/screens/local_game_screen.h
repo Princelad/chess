@@ -46,6 +46,7 @@ private:
     std::optional<chess::PieceType> promoTypeForKey(sf::Keyboard::Key key) const;
     bool applyEngineMove();
     void checkGameOver();
+    void takeback();
     void finishGameOver();
     void returnToMenu();
     void drawHelpOverlay(sf::RenderWindow& window);
@@ -77,6 +78,7 @@ private:
 
     PromoCell promoCell(int index) const;
     Button backBtn_;
+    Button takebackBtn_;
 };
 
 } // namespace chess::client
