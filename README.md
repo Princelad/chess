@@ -89,6 +89,52 @@ cmake --build --preset default  # build with preset
 ctest --test-dir build
 ```
 
+Continuous integration runs the same suite on every push/PR (GitHub
+Actions, GCC and Clang on Ubuntu — see `.github/workflows/ci.yml`; the
+test suite is fully headless, no display or audio device needed).
+
+## Platform support
+
+| Platform | Status |
+|---|---|
+| Linux | Fully supported; covered by CI (GCC + Clang builds, full test suite) |
+| macOS | Supported in principle (POSIX process APIs, SFML 3.1, clang) — not CI-covered yet; build with Homebrew sqlite/SFML deps and report breakage |
+| Windows | Not yet supported — the one real gap is `uci/src/engine.cpp`'s POSIX process API (`fork`/`exec`/`dup2`/`waitpid`/`kill`), used by both server bots and the GUI's local play; a port needs the same `UciEngine` API over `CreateProcess`. Everything else already travels: `std::filesystem`, `sf::Socket` (winsock), the config path (`USERPROFILE`/`APPDATA` fallback), cross-platform system-font fallbacks, and the `CHESS_ASSETS` env override |
+
+Signal handling (SIGINT), home-directory lookup, and background process
+spawning are the places portability actually lives in this codebase —
+everything else is either C++ standard library or SFML.
+
+## Installing
+
+`cmake --install` puts the two binaries into the bindir and the asset tree
+(fonts, piece sets, puzzles) into `<prefix>/share/chess/assets`:
+
+```sh
+cmake --install build --prefix /usr/local          # default /usr/local
+export CHESS_ASSETS="/usr/local/share/chess/assets"
+chess-client &
+chess-server --db ~/.chess.db &
+```
+
+The installed client looks for the asset tree in `CHESS_ASSETS` first
+(checkout repository builds don't need the variable), so `run.sh` remains
+the zero-config path for repo builds.
+
+## Docker
+
+A headless server image is two commands away:
+
+```sh
+docker build -t chess-server .
+docker run -d -p 5555:5555 -v chess-data:/data chess-server \
+    --db /data/chess.db
+```
+
+`docker-compose.example.yml` ships the same thing as a compose file with a
+persistent database volume — copy it to `docker-compose.yml` and
+`docker compose up -d`.
+
 ## Server Usage
 
 ```

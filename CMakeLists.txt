@@ -44,6 +44,11 @@ if(NOT SQLite3_FOUND)
 endif()
 set(CHESS_SQLITE_TARGET SQLite::SQLite3)
 
+# Portability note (13.3): uci/ spawns engines through the POSIX process API
+# (fork/exec/dup2/waitpid — see README "Platform support"), and server bots
+# as well as the GUI's local-play screen link it; all these targets build
+# unconditionally, so a Windows build is documented as not yet supported
+# rather than half-configurable.
 add_subdirectory(core)
 add_subdirectory(uci)
 add_subdirectory(net)
@@ -51,3 +56,14 @@ add_subdirectory(db)
 add_subdirectory(server)
 add_subdirectory(client)
 add_subdirectory(tests)
+
+# Phase 13.2: install targets. Binaries to bindir; the whole assets tree
+# (fonts, piece sets, puzzles.pgn) to a share/chess datadir — clients find
+# it by exporting CHESS_ASSETS=<prefix>/share/chess/assets (see assetRoots()
+# in client/src/asset_paths.h), since the checkout-relative roots a repo
+# build relies on don't exist for installed trees.
+include(GNUInstallDirs)
+install(TARGETS chess-client chess-server
+        RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+install(DIRECTORY "${CMAKE_SOURCE_DIR}/assets/"
+        DESTINATION "${CMAKE_INSTALL_DATADIR}/chess/assets")

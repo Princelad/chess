@@ -1,0 +1,28 @@
+# Phase 13.2 — example compose for the headless match server. Copy this file
+# to docker-compose.yml (compose auto-loads it) or run
+#   docker compose -f docker-compose.example.yml up -d
+#
+# Persistent, rated play needs the SQLite database — mounted at /data and
+# pointed at via --db. Drop the volume/command lines for throwaway unrated.
+
+services:
+  chess-server:
+    build: .
+    image: chess-server
+    ports:
+      - "5555:5555"
+    command:
+      - "--port"
+      - "5555"
+      - "--db"
+      - "/data/chess.db"
+      # Docker's volumes live under a fixed host path — the default 30 s
+      # reconnect grace and 3 arena rounds need no override, but they are
+      # available: --grace-ms, --arena-rounds, --max-clients, --timeout,
+      # --log-level, --log-file.
+    volumes:
+      - chess-data:/data
+    restart: unless-stopped
+
+volumes:
+  chess-data:

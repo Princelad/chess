@@ -1,5 +1,6 @@
 #include "app.h"
 
+#include "asset_paths.h"
 #include "screens/menu_screen.h"
 
 #include <algorithm>
@@ -69,16 +70,29 @@ void App::loadAssets()
     lastName_ = config_.get("general.last_name", "");
 
     font_.emplace();
-    const char* paths[] = {
-        "assets/fonts/Inter-Regular.ttf",
-        "../assets/fonts/Inter-Regular.ttf",
-        "../../assets/fonts/Inter-Regular.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/TTF/DejaVuSans.ttf",
-    };
+    // Asset roots (CHESS_ASSETS env override + the three relative roots)
+    // first, then the common system font locations as a fallback.
     bool fontOk = false;
-    for (const char* path : paths) {
-        if (font_->openFromFile(path)) { fontOk = true; break; }
+    for (const std::string& root : assetRoots()) {
+        if (font_->openFromFile(root + "fonts/Inter-Regular.ttf")) {
+            fontOk = true;
+            break;
+        }
+    }
+    if (!fontOk) {
+        // Asset roots missed and no bundled candidate — fall back through
+        // likely system fonts on each platform (openFromFile fails silently,
+        // ordered Linux → Windows → macOS).
+        const char* paths[] = {
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/TTF/DejaVuSans.ttf",
+            "C:/Windows/Fonts/arial.ttf",
+            "C:/Windows/Fonts/consola.ttf",
+            "/System/Library/Fonts/Helvetica.ttc",
+            "/System/Library/Fonts/HelveticaNeue.ttc",
+        };
+        for (const char* p : paths)
+            if (font_->openFromFile(p)) { fontOk = true; break; }
     }
     if (!fontOk)
         std::cerr << "Warning: no font loaded, text may be invisible\n";
@@ -91,13 +105,12 @@ bool App::loadPieceTextures()
     std::vector<std::string> dirs;
     if (!customDir.empty()) dirs.push_back(customDir);
     // Named set dirs (11.6), then the legacy flat root that predates the
-    // per-set subdirectories (keeps hand-assembled trees loadable).
-    for (const std::string base : { "assets/pieces/", "../assets/pieces/",
-                                    "../../assets/pieces/" })
-        dirs.push_back(base + pieceSetDirName(pieceSet()) + "/");
-    for (const char* base : { "assets/pieces/", "../assets/pieces/",
-                              "../../assets/pieces/" })
-        dirs.push_back(base);
+    // per-set subdirectories (keeps hand-assembled trees loadable), each
+    // under every asset root the runtime knows about.
+    for (const std::string& root : assetRoots())
+        dirs.push_back(root + "pieces/" + pieceSetDirName(pieceSet()) + "/");
+    for (const std::string& root : assetRoots())
+        dirs.push_back(root + "pieces/");
 
     const char names[2][6] = {
         { 'w','w','w','w','w','w' },

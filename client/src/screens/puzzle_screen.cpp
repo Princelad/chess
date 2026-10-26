@@ -1,4 +1,5 @@
 #include "puzzle_screen.h"
+#include "asset_paths.h"
 #include "keyboard.h"
 #include "menu_screen.h"
 #include "ui_helpers.h"
@@ -24,7 +25,7 @@ PuzzleScreen::PuzzleScreen(App& app)
                  app.boardTheme(),
                  app.showCoordinates())
 {
-    puzzles_ = loadPuzzlesFromDirs({"assets/", "../assets/", "../../assets/"});
+    puzzles_ = loadPuzzlesFromDirs(assetRoots());
     streak_.best = app_.config().getInt("puzzle.best_streak", 0);
 
     if (!puzzles_.empty())
