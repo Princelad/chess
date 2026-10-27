@@ -729,7 +729,7 @@ takeback, rematch, chat polish, per-class ratings, login throttling
   - [x] Audit fs paths, signal handling, compiler-specific code (inventory: `uci/src/engine.cpp` fork/exec/dup2/waitpid/kill + SIGPIPE = the only real "portability wall"; server `std::signal(SIGINT)` compiles everywhere; config default path gained `APPDATA`/`USERPROFILE` fallbacks; `App` font fallback now probes Linux dejavu → Windows arial/consola → macOS Helvetica; Clang build of the full suite verified zero-warning + 763/763 green)
   - [x] Windows/macOS build notes (full support if cheap) — checked "if cheap": NOT cheap for Windows (engine-bridge rewrite), documented honestly in README's "Platform support" table; macOS in principle supported, not CI-covered. Considered-and-dropped headless build options (server itself links the engine bridge for bots, so an engine-off toggle has no real target) — recorded in the top-level CMakeLists comment
 
-- [ ] **13.4 Performance pass (optional)**
+- [ ] **13.4 Performance pass (optional)** — DELIBERATELY SKIPPED for v1.6.0 (AGENTS.md release-engineering bullet is the record): engine perft/gameplay is not measurably slow, and a movegen rewrite is high-risk-low-value heading into the 14–17 client overhaul arc. Revisit only after profiling shows a real need.
   - [ ] Profile before touching anything; only optimize what's measurably slow
   - [ ] Candidate: bitboards or precomputed attack tables for movegen
   - [ ] Perft suite must stay green after any change
