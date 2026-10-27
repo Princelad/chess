@@ -42,6 +42,10 @@ phase, PATCH for bugfixes/hotfixes landed within a phase.
 | 11 — Multiplayer QoL | `v1.4.0` | Clocks, rematch, reconnect/resume, premove, themes |
 | 12 — Variants & community | `v1.5.0` | Chess960, puzzles, tournaments, spectators |
 | 13 — Release engineering | `v1.6.0` | CI, packaging, portability |
+| 14 — Design system v2 | `v1.7.0` | Token-driven UI, icons, avatars, restyled screens |
+| 15 — Game experience rebuild | `v1.8.0` | Board-first game layout, player cards, quick chat |
+| 16 — Engine intelligence | `v1.9.0` | Move classification, accuracy, game report |
+| 17 — Puzzles, personas & play hub | `v2.0.0` | Puzzle Rush, daily puzzle, persona bots, play hub |
 
 ---
 
@@ -729,6 +733,150 @@ takeback, rematch, chat polish, per-class ratings, login throttling
   - [ ] Profile before touching anything; only optimize what's measurably slow
   - [ ] Candidate: bitboards or precomputed attack tables for movegen
   - [ ] Perft suite must stay green after any change
+
+---
+
+## Phase 14 — Design system v2 (`client/`)
+
+**Goal:** a token-driven visual foundation, chess.com-style, rebuilt on our own
+assets: one theme module instead of the scattered hardcoded colors, a drawn
+icon + avatar system, and every screen restyled through it. Recreation is
+"in spirit" — same layout vocabulary, zero proprietary chess.com artwork,
+fonts, or branding (our own palette values, our own drawings; README gains an
+"inspired by" note in 14.5).
+
+**Exit version:** `v1.7.0` — all screens restyled on tokens; zero behavior
+change; 763-test suite stays green (CI discipline from 13.x continues)
+
+- [ ] **14.1 Design tokens (`client/src/ui/theme.h`)**
+  - [ ] Central module: spacing scale, type scale, color palette (dark background family, panel/card/button/accent tokens), component style structs; the single source every later phase paints from
+  - [ ] Migrate the widget layer first: `Button`/`TextField`/`Panel`/`Label`/`Checkbox` take styles from tokens instead of per-screen literal colors
+  - [ ] Sweep screens to remove magic colors/sizes connect/menu/settings/game screens draw directly — screens pass composition, tokens pass paint
+  - [ ] Unit-testable helpers pure (color derivations, contrast pair checks) so theme lookups have tests without a window
+
+- [ ] **14.2 Icon system (`client/src/ui/icons.h` + SFML-drawn registry)**
+  - [ ] Small procedural icon set drawn in SFML (clock, flag, draw-hand, flip, hint bulb, medal, watcher eye, back arrow) — no external sprite dependencies, sized by the type scale
+  - [ ] Replace text-only button labels/headers where icons read better (11.6 theme cycler, HUD actions)
+  - [ ] Keep letter fallbacks working everywhere (the 6.2.2 letter-drawing discipline extends to icons)
+
+- [ ] **14.3 Avatar system (`client/src/avatars.{h,cpp}`)**
+  - [ ] Procedural avatars: deterministic pattern + color derived from a seed (config `profile.avatar` for self, FNV over opponent name for the other seat); geometric shapes via `sf::Shape`, initial-letter fallback
+  - [ ] Optional CC0 bundled avatar pack under `assets/avatars/` loaded through `assetRoots()` (13.2's env var applies) — missing pack degrades silently to procedural
+  - [ ] Rendered on player cards (15.2 consumes it), leaderboard rows, spectator lobby rows
+
+- [ ] **14.4 Board theme family refresh (`themes.h` palettes)**
+  - [ ] Add chess.com-iconography-inspired named boards — Green/Brown/Blue/Purple — OUR color values, appended after the existing names (the 11.6 persistence ordering rule: never reorder existing entries)
+  - [ ] Coordinates style toggle (extending `board.show_coordinates` beyond on/off: margin style = current, inside-squares style like chess.com), persisted like the theme
+  - [ ] Settings screen theme row cycles the new family; preview swatches in the settings status text
+
+- [ ] **14.5 Runtime chrome + settings restyle**
+  - [ ] Window background, title rendering, version badge; rounded panels + pill buttons + underline textfields as component defaults from tokens
+  - [ ] Settings screen restyled on the token layer (larger touch rows, sectioned panels); "inspired by chess.com" note lands in README
+
+---
+
+## Phase 15 — Game experience rebuild (`client/`)
+
+**Goal:** the game experience rebuilt board-first — the in-game right panel
+becomes a full stack (player card / clock / move list / actions) shared by
+every board-bearing screen instead of each screen hand-drawing a panel.
+
+**Exit version:** `v1.8.0` — GameScreen, LocalGameScreen, AnalysisScreen,
+SpectateScreen (12.4) and PuzzleScreen render through the shared composer;
+input parity tests green; zero protocol/server changes
+
+- [ ] **15.1 Shared board composer (`client/src/screens/board_layout.{h,cpp}`)**
+  - [ ] One layout module: top player card band, board rect, bottom player card band, right action stack — parameterized per screen (PuzzleScreen has no cards; Analysis has eval bar slot; Spectate is read-only)
+  - [ ] Migrate the five board-bearing screens onto it; screens keep their event handling, composer owns geometry only (single writer rule for rect math)
+
+- [ ] **15.2 Player card widget (`client/src/widgets/player_card.{h,cpp}`, 9.3's residual closure)**
+  - [ ] Avatar (14.3) + name + rating suffix + captured-material row + material diff in one card; "thinking…" dot, connection icon, premove ghost badge states
+  - [ ] Clock pill styling for 11.1's figures (m:ss / tenths / amber-red thresholds preserved; no display for unlimited)
+  - [ ] Widget-level unit test: extend the client/widget test file — the 9.3 residual "player-card composition untested" closes here (headless composition via `sf::RenderTarget`-free logic slice)
+
+- [ ] **15.3 Move-list panel restyle**
+  - [ ] Alternating row shading + current-ply highlight + move-number gutter in the 9.3 navigator; scroll auto-follows the live ply (only when the user is at the tail — never yank during browsing)
+  - [ ] ECO opening (11.5) stays the header; draw-offer/takeback prompt rows restyled as banners
+
+- [ ] **15.4 Quick-message strip + chat restyle**
+  - [ ] Three canned chips ("Good luck", "Good game", "Thanx for the game") above the chat panel, online GameScreen only; zero protocol change (she sends ordinary `ChatMsg`)
+  - [ ] Chat panel restyle on 11.8's three-part line renderer (tokens for width/truncation math)
+
+- [ ] **15.5 Input & motion polish**
+  - [ ] Square-hover highlight under cursor, drag shadow fidelity, annotation arrow width/opacity from tokens, animated "waiting" spinner for engine/server think states
+  - [ ] Board entrance animation optional (config `animation.entrance`, default off)
+
+- [ ] **15.6 Consistency pass**
+  - [ ] GameOverScreen / TournamentLobbyScreen / LeaderboardScreen / HistoryScreen restyled via the composer + tokens; promotion picker restyled (bigger cells, token stroke)
+
+---
+
+## Phase 16 — Engine intelligence: accuracy & game report (`client/`)
+
+**Goal:** chess.com's most recognizable feature system on our own terms:
+per-move classification, accuracy percentages, and a Game Report screen.
+The engine stays OPTIONAL through the whole phase — features hide cleanly
+when no engine is found (e2e/CI has none), exactly like the AGENTS "mock
+engine" discipline.
+
+**Exit version:** `v1.9.0` — finished local games and archived online games
+classify; Report screen reachable from GameOverScreen; classification unit
+tests abstain from engines (canned eval streams only)
+
+- [ ] **16.1 Eval harness (`client/src/eval_harness.{h,cpp}`, engine required only at runtime here)**
+  - [ ] Background-thread batch evaluation of every position of a finished game via `uci::UciEngine` (budgeted movetime per node, cancelable, no UI freeze — `tryGetBestMove`-style polling discipline from 8.2 never blocks the render loop)
+  - [ ] Results cached in-process per `App` run; game identity = archive id or SAN-chain hash; re-opening the same game skips completed nodes
+  - [ ] Engine-absent contract: `hasEngine()` false → callers hide all 16.* UI; harness never spuriously spawns engines from CI tests
+
+- [ ] **16.2 Classification + accuracy (pure `client/src/move_quality.{h,cpp}`, the carefully-tested core)**
+  - [ ] Win% conversion from cp/mate scores (sigmoid-equivalent mapping), per-move delta = win% given up from the mover's seat; thresholds → Brilliant/Best/Good/Inaccuracy/Mistake/Blunder/Book (book = 11.5's ECO prefix hit)
+  - [ ] Accuracy% per side = a normalized win%-loss curve over `N` plies (the existing Glicko-2/norm discipline: clamp to 0-100)
+  - [ ] Unit tests: a canned `MoveEvalStream` fixture vector drives the entire classifier; thresholds asserted stable (tuning changes REQUIRE test updates — same discipline as the 2.x perft constants); no engine binary in test envs
+
+- [ ] **16.3 Game Report screen (`client/src/screens/report_screen.{h,cpp}`)**
+  - [ ] Post-game panel: accuracy bars per side, class counts per piece legend, opening name (11.5 lookup), "worst moves" list jumping the navigator; reuses 9.3 navigator for board replay
+  - [ ] Stored vs computed: reports are only computed on demand (button "View report" when engine present + game finished), never silently in the background during play
+  - [ ] GameOverScreen integration: report button appears next to Rematch where 16.1 contract is satisfied
+
+- [ ] **16.4 Move-list coloring + analysis upgrades**
+  - [ ] Classified move list: class abbreviation chips/tints on each SAN cell (16.2's labels), rendered via 15.3's restyled rows; archive-replay and spectate views honor the same chip layer when a report was computed
+  - [ ] AnalysisScreen: multi-line best PV arrows toggle, node markers on the 8.5 eval graph at classified points, per-position annotation arrows/circles persisted client-local via the 9.5 config file, keyed by game identity
+
+---
+
+## Phase 17 — Puzzles, personas & play hub (`client/` + tiny `server/` config)
+
+**Goal:** the remaining chess.com hub surfaces: Puzzle Rush timed marathons,
+daily puzzles/streaks, persona bots, and a full-screen "Play" hub that
+retires the old ConnectScreen-first flow.
+
+**Exit version:** `v2.0.0` — the hub is the client's entry surface; ConnectScreen
+fields survive as a collapsible drawer; suite green; protocol untouched
+(bot personas on the server are config-only, Guests still pair like humans)
+
+- [ ] **17.1 Puzzle Rush & Survival (`client/src/screens/rush_screen.{h,cpp}`, extends 12.2)**
+  - [ ] 3-minute and 5-minute rush + endless Survival mode: fail-or-skip advances, streak-and-score counter, time pill (11.1's clock styling)
+  - [ ] Scores persisted per mode as `puzzle.rush_{3m,5m,survival}_best` config keys; "beat your best" status banner; solution-reveal still zeroes the streak (12.2 discipline carries over verbatim)
+  - [ ] Feed shuffling deterministic per session (seed stored in config; shuffle source = the 12.2 loader order)
+  - [ ] Input discipline: the 12.2 `solverTurn()` guard extends to rush timer expiry (a stall mid-animation can never double-apply)
+
+- [ ] **17.2 Daily puzzle + streaks**
+  - [ ] Date-seeded deterministic selection from the bundled set (year+day hash → shard into the 12.2 list); "Daily" card entry opens PuzzleScreen in daily mode; solving marks `puzzle.daily_last`/`daily_streak` (config) and days skipped reset the streak
+  - [ ] All-time solves + daily stats panel inside PuzzleScreen header
+
+- [ ] **17.3 Persona bots (`client/src/bot_personas.{h,cpp}` + server config table)**
+  - [ ] Named difficulty personas for LOCAL play — fresh, neutral names of our own (NOT chess.com's bot cast): depth presets + style caps (an engine-option set like Skill Level / move-time budgets; zero protocol)
+  - [ ] Server-side configurable persona table (`--bot-personas` config) mapping persona names to depth/preset pairs so spawned server bots (8.3's `botSpawnQueue` path, unchanged) play at matching strength — still zero wire changes
+  - [ ] Persona cards from 14.2/14.3 render like player cards on the 15.2 layout
+
+- [ ] **17.4 Play hub (`client/src/screens/play_hub_screen.{h,cpp}`)**
+  - [ ] Chess.com-style home: quick-queue TC cards (bullet/blitz/rapid/classical from 11.1's presets), variant cards (standard/Chess960 via 12.1, arena from 12.3), vs-Bot persona section, Archive/Leaderboard/Puzzles/Spectate/Settings entries (9.1 menu entries all move here, none lost)
+  - [ ] ConnectScreen survives as a collapsible "connect" drawer inside the hub (last_host/port/name pre-filled from 10.2's persistence, time-control cycler replaces the 11.1 connect-screen cycle button)
+  - [ ] App entry point swaps to the hub (config `general.entry` opt-out keeps the old menu for one version; menu screen stays functional)
+
+- [ ] **17.5 Final consistency + release pass**
+  - [ ] Full sweep: every screen paints from tokens (no stragglers flagged by a debug-only "token violation" overlay build flag); sounds/animation settings apply everywhere
+  - [ ] README screenshots + "inspired by chess.com" note + version-table close-out; tag v2.0.0
 
 ---
 
