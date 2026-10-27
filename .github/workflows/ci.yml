@@ -1,10 +1,13 @@
 name: CI
 
 on:
+  # Tag-gated per the project's convention: a tag is cut only after the
+  # suite is green locally, so CI certifies releases rather than guarding
+  # every push. workflow_dispatch keeps manual re-runs available.
   push:
-    branches: [master]
-  pull_request:
-    branches: [master]
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
 
 jobs:
   build-and-test:
@@ -24,13 +27,14 @@ jobs:
       # SFML dev packages: Ubuntu's libsfml ships 2.x (too old), so the
       # build falls back to FetchContent SFML 3.1.0 — which needs the
       # development headers of SFML's own dependencies (window/graphics
-      # backends plus OpenAL+codecs for the 9.8 audio module; network for
-      # net/protocol).
+      # backends incl. OpenGL for the Window module's FIND OpenGL, plus
+      # OpenAL+codecs for the 9.8 audio module; network for net/protocol).
       - name: Install SFML build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             libfreetype-dev \
+            libgl1-mesa-dev \
             libx11-dev \
             libxrandr-dev \
             libxcursor-dev \
