@@ -1,4 +1,6 @@
 #include "game_over_screen.h"
+
+#include "ui/theme.h"
 #include "analysis_screen.h"
 #include "game_screen.h"
 #include "history_screen.h"
@@ -78,26 +80,22 @@ GameOverScreen::GameOverScreen(App& app,
     }
 
     resultLabel_.setText(resultText_);
-    resultLabel_.setFontSize(30);
-    resultLabel_.setColor(sf::Color(255, 255, 255));
+    resultLabel_.setFontSize(ui::type::Result);
+    resultLabel_.setColor(ui::pal::white);
 
     reasonLabel_.setText("(" + reasonText_ + ")");
-    reasonLabel_.setFontSize(20);
-    reasonLabel_.setColor(sf::Color(160, 160, 160));
+    reasonLabel_.setFontSize(ui::type::Heading);
+    reasonLabel_.setColor(ui::pal::textMuted);
 
-    statusLabel_.setFontSize(16);
-    statusLabel_.setColor(sf::Color(190, 180, 120));
+    statusLabel_.setFontSize(16); // offer banner row size
+    statusLabel_.setColor(ui::pal::warnSoft);
 
     hint_.setText("Tab to switch, Enter to select");
-    hint_.setFontSize(14);
-    hint_.setColor(sf::Color(100, 100, 100));
+    hint_.setFontSize(ui::type::Body);
+    hint_.setColor(ui::pal::textGhost);
 
     rematchBtn_.setLabel("Rematch");
-    rematchBtn_.setColors(sf::Color(60, 130, 60), sf::Color(80, 160, 80),
-                          sf::Color(50, 110, 50), sf::Color(40, 90, 40),
-                          sf::Color(120, 150, 120), sf::Color(240, 240, 240),
-                          sf::Color(100, 100, 100), sf::Color(200, 200, 200),
-                          sf::Color(160, 160, 160));
+    rematchBtn_.setStyle(ui::buttonSuccess());
     rematchBtn_.setOnClick([this] { activateRematch(); });
 
     // Arena game (12.3): the rematch row is the lobby return instead —
@@ -110,46 +108,26 @@ GameOverScreen::GameOverScreen(App& app,
     }
 
     offerAcceptBtn_.setLabel("Accept");
-    offerAcceptBtn_.setColors(sf::Color(60, 130, 60), sf::Color(80, 160, 80),
-                              sf::Color(50, 110, 50), sf::Color(40, 90, 40),
-                              sf::Color(120, 150, 120), sf::Color(240, 240, 240),
-                              sf::Color(100, 100, 100), sf::Color(200, 200, 200),
-                              sf::Color(160, 160, 160));
+    offerAcceptBtn_.setStyle(ui::buttonSuccess());
     offerAcceptBtn_.setOnClick([this] { acceptRematch(); });
 
     offerDeclineBtn_.setLabel("Decline");
-    offerDeclineBtn_.setColors(sf::Color(140, 70, 60), sf::Color(165, 90, 80),
-                               sf::Color(115, 60, 50), sf::Color(95, 48, 40),
-                               sf::Color(150, 120, 120), sf::Color(240, 240, 240),
-                               sf::Color(100, 100, 100), sf::Color(200, 200, 200),
-                               sf::Color(160, 160, 160));
+    offerDeclineBtn_.setStyle(ui::buttonDangerMuted());
     offerDeclineBtn_.setOnClick([this] { declineRematch(); });
 
     analyzeBtn_.setLabel("Analyze");
-    analyzeBtn_.setColors(sf::Color(60, 80, 120), sf::Color(80, 100, 140),
-                          sf::Color(50, 70, 100), sf::Color(40, 55, 80),
-                          sf::Color(120, 130, 150), sf::Color(240, 240, 240),
-                          sf::Color(100, 100, 100), sf::Color(200, 200, 200),
-                          sf::Color(160, 160, 160));
+    analyzeBtn_.setStyle(ui::buttonInfo());
     analyzeBtn_.setOnClick([this] { activateAnalyze(); });
 
     archiveBtn_.setLabel("Match archive");
-    archiveBtn_.setColors(sf::Color(60, 90, 160), sf::Color(75, 105, 180),
-                          sf::Color(52, 80, 140), sf::Color(45, 60, 90),
-                          sf::Color(120, 130, 150), sf::Color(240, 240, 240),
-                          sf::Color(52, 78, 135), sf::Color(160, 190, 240),
-                          sf::Color(210, 230, 255));
+    archiveBtn_.setStyle(ui::buttonBlue());
     archiveBtn_.setOnClick([this] { activateArchive(); });
     // Browsing needs the live socket of the just-finished game.
     archiveBtn_.setEnabled(
         app_.connection().state() == ConnectionState::Connected);
 
     menuBtn_.setLabel("Menu");
-    menuBtn_.setColors(sf::Color(80, 80, 80), sf::Color(100, 100, 100),
-                       sf::Color(70, 70, 70), sf::Color(60, 60, 60),
-                       sf::Color(130, 130, 130), sf::Color(240, 240, 240),
-                       sf::Color(100, 100, 100), sf::Color(200, 200, 200),
-                       sf::Color(160, 160, 160));
+    menuBtn_.setStyle(ui::buttonPlain());
     menuBtn_.setOnClick([this] { activateMenu(); });
 
     layoutWidgets();

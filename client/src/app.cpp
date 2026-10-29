@@ -2,6 +2,7 @@
 
 #include "asset_paths.h"
 #include "screens/menu_screen.h"
+#include "ui/theme.h"
 
 #include <algorithm>
 #include <iostream>
@@ -203,7 +204,7 @@ void App::run()
             accumulator -= FixedDt;
         }
 
-        window_.clear(sf::Color(48, 46, 43));
+        window_.clear(ui::pal::bgApp);
         window_.setView(view_);
         if (screen_) screen_->draw(window_);
         window_.display();

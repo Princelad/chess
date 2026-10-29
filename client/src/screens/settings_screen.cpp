@@ -1,4 +1,5 @@
 #include "settings_screen.h"
+#include "ui/theme.h"
 #include "widgets/layout.h"
 
 #include <algorithm>
@@ -17,12 +18,12 @@ SettingsScreen::SettingsScreen(App& app)
     : app_(app)
 {
     title_.setText("Settings");
-    title_.setFontSize(28);
-    title_.setColor(sf::Color(255, 255, 255));
+    title_.setFontSize(ui::type::Big);
+    title_.setColor(ui::pal::white);
 
     hint_.setText("Arrows/Tab: navigate · Space/Enter: activate · Esc: back");
-    hint_.setFontSize(13);
-    hint_.setColor(sf::Color(100, 100, 100));
+    hint_.setFontSize(ui::type::Small);
+    hint_.setColor(ui::pal::textGhost);
 
     autoQueenCheck_.setLabel("Auto-queen (skip promotion picker)");
     autoQueenCheck_.setChecked(app_.autoQueen());
@@ -94,7 +95,7 @@ SettingsScreen::SettingsScreen(App& app)
     backBtn_.setLabel("Back");
     backBtn_.setOnClick([this] { app_.goBack(); });
 
-    status_.setColor(sf::Color(150, 150, 150));
+    status_.setColor(ui::pal::textDimmed);
 
     const std::string configured = app_.config().get("pieces.path", "");
     setStatus(configured.empty() ? "Using bundled piece set"
@@ -198,14 +199,14 @@ void SettingsScreen::updateThemeLabel()
 {
     themeName_.setText(boardThemeName(app_.boardTheme()));
     themeName_.setFontSize(15);
-    themeName_.setColor(sf::Color(230, 230, 230));
+    themeName_.setColor(ui::pal::textBright);
 }
 
 void SettingsScreen::updatePieceSetLabel()
 {
     pieceSetName_.setText(pieceSetDirName(app_.pieceSet()));
     pieceSetName_.setFontSize(15);
-    pieceSetName_.setColor(sf::Color(230, 230, 230));
+    pieceSetName_.setColor(ui::pal::textBright);
 }
 
 void SettingsScreen::cyclePieceSet(int dir)
@@ -305,7 +306,7 @@ void SettingsScreen::updateAnimDurLabel()
     }
     animDurName_.setText(kAnimDurLabels[idx]);
     animDurName_.setFontSize(15);
-    animDurName_.setColor(sf::Color(230, 230, 230));
+    animDurName_.setColor(ui::pal::textBright);
 }
 
 void SettingsScreen::cycleAnimDur(int dir)
@@ -334,7 +335,7 @@ void SettingsScreen::updateSoundVolLabel()
     else if (v <= 60) idx = 1;
     soundVolName_.setText(kVolLabels[idx]);
     soundVolName_.setFontSize(15);
-    soundVolName_.setColor(sf::Color(230, 230, 230));
+    soundVolName_.setColor(ui::pal::textBright);
 }
 
 void SettingsScreen::cycleSoundVol(int dir)

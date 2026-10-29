@@ -1,5 +1,7 @@
 #include "leaderboard_screen.h"
 
+#include "ui/theme.h"
+
 #include "game_screen.h"
 
 #include <algorithm>
@@ -41,17 +43,17 @@ LeaderboardScreen::LeaderboardScreen(App& app)
     : app_(app)
     , bg_(sf::FloatRect(sf::Vector2f(PanelX, PanelY),
                         sf::Vector2f(PanelW, PanelH)),
-          sf::Color(28, 28, 30), sf::Color(90, 90, 90), 1.f)
+          ui::pal::bgPanel, ui::overlay::panelStroke, 1.f)
 {
     if (const auto& profile = app_.profile(); profile.has_value() && !profile->isGuest)
         ownName_ = toLower(profile->name);
 
     title_.setText("Leaderboard");
-    title_.setFontSize(30);
-    title_.setColor(sf::Color(240, 240, 240));
+    title_.setFontSize(ui::type::Result);
+    title_.setColor(ui::pal::textPrimary);
 
     status_.setFontSize(15);
-    status_.setColor(sf::Color(170, 170, 170));
+    status_.setColor(ui::pal::textSoft);
 
     backBtn_.setLabel("OK");
     backBtn_.setOnClick([this] { app_.goBack(); });
@@ -101,17 +103,9 @@ void LeaderboardScreen::layoutRows()
         // Rows are not clickable; muted colors like the archive list, with a
         // distinct tint for the viewer's own account.
         if (own)
-            row.setColors(sf::Color(46, 62, 58), sf::Color(58, 78, 72),
-                          sf::Color(52, 70, 64), sf::Color(46, 62, 58),
-                          sf::Color(150, 150, 150), sf::Color(230, 245, 230),
-                          sf::Color(70, 110, 90), sf::Color(120, 190, 150),
-                          sf::Color(150, 220, 180));
+            row.setStyle(ui::buttonRowSelf());
         else
-            row.setColors(sf::Color(42, 42, 44), sf::Color(58, 58, 62),
-                          sf::Color(52, 52, 56), sf::Color(42, 42, 44),
-                          sf::Color(120, 120, 120), sf::Color(220, 220, 220),
-                          sf::Color(90, 90, 90), sf::Color(200, 200, 120),
-                          sf::Color(220, 220, 140));
+            row.setStyle(ui::buttonRow());
         y += RowH + 2.f;
     }
 

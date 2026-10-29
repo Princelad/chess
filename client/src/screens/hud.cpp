@@ -1,4 +1,6 @@
 #include "hud.h"
+
+#include "ui/theme.h"
 #include "app.h"
 
 #include <algorithm>
@@ -55,9 +57,9 @@ std::string clockText(double ms)
 // Low time heats up: red inside the last 10 s, amber until 30 s.
 sf::Color clockColor(double ms)
 {
-    if (ms < 10000.0) return sf::Color(255, 90, 90);
-    if (ms < 30000.0) return sf::Color(255, 190, 70);
-    return sf::Color(210, 210, 210);
+    if (ms < 10000.0) return ui::pal::dangerRed;
+    if (ms < 30000.0) return ui::pal::dangerAmber;
+    return ui::pal::textCell;
 }
 }
 
@@ -67,20 +69,20 @@ Hud::Hud(App& app, float panelX, float panelWidth)
     , panelW_(panelWidth)
 {
     opponentNameLabel_.setFontSize(NameFontSize);
-    opponentNameLabel_.setColor(sf::Color(180, 180, 180));
+    opponentNameLabel_.setColor(ui::pal::textFaded);
 
     localNameLabel_.setFontSize(NameFontSize);
-    localNameLabel_.setColor(sf::Color(180, 180, 180));
+    localNameLabel_.setColor(ui::pal::textFaded);
 
     statusLabel_.setFontSize(StatusFontSize);
-    statusLabel_.setColor(sf::Color(255, 200, 60));
+    statusLabel_.setColor(ui::pal::warn);
 
     headerLabel_.setText("Moves");
     headerLabel_.setFontSize(HeaderFontSize);
-    headerLabel_.setColor(sf::Color(120, 120, 120));
+    headerLabel_.setColor(ui::pal::textFaded);
 
     openingLabel_.setFontSize(HeaderFontSize);
-    openingLabel_.setColor(sf::Color(150, 140, 110));
+    openingLabel_.setColor(sf::Color(150, 140, 110)); // ECO bronze (HUD-only)
 
     navigator_.setLayout(
         sf::FloatRect(sf::Vector2f(panelX_, MoveListTop),
@@ -221,8 +223,8 @@ void Hud::draw(sf::RenderWindow& window, const sf::Font& font)
         std::string localName = "You - " + colorStr + ratingSuffix(localRating_);
         if (!gameOver_)
             localName += myTurn_ ? "  -  Your turn" : "  -  Waiting...";
-        localNameLabel_.setColor(myTurn_ ? sf::Color(76, 175, 80)
-                                         : sf::Color(180, 180, 180));
+        localNameLabel_.setColor(myTurn_ ? ui::pal::okTurn
+                                         : ui::pal::textFaded);
         drawPlayerCard(window, font, localName, myColor_,
                        LocalNameY, LocalCapturedY, true, localClock);
     }
@@ -235,7 +237,7 @@ void Hud::draw(sf::RenderWindow& window, const sf::Font& font)
 
     sf::RectangleShape sep({panelW_, 1.f});
     sep.setPosition({panelX_, SeparatorY});
-    sep.setFillColor(sf::Color(80, 80, 80));
+    sep.setFillColor(ui::pal::stroke);
     window.draw(sep);
 
     headerLabel_.setPosition({panelX_, MoveHeaderY});
@@ -275,7 +277,7 @@ void Hud::drawPlayerCard(sf::RenderWindow& window, const sf::Font& font,
     int advantage = navigator_.materialAdvantage(cardColor);
     if (advantage > 0) {
         sf::Text diff(font, "+" + std::to_string(advantage), 14);
-        diff.setFillColor(sf::Color(140, 200, 140));
+        diff.setFillColor(ui::pal::okDim);
         float x = right - diff.getLocalBounds().size.x;
         diff.setPosition({x, nameY});
         window.draw(diff);
@@ -299,7 +301,7 @@ void Hud::drawPlayerCard(sf::RenderWindow& window, const sf::Font& font,
             const char letters[] = { 'P', 'N', 'B', 'R', 'Q', 'K' };
             sf::Text letter(font, std::string(1, letters[static_cast<int>(piece.type)]), 13);
             letter.setFillColor(piece.color == Color::White
-                ? sf::Color(220, 220, 220) : sf::Color(120, 120, 120));
+                ? ui::pal::textBody : ui::pal::textFaded);
             letter.setPosition({x, capturedY});
             window.draw(letter);
         }

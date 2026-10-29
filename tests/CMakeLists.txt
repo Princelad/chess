@@ -54,6 +54,7 @@ if(BUILD_TESTING)
         client/eco_test.cpp
         client/sfx_test.cpp
         client/widget_test.cpp
+        client/theme_test.cpp
         client/archive_pgn_test.cpp
         client/game_over_transition_test.cpp
         uci/engine_test.cpp

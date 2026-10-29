@@ -1,27 +1,13 @@
 #include "button.h"
 
+#include <SFML/Graphics/RenderWindow.hpp>
+
 namespace chess::client {
 
 Button::Button(sf::FloatRect rect, std::string label)
     : rect_(rect)
     , label_(std::move(label))
 {
-}
-
-void Button::setColors(sf::Color idleFill, sf::Color hoverFill, sf::Color pressedFill,
-                       sf::Color disabledFill, sf::Color disabledLabel,
-                       sf::Color label, sf::Color outline, sf::Color activeOutline,
-                       sf::Color focusOutline)
-{
-    idleFill_ = idleFill;
-    hoverFill_ = hoverFill;
-    pressedFill_ = pressedFill;
-    disabledFill_ = disabledFill;
-    disabledLabel_ = disabledLabel;
-    labelColor_ = label;
-    outline_ = outline;
-    activeOutline_ = activeOutline;
-    focusOutline_ = focusOutline;
 }
 
 void Button::activate()
@@ -75,25 +61,25 @@ void Button::draw(sf::RenderWindow& window, const sf::Font& font) const
     float thickness = 1.f;
 
     if (!enabled_) {
-        fill = disabledFill_;
-        outline = outline_;
-        labelColor = disabledLabel_;
+        fill = style_.disabledFill;
+        outline = style_.outline;
+        labelColor = style_.disabledLabel;
     } else if (pressedIn_) {
-        fill = pressedFill_;
-        outline = activeOutline_;
-        labelColor = labelColor_;
+        fill = style_.pressedFill;
+        outline = style_.activeOutline;
+        labelColor = style_.label;
     } else if (hovered_) {
-        fill = hoverFill_;
-        outline = activeOutline_;
-        labelColor = labelColor_;
+        fill = style_.hoverFill;
+        outline = style_.activeOutline;
+        labelColor = style_.label;
     } else {
-        fill = idleFill_;
-        outline = outline_;
-        labelColor = labelColor_;
+        fill = style_.idleFill;
+        outline = style_.outline;
+        labelColor = style_.label;
     }
 
     if (focused_) {
-        outline = focusOutline_;
+        outline = style_.focusOutline;
         thickness = 2.f;
     }
 
@@ -104,7 +90,7 @@ void Button::draw(sf::RenderWindow& window, const sf::Font& font) const
     shape.setOutlineThickness(thickness);
     window.draw(shape);
 
-    sf::Text text(font, label_, 20);
+    sf::Text text(font, label_, style_.textSize);
     text.setFillColor(labelColor);
     const auto bounds = text.getLocalBounds();
     text.setPosition({

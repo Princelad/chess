@@ -3,6 +3,7 @@
 #include "local_game_screen.h"
 #include "puzzle_screen.h"
 #include "settings_screen.h"
+#include "ui/theme.h"
 #include "widgets/layout.h"
 
 #include <cstdlib>
@@ -46,12 +47,12 @@ MenuScreen::MenuScreen(App& app)
     entries_[0].setFocused(true);
 
     title_.setText("Chess");
-    title_.setFontSize(36);
-    title_.setColor(sf::Color(255, 255, 255));
+    title_.setFontSize(ui::type::Display);
+    title_.setColor(ui::pal::textPrimary);
 
     hint_.setText("Mouse or arrow keys + Enter");
-    hint_.setFontSize(14);
-    hint_.setColor(sf::Color(100, 100, 100));
+    hint_.setFontSize(ui::type::Body);
+    hint_.setColor(ui::pal::textGhost);
 
     layoutButtons();
 }

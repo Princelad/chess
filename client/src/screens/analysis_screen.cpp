@@ -1,4 +1,6 @@
 #include "analysis_screen.h"
+
+#include "ui/theme.h"
 #include "ui_helpers.h"
 #include "widgets/layout.h"
 #include "widgets/panel.h"
@@ -58,24 +60,24 @@ AnalysisScreen::AnalysisScreen(App& app,
 
     resultLabel_.setText(resultText_);
     resultLabel_.setFontSize(14);
-    resultLabel_.setColor(sf::Color(160, 160, 160));
+    resultLabel_.setColor(ui::pal::textMuted);
 
     analysisLabel_.setText("Analysis");
     analysisLabel_.setFontSize(18);
-    analysisLabel_.setColor(sf::Color(200, 200, 200));
+    analysisLabel_.setColor(ui::pal::textSecondary);
 
     plyLabel_.setText("");
     plyLabel_.setFontSize(14);
-    plyLabel_.setColor(sf::Color(120, 120, 120));
+    plyLabel_.setColor(ui::pal::textFaded);
 
     hint_.setText("Esc: back");
     hint_.setFontSize(12);
-    hint_.setColor(sf::Color(80, 80, 80));
+    hint_.setColor(ui::pal::stroke);
 
     evalTextLabel_.setFontSize(14);
-    evalTextLabel_.setColor(sf::Color(200, 200, 200));
+    evalTextLabel_.setColor(ui::pal::textSecondary);
     turnLabel_.setFontSize(14);
-    turnLabel_.setColor(sf::Color(120, 120, 120));
+    turnLabel_.setColor(ui::pal::textFaded);
 
     layoutPanel();
 
@@ -232,7 +234,7 @@ void AnalysisScreen::drawEvalBar(sf::RenderWindow& window) const
     Panel bg(sf::FloatRect(
         sf::Vector2f(origin.x - EvalBarWidth - 4.f, origin.y),
         sf::Vector2f(EvalBarWidth, boardH)),
-        sf::Color(40, 40, 40));
+        sf::Color(40, 40, 40)); // eval bar track (analysis-only)
     bg.draw(window);
 
     int ply = navigator_.currentPly();
@@ -250,12 +252,12 @@ void AnalysisScreen::drawEvalBar(sf::RenderWindow& window) const
 
     sf::RectangleShape whiteBar({EvalBarWidth, whiteH});
     whiteBar.setPosition({origin.x - EvalBarWidth - 4.f, origin.y + boardH - whiteH});
-    whiteBar.setFillColor(sf::Color(240, 240, 240));
+    whiteBar.setFillColor(ui::pal::textPrimary); // eval bar white side
     window.draw(whiteBar);
 
     sf::RectangleShape blackBar({EvalBarWidth, boardH - whiteH});
     blackBar.setPosition({origin.x - EvalBarWidth - 4.f, origin.y});
-    blackBar.setFillColor(sf::Color(50, 50, 50));
+    blackBar.setFillColor(sf::Color(50, 50, 50)); // eval bar black side
     window.draw(blackBar);
 }
 
@@ -313,7 +315,8 @@ void AnalysisScreen::drawBestMoveArrow(sf::RenderWindow& window) const
     shaft.setPoint(1, shaftEnd + perp * shaftW);
     shaft.setPoint(2, shaftEnd - perp * shaftW);
     shaft.setPoint(3, from - perp * shaftW);
-    shaft.setFillColor(sf::Color(0, 180, 0, 140));
+    shaft.setFillColor(sf::Color(ui::pal::bestMoveGreen.r, ui::pal::bestMoveGreen.g,
+                                 ui::pal::bestMoveGreen.b, 140));
     window.draw(shaft);
 
     float headLen = sq * 0.45f;
@@ -325,7 +328,8 @@ void AnalysisScreen::drawBestMoveArrow(sf::RenderWindow& window) const
     head.setPoint(0, headTip);
     head.setPoint(1, headBase + perp * headW);
     head.setPoint(2, headBase - perp * headW);
-    head.setFillColor(sf::Color(0, 180, 0, 140));
+    head.setFillColor(sf::Color(ui::pal::bestMoveGreen.r, ui::pal::bestMoveGreen.g,
+                                ui::pal::bestMoveGreen.b, 140));
     window.draw(head);
 }
 

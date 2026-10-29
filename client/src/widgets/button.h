@@ -1,6 +1,7 @@
 #pragma once
 
 #include <SFML/Graphics.hpp>
+#include <ui/theme.h>
 
 #include <functional>
 #include <string>
@@ -34,10 +35,8 @@ public:
 
     void setOnClick(std::function<void()> onClick) { onClick_ = std::move(onClick); }
 
-    void setColors(sf::Color idleFill, sf::Color hoverFill, sf::Color pressedFill,
-                   sf::Color disabledFill, sf::Color disabledLabel,
-                   sf::Color label, sf::Color outline, sf::Color activeOutline,
-                   sf::Color focusOutline);
+    void setStyle(const ui::ButtonStyle& style) { style_ = style; }
+    const ui::ButtonStyle& style() const { return style_; }
 
     bool isHovered() const { return hovered_; }
     bool isPressed() const { return pressedIn_; }
@@ -60,15 +59,7 @@ private:
     bool pressedIn_ = false;
     std::function<void()> onClick_;
 
-    sf::Color idleFill_ = sf::Color(58, 56, 54);
-    sf::Color hoverFill_ = sf::Color(70, 68, 66);
-    sf::Color pressedFill_ = sf::Color(50, 48, 46);
-    sf::Color disabledFill_ = sf::Color(40, 38, 36);
-    sf::Color disabledLabel_ = sf::Color(90, 90, 90);
-    sf::Color labelColor_ = sf::Color(220, 220, 220);
-    sf::Color outline_ = sf::Color(80, 78, 76);
-    sf::Color activeOutline_ = sf::Color(140, 140, 140);
-    sf::Color focusOutline_ = sf::Color(180, 180, 180);
+    ui::ButtonStyle style_; // zero-init == theme::buttonNeutral() values
 };
 
 } // namespace chess::client

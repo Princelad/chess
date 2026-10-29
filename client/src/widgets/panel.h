@@ -1,16 +1,17 @@
 #pragma once
 
 #include <SFML/Graphics.hpp>
+#include <ui/theme.h>
 
 namespace chess::client {
 
 class Panel {
 public:
     Panel() = default;
-    Panel(sf::FloatRect rect,
-          sf::Color fill = sf::Color(30, 30, 30),
-          sf::Color outline = sf::Color(80, 80, 80),
-          float outlineThickness = 1.f);
+    explicit Panel(sf::FloatRect rect,
+                   sf::Color fill = ui::pal::bgDeep,
+                   sf::Color outline = ui::pal::stroke,
+                   float outlineThickness = 1.f);
 
     void setRect(sf::FloatRect rect) { rect_ = rect; }
     sf::FloatRect rect() const { return rect_; }
@@ -24,8 +25,8 @@ public:
 
 private:
     sf::FloatRect rect_;
-    sf::Color fill_ = sf::Color(30, 30, 30);
-    sf::Color outline_ = sf::Color(80, 80, 80);
+    sf::Color fill_ = ui::pal::bgDeep;
+    sf::Color outline_ = ui::pal::stroke;
     float outlineThickness_ = 1.f;
 };
 

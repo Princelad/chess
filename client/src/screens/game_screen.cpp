@@ -1,4 +1,6 @@
 #include "game_screen.h"
+
+#include "ui/theme.h"
 #include "game_over_screen.h"
 #include "connect_screen.h"
 #include "keyboard.h"
@@ -77,28 +79,20 @@ GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName,
 
     chatLabel_.setText("Chat:");
     chatLabel_.setFontSize(14);
-    chatLabel_.setColor(sf::Color(160, 160, 160));
+    chatLabel_.setColor(ui::pal::textMuted);
 
     drawOfferLabel_.setText("Draw offered:");
     drawOfferLabel_.setFontSize(14);
-    drawOfferLabel_.setColor(sf::Color(255, 200, 60));
+    drawOfferLabel_.setColor(ui::pal::warn);
 
     resignBtn_.setLabel("Resign");
-    resignBtn_.setColors(sf::Color(160, 55, 55), sf::Color(185, 65, 65),
-                         sf::Color(135, 45, 45), sf::Color(70, 45, 45),
-                         sf::Color(140, 90, 90), sf::Color(240, 240, 240),
-                         sf::Color(90, 60, 60), sf::Color(210, 120, 120),
-                         sf::Color(180, 140, 140));
+    resignBtn_.setStyle(ui::buttonDanger());
     resignBtn_.setOnClick([this] {
         if (!gameOver_) app_.connection().send(chess::net::ResignMsg{});
     });
 
     offerDrawBtn_.setLabel("Offer Draw");
-    offerDrawBtn_.setColors(sf::Color(70, 70, 95), sf::Color(85, 85, 115),
-                            sf::Color(58, 58, 78), sf::Color(45, 45, 58),
-                            sf::Color(105, 105, 120), sf::Color(230, 230, 235),
-                            sf::Color(80, 80, 100), sf::Color(150, 150, 175),
-                            sf::Color(180, 180, 205));
+    offerDrawBtn_.setStyle(ui::buttonPlum());
     offerDrawBtn_.setOnClick([this] {
         if (gameOver_) return;
         app_.connection().send(chess::net::DrawOfferMsg{});
@@ -106,11 +100,7 @@ GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName,
     });
 
     declineBtn_.setLabel("Decline");
-    declineBtn_.setColors(sf::Color(160, 55, 55), sf::Color(185, 65, 65),
-                          sf::Color(135, 45, 45), sf::Color(70, 45, 45),
-                          sf::Color(140, 90, 90), sf::Color(240, 240, 240),
-                          sf::Color(90, 60, 60), sf::Color(210, 120, 120),
-                          sf::Color(180, 140, 140));
+    declineBtn_.setStyle(ui::buttonDanger());
     declineBtn_.setOnClick([this] {
         if (drawOfferPending_) {
             app_.connection().send(chess::net::DrawDeclineMsg{});
@@ -124,11 +114,7 @@ GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName,
     });
 
     acceptBtn_.setLabel("Accept");
-    acceptBtn_.setColors(sf::Color(60, 140, 60), sf::Color(75, 165, 75),
-                         sf::Color(48, 115, 48), sf::Color(45, 80, 45),
-                         sf::Color(110, 140, 110), sf::Color(240, 240, 240),
-                         sf::Color(70, 100, 70), sf::Color(140, 200, 140),
-                         sf::Color(180, 220, 180));
+    acceptBtn_.setStyle(ui::buttonSuccessBright());
     acceptBtn_.setOnClick([this] {
         if (drawOfferPending_) {
             app_.connection().send(chess::net::DrawAcceptMsg{});
@@ -141,14 +127,10 @@ GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName,
 
     takebackLabel_.setText("Takeback asked:");
     takebackLabel_.setFontSize(14);
-    takebackLabel_.setColor(sf::Color(255, 200, 60));
+    takebackLabel_.setColor(ui::pal::warn);
 
     takebackBtn_.setLabel("Takeback");
-    takebackBtn_.setColors(sf::Color(70, 70, 95), sf::Color(85, 85, 115),
-                           sf::Color(58, 58, 78), sf::Color(45, 45, 58),
-                           sf::Color(105, 105, 120), sf::Color(230, 230, 235),
-                           sf::Color(80, 80, 100), sf::Color(150, 150, 175),
-                           sf::Color(180, 180, 205));
+    takebackBtn_.setStyle(ui::buttonPlum());
     takebackBtn_.setOnClick([this] {
         if (gameOver_) return;
         app_.connection().send(chess::net::TakebackRequestMsg{});
@@ -158,11 +140,7 @@ GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName,
     // Spectator mode (12.4): the action buttons give way to one Leave
     // button; the chat input is disabled (watchers may not talk).
     leaveBtn_.setLabel("Leave");
-    leaveBtn_.setColors(sf::Color(70, 90, 70), sf::Color(85, 110, 85),
-                        sf::Color(55, 72, 55), sf::Color(42, 55, 42),
-                        sf::Color(105, 125, 105), sf::Color(235, 240, 235),
-                        sf::Color(75, 95, 75), sf::Color(140, 165, 140),
-                        sf::Color(175, 200, 175));
+    leaveBtn_.setStyle(ui::buttonLeave());
     leaveBtn_.setOnClick([this] { leaveWatch(); });
 
     if (spectator_) {
@@ -280,8 +258,8 @@ void GameScreen::layoutPanel()
     chatLogBg_.setRect(sf::FloatRect(
         sf::Vector2f(px, logTop),
         sf::Vector2f(static_cast<float>(App::WindowWidth) - px - 8.f, logBottom - logTop)));
-    chatLogBg_.setFill(sf::Color(30, 30, 30));
-    chatLogBg_.setOutline(sf::Color(70, 70, 70));
+    chatLogBg_.setFill(ui::pal::bgDeep);
+    chatLogBg_.setOutline(ui::pal::bgElevated);
 
     chatInput_.setRect(sf::FloatRect(
         sf::Vector2f(px, inputY),
@@ -1204,7 +1182,7 @@ void GameScreen::drawChat(sf::RenderWindow& window)
 
     sf::RectangleShape sep({panelW, 1.f});
     sep.setPosition({px, chatSepY});
-    sep.setFillColor(sf::Color(80, 80, 80));
+    sep.setFillColor(ui::pal::stroke);
     window.draw(sep);
 
     chatLabel_.draw(window, font);
@@ -1240,26 +1218,26 @@ void GameScreen::drawChat(sf::RenderWindow& window)
         };
 
         sf::Text timeTag(font, "[" + chatTimestamp(entry.epochSec) + "] ", 13);
-        timeTag.setFillColor(sf::Color(110, 110, 110));
+        timeTag.setFillColor(sf::Color(110, 110, 110)); // chat stub gray
         timeTag.setPosition({left, y});
         window.draw(timeTag);
 
         float x = left + timeTag.getLocalBounds().size.x;
         if (entry.name.empty()) {
             sf::Text line(font, fits(x, entry.text), 13);
-            line.setFillColor(sf::Color(170, 170, 170));
+            line.setFillColor(sf::Color(170, 170, 170)); // chat muted line
             line.setPosition({x, y});
             window.draw(line);
         } else {
             sf::Text namePart(font, entry.name + ": ", 13);
             namePart.setFillColor(entry.name == YouName()
-                ? sf::Color(255, 230, 130) : chatNameColor(entry.name));
+                ? ui::pal::goldChatSelf : chatNameColor(entry.name));
             namePart.setPosition({x, y});
             window.draw(namePart);
 
             sf::Text line(font, fits(x + namePart.getLocalBounds().size.x,
                                      entry.text), 13);
-            line.setFillColor(sf::Color(200, 200, 200));
+            line.setFillColor(ui::pal::textSecondary);
             line.setPosition({x + namePart.getLocalBounds().size.x, y});
             window.draw(line);
         }
@@ -1308,15 +1286,15 @@ void GameScreen::draw(sf::RenderWindow& window)
             auto c = promoCell(i);
             sf::RectangleShape cell({c.size, c.size});
             cell.setPosition(c.pos);
-            cell.setFillColor(sf::Color(40, 38, 35, 220));
-            cell.setOutlineColor(sf::Color(180, 180, 180, 180));
+            cell.setFillColor(ui::overlay::cellFill);
+            cell.setOutlineColor(ui::overlay::cellStroke);
             cell.setOutlineThickness(1.f);
             window.draw(cell);
 
             if (i == promoHover_) {
                 sf::RectangleShape hover({c.size, c.size});
                 hover.setPosition(c.pos);
-                hover.setFillColor(sf::Color(255, 255, 255, 30));
+                hover.setFillColor(ui::overlay::cellHover);
                 window.draw(hover);
             }
 
@@ -1336,7 +1314,7 @@ void GameScreen::draw(sf::RenderWindow& window)
                 unsigned int letterSize = static_cast<unsigned int>(c.size * 0.5f);
                 if (letterSize < 12) letterSize = 12;
                 sf::Text letter(font, std::string(1, letters[static_cast<int>(pt)]), letterSize);
-                letter.setFillColor(sf::Color(240, 240, 240));
+                letter.setFillColor(ui::overlay::cellGlyph);
                 auto lb = letter.getLocalBounds();
                 letter.setPosition({
                     c.pos.x + (c.size - lb.size.x) / 2.f - lb.position.x,
@@ -1365,7 +1343,7 @@ void GameScreen::drawHelpOverlay(sf::RenderWindow& window)
 
     sf::RectangleShape dim(
         {static_cast<float>(App::WindowWidth), static_cast<float>(App::WindowHeight)});
-    dim.setFillColor(sf::Color(0, 0, 0, 120));
+    dim.setFillColor(ui::overlay::dim);
     window.draw(dim);
 
     const char* lines[] = {
@@ -1402,15 +1380,15 @@ void GameScreen::drawHelpOverlay(sf::RenderWindow& window)
 
     sf::RectangleShape bg({panelW, panelH});
     bg.setPosition({px, py});
-    bg.setFillColor(sf::Color(30, 30, 30, 235));
-    bg.setOutlineColor(sf::Color(90, 90, 90));
+    bg.setFillColor(ui::overlay::panelFill);
+    bg.setOutlineColor(ui::overlay::panelStroke);
     bg.setOutlineThickness(1.f);
     window.draw(bg);
 
     float y = py + PadY;
     for (int i = 0; i < Count; ++i) {
         sf::Text t(font, lines[i], (i == 0) ? HdrSize : RowSize);
-        t.setFillColor(i == 0 ? sf::Color(255, 255, 255) : sf::Color(210, 210, 210));
+        t.setFillColor(i == 0 ? ui::pal::white : ui::pal::textCell);
         auto lb = t.getLocalBounds();
         t.setPosition({
             px + (panelW - lb.size.x) / 2.f - lb.position.x,

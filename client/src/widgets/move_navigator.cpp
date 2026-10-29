@@ -292,8 +292,8 @@ void MoveNavigator::drawGrid(sf::RenderWindow& window, const sf::Font& font)
 
     sf::RectangleShape bg(gridRect_.size);
     bg.setPosition(gridRect_.position);
-    bg.setFillColor(sf::Color(25, 25, 25));
-    bg.setOutlineColor(sf::Color(80, 80, 80));
+    bg.setFillColor(ui::pal::bgSunken);
+    bg.setOutlineColor(ui::pal::stroke);
     bg.setOutlineThickness(1.f);
     window.draw(bg);
 
@@ -309,7 +309,7 @@ void MoveNavigator::drawGrid(sf::RenderWindow& window, const sf::Font& font)
     float numX = px + GridPadLeft;
 
     sf::Text numText(font, "", static_cast<unsigned int>(FontSize));
-    numText.setFillColor(sf::Color(130, 130, 130));
+    numText.setFillColor(ui::pal::textFaint);
     sf::Text moveText(font, "", static_cast<unsigned int>(FontSize));
     moveText.setFillColor(sf::Color(210, 210, 210));
 
@@ -330,12 +330,15 @@ void MoveNavigator::drawGrid(sf::RenderWindow& window, const sf::Font& font)
             if (ply == currentPly_) {
                 sf::RectangleShape hl({colW, RowH});
                 hl.setPosition({cellX - CellPad, yTop});
-                hl.setFillColor(sf::Color(0, 120, 215, 100));
+                hl.setFillColor(sf::Color(ui::pal::selectionBlue.r,
+                                          ui::pal::selectionBlue.g,
+                                          ui::pal::selectionBlue.b, 100));
                 window.draw(hl);
             } else if (ply == hoveredCellPly_ && ply > 0) {
                 sf::RectangleShape hov({colW, RowH});
                 hov.setPosition({cellX - CellPad, yTop});
-                hov.setFillColor(sf::Color(120, 120, 120, 45));
+                hov.setFillColor(sf::Color(ui::pal::hoverWash.r, ui::pal::hoverWash.g,
+                                           ui::pal::hoverWash.b, 45));
                 window.draw(hov);
             }
 
@@ -361,7 +364,7 @@ void MoveNavigator::drawGrid(sf::RenderWindow& window, const sf::Font& font)
 
     if (totalPlies() == 0) {
         sf::Text empty(font, "No moves yet", static_cast<unsigned int>(FontSize));
-        empty.setFillColor(sf::Color(100, 100, 100));
+        empty.setFillColor(ui::pal::textGhost);
         empty.setPosition({px + GridPadLeft, top + 2.f});
         window.draw(empty);
     }

@@ -1,4 +1,6 @@
 #include "puzzle_screen.h"
+
+#include "ui/theme.h"
 #include "asset_paths.h"
 #include "keyboard.h"
 #include "menu_screen.h"
@@ -33,13 +35,6 @@ PuzzleScreen::PuzzleScreen(App& app)
     else
         setStatus("No puzzles found (missing puzzles.pgn)", 999.f);
 
-    auto themed = [](Button& b, sf::Color r, sf::Color h, sf::Color p) {
-        b.setColors(r, h, p, sf::Color(70, 70, 70),
-                    sf::Color(140, 140, 140), sf::Color(240, 240, 240),
-                    sf::Color(90, 90, 90), sf::Color(200, 200, 200),
-                    sf::Color(180, 180, 180));
-    };
-
     const float px = boardView_.panelX();
     const float width = static_cast<float>(App::WindowWidth);
     const float height = static_cast<float>(App::WindowHeight);
@@ -49,26 +44,22 @@ PuzzleScreen::PuzzleScreen(App& app)
     };
 
     hintBtn_.setLabel("Hint");
-    themed(hintBtn_, sf::Color(60, 90, 140), sf::Color(75, 105, 160),
-           sf::Color(50, 75, 115));
+    hintBtn_.setStyle(ui::buttonHint());
     place(hintBtn_, y - 3.f * (BtnH + BtnGap));
     hintBtn_.setOnClick([this] { hint(); });
 
     solutionBtn_.setLabel("Show solution");
-    themed(solutionBtn_, sf::Color(140, 110, 40), sf::Color(160, 130, 50),
-           sf::Color(110, 88, 32));
+    solutionBtn_.setStyle(ui::buttonAmber());
     place(solutionBtn_, y - 2.f * (BtnH + BtnGap));
     solutionBtn_.setOnClick([this] { revealSolution(); });
 
     nextBtn_.setLabel("Next puzzle");
-    themed(nextBtn_, sf::Color(60, 120, 60), sf::Color(75, 140, 75),
-           sf::Color(48, 95, 48));
+    nextBtn_.setStyle(ui::buttonGreen());
     place(nextBtn_, y - (BtnH + BtnGap));
     nextBtn_.setOnClick([this] { nextPuzzle(); });
 
     backBtn_.setLabel("Back to Menu");
-    themed(backBtn_, sf::Color(160, 55, 55), sf::Color(185, 65, 65),
-           sf::Color(135, 45, 45));
+    backBtn_.setStyle(ui::buttonDanger());
     place(backBtn_, y);
     backBtn_.setOnClick([this] { backToMenu(); });
 }
@@ -680,15 +671,15 @@ void PuzzleScreen::draw(sf::RenderWindow& window)
             auto c = promoCell(i);
             sf::RectangleShape cell({c.size, c.size});
             cell.setPosition(c.pos);
-            cell.setFillColor(sf::Color(40, 38, 35, 220));
-            cell.setOutlineColor(sf::Color(180, 180, 180, 180));
+            cell.setFillColor(ui::overlay::cellFill);
+            cell.setOutlineColor(ui::overlay::cellStroke);
             cell.setOutlineThickness(1.f);
             window.draw(cell);
 
             if (i == promoHover_) {
                 sf::RectangleShape hover({c.size, c.size});
                 hover.setPosition(c.pos);
-                hover.setFillColor(sf::Color(255, 255, 255, 30));
+                hover.setFillColor(ui::overlay::cellHover);
                 window.draw(hover);
             }
 
@@ -710,7 +701,7 @@ void PuzzleScreen::draw(sf::RenderWindow& window)
                 sf::Text letter(font,
                                 std::string(1, letters[static_cast<int>(pt)]),
                                 letterSize);
-                letter.setFillColor(sf::Color(240, 240, 240));
+                letter.setFillColor(ui::overlay::cellGlyph);
                 auto lb = letter.getLocalBounds();
                 letter.setPosition({
                     c.pos.x + (c.size - lb.size.x) / 2.f - lb.position.x,
@@ -726,7 +717,7 @@ void PuzzleScreen::draw(sf::RenderWindow& window)
     const float px = boardView_.panelX();
     sf::RectangleShape panel({width - px, height});
     panel.setPosition({px, 0.f});
-    panel.setFillColor(sf::Color(24, 26, 30));
+    panel.setFillColor(sf::Color(24, 26, 30)); // puzzle header slate
     window.draw(panel);
 
     const auto* puzzle = current();
@@ -739,7 +730,7 @@ void PuzzleScreen::draw(sf::RenderWindow& window)
                 " mates in " + std::to_string(puzzle->mateIn());
     }
     sf::Text titleText(font, title, 15);
-    titleText.setFillColor(sf::Color(240, 240, 240));
+    titleText.setFillColor(ui::pal::textPrimary);
     titleText.setPosition({px + 14.f, 18.f});
     window.draw(titleText);
 
@@ -747,13 +738,13 @@ void PuzzleScreen::draw(sf::RenderWindow& window)
                         "Streak " + std::to_string(streak_.current) +
                             "   best " + std::to_string(streak_.best),
                         14);
-    streakText.setFillColor(sf::Color(160, 190, 130));
+    streakText.setFillColor(sf::Color(160, 190, 130)); // streak sage
     streakText.setPosition({px + 14.f, 44.f});
     window.draw(streakText);
 
     sf::Text statusText(font, status_, 14);
-    statusText.setFillColor(solved_ ? sf::Color(140, 220, 140)
-                                    : sf::Color(220, 200, 130));
+    statusText.setFillColor(solved_ ? ui::pal::ok
+                                    : ui::pal::warnBanner);
     statusText.setPosition({px + 14.f, 68.f});
     window.draw(statusText);
 
@@ -764,7 +755,7 @@ void PuzzleScreen::draw(sf::RenderWindow& window)
             line += s;
         }
         sf::Text lineText(font, safeTruncate(line, 32), 14);
-        lineText.setFillColor(sf::Color(150, 150, 165));
+        lineText.setFillColor(sf::Color(150, 150, 165)); // solution line slate
         lineText.setPosition({px + 14.f, 96.f});
         window.draw(lineText);
     }
@@ -787,7 +778,7 @@ void PuzzleScreen::drawHelpOverlay(sf::RenderWindow& window)
     sf::RectangleShape dim(
         {static_cast<float>(App::WindowWidth),
          static_cast<float>(App::WindowHeight)});
-    dim.setFillColor(sf::Color(0, 0, 0, 120));
+    dim.setFillColor(ui::overlay::dim);
     window.draw(dim);
 
     const char* lines[] = {
@@ -822,15 +813,15 @@ void PuzzleScreen::drawHelpOverlay(sf::RenderWindow& window)
 
     sf::RectangleShape bg({panelW, panelH});
     bg.setPosition({px, py});
-    bg.setFillColor(sf::Color(30, 30, 30, 235));
-    bg.setOutlineColor(sf::Color(90, 90, 90));
+    bg.setFillColor(ui::overlay::panelFill);
+    bg.setOutlineColor(ui::overlay::panelStroke);
     bg.setOutlineThickness(1.f);
     window.draw(bg);
 
     float y = py + PadY;
     for (int i = 0; i < Count; ++i) {
         sf::Text t(font, lines[i], (i == 0) ? HdrSize : RowSize);
-        t.setFillColor(i == 0 ? sf::Color(255, 255, 255) : sf::Color(210, 210, 210));
+        t.setFillColor(i == 0 ? ui::pal::white : ui::pal::textCell);
         auto lb = t.getLocalBounds();
         t.setPosition({
             px + (panelW - lb.size.x) / 2.f - lb.position.x,

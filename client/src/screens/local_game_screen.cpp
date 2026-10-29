@@ -1,4 +1,6 @@
 #include "local_game_screen.h"
+
+#include "ui/theme.h"
 #include "game_over_screen.h"
 #include "keyboard.h"
 #include "menu_screen.h"
@@ -70,11 +72,7 @@ LocalGameScreen::LocalGameScreen(App& app, Color myColor,
     hud_.setInfo("Computer", myColor_, myTurn_, gameOver_);
 
     backBtn_.setLabel("Back to Menu");
-    backBtn_.setColors(sf::Color(160, 55, 55), sf::Color(185, 65, 65),
-                       sf::Color(135, 45, 45), sf::Color(70, 45, 45),
-                       sf::Color(140, 90, 90), sf::Color(240, 240, 240),
-                       sf::Color(90, 60, 60), sf::Color(210, 120, 120),
-                       sf::Color(180, 140, 140));
+    backBtn_.setStyle(ui::buttonDanger());
     backBtn_.setRect(sf::FloatRect(
         sf::Vector2f(boardView_.panelX(), hud_.contentBottom()),
         sf::Vector2f(140.f, BtnH)));
@@ -655,15 +653,15 @@ void LocalGameScreen::draw(sf::RenderWindow& window)
             auto c = promoCell(i);
             sf::RectangleShape cell({c.size, c.size});
             cell.setPosition(c.pos);
-            cell.setFillColor(sf::Color(40, 38, 35, 220));
-            cell.setOutlineColor(sf::Color(180, 180, 180, 180));
+            cell.setFillColor(ui::overlay::cellFill);
+            cell.setOutlineColor(ui::overlay::cellStroke);
             cell.setOutlineThickness(1.f);
             window.draw(cell);
 
             if (i == promoHover_) {
                 sf::RectangleShape hover({c.size, c.size});
                 hover.setPosition(c.pos);
-                hover.setFillColor(sf::Color(255, 255, 255, 30));
+                hover.setFillColor(ui::overlay::cellHover);
                 window.draw(hover);
             }
 
@@ -683,7 +681,7 @@ void LocalGameScreen::draw(sf::RenderWindow& window)
                 unsigned int letterSize = static_cast<unsigned int>(c.size * 0.5f);
                 if (letterSize < 12) letterSize = 12;
                 sf::Text letter(font, std::string(1, letters[static_cast<int>(pt)]), letterSize);
-                letter.setFillColor(sf::Color(240, 240, 240));
+                letter.setFillColor(ui::overlay::cellGlyph);
                 auto lb = letter.getLocalBounds();
                 letter.setPosition({
                     c.pos.x + (c.size - lb.size.x) / 2.f - lb.position.x,
@@ -714,7 +712,7 @@ void LocalGameScreen::drawHelpOverlay(sf::RenderWindow& window)
 
     sf::RectangleShape dim(
         {static_cast<float>(App::WindowWidth), static_cast<float>(App::WindowHeight)});
-    dim.setFillColor(sf::Color(0, 0, 0, 120));
+    dim.setFillColor(ui::overlay::dim);
     window.draw(dim);
 
     const char* lines[] = {
@@ -751,15 +749,15 @@ void LocalGameScreen::drawHelpOverlay(sf::RenderWindow& window)
 
     sf::RectangleShape bg({panelW, panelH});
     bg.setPosition({px, py});
-    bg.setFillColor(sf::Color(30, 30, 30, 235));
-    bg.setOutlineColor(sf::Color(90, 90, 90));
+    bg.setFillColor(ui::overlay::panelFill);
+    bg.setOutlineColor(ui::overlay::panelStroke);
     bg.setOutlineThickness(1.f);
     window.draw(bg);
 
     float y = py + PadY;
     for (int i = 0; i < Count; ++i) {
         sf::Text t(font, lines[i], (i == 0) ? HdrSize : RowSize);
-        t.setFillColor(i == 0 ? sf::Color(255, 255, 255) : sf::Color(210, 210, 210));
+        t.setFillColor(i == 0 ? ui::pal::white : ui::pal::textCell);
         auto lb = t.getLocalBounds();
         t.setPosition({
             px + (panelW - lb.size.x) / 2.f - lb.position.x,

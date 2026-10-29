@@ -1,4 +1,6 @@
 #include "tournament_lobby_screen.h"
+
+#include "ui/theme.h"
 #include "game_screen.h"
 #include "menu_screen.h"
 
@@ -26,7 +28,7 @@ TournamentLobbyScreen::TournamentLobbyScreen(App& app,
 {
     title_.setText("Arena");
     title_.setFontSize(32);
-    title_.setColor(sf::Color(255, 255, 255));
+    title_.setColor(ui::pal::white);
 
     std::string sub = timeControl_.empty()
         ? "unlimited" : ("tc " + timeControl_);
@@ -34,29 +36,25 @@ TournamentLobbyScreen::TournamentLobbyScreen(App& app,
         ? "   ·   standard" : ("   ·   " + variant_);
     subtitle_.setText(sub);
     subtitle_.setFontSize(16);
-    subtitle_.setColor(sf::Color(150, 150, 155));
+    subtitle_.setColor(sf::Color(150, 150, 155)); // arena slate tone
 
     headerName_.setText("Name");
     headerPoints_.setText("Pts");
     headerRecord_.setText("W   L   D");
     for (auto* h : {&headerName_, &headerPoints_, &headerRecord_}) {
         h->setFontSize(15);
-        h->setColor(sf::Color(160, 170, 190));
+        h->setColor(sf::Color(160, 170, 190)); // arena header slate
     }
 
     statusLabel_.setFontSize(16);
-    statusLabel_.setColor(sf::Color(220, 200, 130));
+    statusLabel_.setColor(ui::pal::warnBanner);
     statusLabel_.setText("Joining the arena...");
 
     resultLabel_.setFontSize(30);
-    resultLabel_.setColor(sf::Color(140, 220, 140));
+    resultLabel_.setColor(ui::pal::ok);
 
     leaveBtn_.setLabel("Leave arena");
-    leaveBtn_.setColors(sf::Color(140, 70, 60), sf::Color(165, 90, 80),
-                        sf::Color(115, 60, 50), sf::Color(95, 48, 40),
-                        sf::Color(150, 120, 120), sf::Color(240, 240, 240),
-                        sf::Color(100, 100, 100), sf::Color(200, 200, 200),
-                        sf::Color(160, 160, 160));
+    leaveBtn_.setStyle(ui::buttonDangerMuted());
     leaveBtn_.setOnClick([this] { leave(); });
 
     title_.setPosition({NameX, TitleY});
@@ -115,12 +113,12 @@ void TournamentLobbyScreen::rebuildRows()
         RowWidgets widgets;
         widgets.name.setText(row.name);
         widgets.name.setFontSize(15);
-        widgets.name.setColor(row.self ? sf::Color(255, 215, 120)
-                                       : sf::Color(225, 225, 235));
+        widgets.name.setColor(row.self ? ui::pal::goldSelf
+                                       : sf::Color(225, 225, 235)); // arena pale row
 
         widgets.points.setText(std::to_string(row.points));
         widgets.points.setFontSize(15);
-        widgets.points.setColor(sf::Color(210, 210, 220));
+        widgets.points.setColor(sf::Color(210, 210, 220)); // arena row tint
 
         std::string rec = std::to_string(row.wins) + "   "
             + std::to_string(row.losses) + "   " + std::to_string(row.draws);
@@ -128,7 +126,7 @@ void TournamentLobbyScreen::rebuildRows()
             rec += "  (playing)";
         widgets.record.setText(rec);
         widgets.record.setFontSize(15);
-        widgets.record.setColor(sf::Color(170, 175, 185));
+        widgets.record.setColor(sf::Color(170, 175, 185)); // arena row tint
 
         rowWidgets_.push_back(std::move(widgets));
     }
