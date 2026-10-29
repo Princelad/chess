@@ -748,11 +748,12 @@ fonts, or branding (our own palette values, our own drawings; README gains an
 **Exit version:** `v1.7.0` — all screens restyled on tokens; zero behavior
 change; 763-test suite stays green (CI discipline from 13.x continues)
 
-- [ ] **14.1 Design tokens (`client/src/ui/theme.h`)**
-  - [ ] Central module: spacing scale, type scale, color palette (dark background family, panel/card/button/accent tokens), component style structs; the single source every later phase paints from
-  - [ ] Migrate the widget layer first: `Button`/`TextField`/`Panel`/`Label`/`Checkbox` take styles from tokens instead of per-screen literal colors
-  - [ ] Sweep screens to remove magic colors/sizes connect/menu/settings/game screens draw directly — screens pass composition, tokens pass paint
-  - [ ] Unit-testable helpers pure (color derivations, contrast pair checks) so theme lookups have tests without a window
+- [x] **14.1 Design tokens (`client/src/ui/theme.h`)** — pure refactor: every token value mirrors the pre-14.1 hardcoded palette verbatim, so the phase's visual refresh (14.4/14.5) changes values HERE, not at the call sites
+  - [x] Central module: spacing scale, type scale, color palette (dark background family, panel/card/button/accent tokens), component style structs; the single source every later phase paints from (header-only like `themes.h`/`chat_log.h`; `pal` namespace = shared families, `overlay` = promo-picker/dialog chrome shared by GameScreen/LocalGame/Puzzle, `type`/`space` scales)
+  - [x] Migrate the widget layer first: `Button`/`TextField`/`Panel`/`Label`/`Checkbox` take styles from tokens instead of per-screen literal colors (`Button::setColors` 9-arg DELETED — `setStyle(const ui::ButtonStyle&)`; 15 `constexpr` variant factories `buttonDanger/Success/ConnectBlue/…` each copy one screens' exact trio; MoveNavigator paints from `pal` too)
+  - [x] Sweep screens to remove magic colors/sizes connect/menu/settings/game screens draw directly — screens pass composition, tokens pass paint (~300 `sf::Color` literals down to 10, each of which is a screened-unique accent tone with a trailing comment naming it: ECO bronze, arena slate family, puzzle header sage, chat stub grays, eval-bar track; `boardview.cpp` + `chat_log.h` deliberately untouched — board semantics, 14.4/15.5 territory)
+  - [x] Unit-testable helpers pure (color derivations, contrast pair checks) so theme lookups have tests without a window (`tests/client/theme_test.cpp`, +11 tests: mix/shade clamping + alpha preservation, contrast symmetry + 21:1 white/black, readable-text flip, panel contrast floors ≥ 4.0, type/spacing monotonicity, variant distinctness/statefulness; suite 774 green)
+  - Note: today's legacy text-on-card contrast actually measures ~3.9–4.3:1 — the test floor is set at truth and 14.5's restyle should RAISE it (update the asserts when values change)
 
 - [ ] **14.2 Icon system (`client/src/ui/icons.h` + SFML-drawn registry)**
   - [ ] Small procedural icon set drawn in SFML (clock, flag, draw-hand, flip, hint bulb, medal, watcher eye, back arrow) — no external sprite dependencies, sized by the type scale
