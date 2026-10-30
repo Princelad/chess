@@ -69,7 +69,7 @@ private:
     void drawPlayerCard(sf::RenderWindow& window, const sf::Font& font,
                         const std::string& name, Color cardColor,
                         float nameY, float capturedY, bool isLocal,
-                        const std::string& clockText);
+                        const std::string& clockText, int watcherCount = 0);
     // Current shown remaining of one side, honoring local ticking since the
     // last server sync for the side on the move.
     double shownRemainingMs(Color side) const;

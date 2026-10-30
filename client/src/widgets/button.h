@@ -1,9 +1,11 @@
 #pragma once
 
 #include <SFML/Graphics.hpp>
+#include <ui/icons.h>
 #include <ui/theme.h>
 
 #include <functional>
+#include <optional>
 #include <string>
 
 namespace chess::client {
@@ -38,6 +40,12 @@ public:
     void setStyle(const ui::ButtonStyle& style) { style_ = style; }
     const ui::ButtonStyle& style() const { return style_; }
 
+    // Decorative leading icon (14.2). The label always keeps rendering
+    // alongside it (letter-fallback discipline); if the remaining text
+    // space would collide, the icon silently drops instead.
+    void setIcon(std::optional<ui::icons::IconKind> icon) { icon_ = icon; }
+    void clearIcon() { icon_.reset(); }
+
     bool isHovered() const { return hovered_; }
     bool isPressed() const { return pressedIn_; }
 
@@ -58,6 +66,7 @@ private:
     bool hovered_ = false;
     bool pressedIn_ = false;
     std::function<void()> onClick_;
+    std::optional<ui::icons::IconKind> icon_;
 
     ui::ButtonStyle style_; // zero-init == theme::buttonNeutral() values
 };

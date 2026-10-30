@@ -127,6 +127,7 @@ GameOverScreen::GameOverScreen(App& app,
         app_.connection().state() == ConnectionState::Connected);
 
     menuBtn_.setLabel("Menu");
+    menuBtn_.setIcon(ui::icons::IconKind::ArrowBack);
     menuBtn_.setStyle(ui::buttonPlain());
     menuBtn_.setOnClick([this] { activateMenu(); });
 

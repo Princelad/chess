@@ -1,5 +1,6 @@
 #include "hud.h"
 
+#include "ui/icons.h"
 #include "ui/theme.h"
 #include "app.h"
 
@@ -207,12 +208,12 @@ void Hud::draw(sf::RenderWindow& window, const sf::Font& font)
                        OpponentNameY, OpponentCapturedY, false, opponentClock);
 
         std::string whiteText = spectatorWhite_ + ratingSuffix(localRating_)
-            + (!gameOver_ && whiteToMove ? " - to move" : "")
-            + (watcherCount_ > 0
-                   ? " - " + std::to_string(watcherCount_) + " watching"
-                   : "");
+            + (!gameOver_ && whiteToMove ? " - to move" : "");
+        // 14.2: the count moved out of the name string into an eye-icon
+        // unit drawn by drawPlayerCard.
         drawPlayerCard(window, font, whiteText, Color::White,
-                       LocalNameY, LocalCapturedY, true, localClock);
+                       LocalNameY, LocalCapturedY, true, localClock,
+                       watcherCount_);
     } else {
         std::string opponentText = "vs " + opponentName_
             + ratingSuffix(opponentRating_);
@@ -256,7 +257,7 @@ void Hud::draw(sf::RenderWindow& window, const sf::Font& font)
 void Hud::drawPlayerCard(sf::RenderWindow& window, const sf::Font& font,
                          const std::string& name, Color cardColor,
                          float nameY, float capturedY, bool isLocal,
-                         const std::string& clockText)
+                         const std::string& clockText, int watcherCount)
 {
     Label& nameLabel = isLocal ? localNameLabel_ : opponentNameLabel_;
     nameLabel.setText(name);
@@ -271,7 +272,34 @@ void Hud::drawPlayerCard(sf::RenderWindow& window, const sf::Font& font,
         const float clockW = clock.getLocalBounds().size.x;
         clock.setPosition({right - clockW, nameY});
         window.draw(clock);
-        right -= clockW + 10.f;
+
+        // 14.2: small clock glyph beside the figure, vertically centered
+        // on the text's glyph box.
+        const float iconS = ui::icons::iconBox(14);
+        const auto cb = clock.getLocalBounds();
+        const float clockCy = nameY + cb.position.y + cb.size.y * 0.5f;
+        ui::icons::drawIcon(window, ui::icons::IconKind::Clock,
+                            {right - clockW - iconS - 4.f, clockCy - iconS * 0.5f},
+                            iconS, clock.getFillColor());
+        right -= clockW + iconS + 14.f;
+    }
+
+    if (watcherCount > 0) {
+        // Spectator stands (12.4): eye + count on the white card's name
+        // row, between the name text and the clock figure.
+        sf::Text count(font, std::to_string(watcherCount), 14);
+        count.setFillColor(ui::pal::textFaded);
+        const float countW = count.getLocalBounds().size.x;
+        count.setPosition({right - countW, nameY});
+        window.draw(count);
+
+        const float iconS = ui::icons::iconBox(14);
+        const auto cb = count.getLocalBounds();
+        const float countCy = nameY + cb.position.y + cb.size.y * 0.5f;
+        ui::icons::drawIcon(window, ui::icons::IconKind::Eye,
+                            {right - countW - iconS - 4.f, countCy - iconS * 0.5f},
+                            iconS, ui::pal::textFaded);
+        right -= countW + iconS + 14.f;
     }
 
     int advantage = navigator_.materialAdvantage(cardColor);

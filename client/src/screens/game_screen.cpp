@@ -86,12 +86,14 @@ GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName,
     drawOfferLabel_.setColor(ui::pal::warn);
 
     resignBtn_.setLabel("Resign");
+    resignBtn_.setIcon(ui::icons::IconKind::Flag);
     resignBtn_.setStyle(ui::buttonDanger());
     resignBtn_.setOnClick([this] {
         if (!gameOver_) app_.connection().send(chess::net::ResignMsg{});
     });
 
-    offerDrawBtn_.setLabel("Offer Draw");
+    offerDrawBtn_.setLabel("Draw");
+    offerDrawBtn_.setIcon(ui::icons::IconKind::HandDraw);
     offerDrawBtn_.setStyle(ui::buttonPlum());
     offerDrawBtn_.setOnClick([this] {
         if (gameOver_) return;
@@ -140,6 +142,7 @@ GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName,
     // Spectator mode (12.4): the action buttons give way to one Leave
     // button; the chat input is disabled (watchers may not talk).
     leaveBtn_.setLabel("Leave");
+    leaveBtn_.setIcon(ui::icons::IconKind::ArrowBack);
     leaveBtn_.setStyle(ui::buttonLeave());
     leaveBtn_.setOnClick([this] { leaveWatch(); });
 

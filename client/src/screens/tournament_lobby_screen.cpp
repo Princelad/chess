@@ -1,5 +1,6 @@
 #include "tournament_lobby_screen.h"
 
+#include "ui/icons.h"
 #include "ui/theme.h"
 #include "game_screen.h"
 #include "menu_screen.h"
@@ -239,8 +240,16 @@ void TournamentLobbyScreen::draw(sf::RenderWindow& window)
 
     if (!statusLabel_.text().empty())
         statusLabel_.draw(window, font);
-    if (!resultLabel_.text().empty())
+    if (!resultLabel_.text().empty()) {
+        // 14.2: medal glyph left of the final-standings banner.
+        const float iconS = ui::icons::iconBox(resultLabel_.fontSize());
+        const auto lb = resultLabel_.bounds(app_.font());
+        ui::icons::drawIcon(window, ui::icons::IconKind::Medal,
+                            {lb.position.x - iconS - 8.f,
+                             lb.position.y + (lb.size.y - iconS) * 0.5f},
+                            iconS, ui::pal::goldSelf);
         resultLabel_.draw(window, font);
+    }
     leaveBtn_.draw(window, font);
 }
 

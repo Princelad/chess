@@ -44,6 +44,7 @@ PuzzleScreen::PuzzleScreen(App& app)
     };
 
     hintBtn_.setLabel("Hint");
+    hintBtn_.setIcon(ui::icons::IconKind::Bulb);
     hintBtn_.setStyle(ui::buttonHint());
     place(hintBtn_, y - 3.f * (BtnH + BtnGap));
     hintBtn_.setOnClick([this] { hint(); });
@@ -58,7 +59,8 @@ PuzzleScreen::PuzzleScreen(App& app)
     place(nextBtn_, y - (BtnH + BtnGap));
     nextBtn_.setOnClick([this] { nextPuzzle(); });
 
-    backBtn_.setLabel("Back to Menu");
+    backBtn_.setLabel("Menu");
+    backBtn_.setIcon(ui::icons::IconKind::ArrowBack);
     backBtn_.setStyle(ui::buttonDanger());
     place(backBtn_, y);
     backBtn_.setOnClick([this] { backToMenu(); });

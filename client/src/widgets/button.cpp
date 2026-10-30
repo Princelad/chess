@@ -90,12 +90,27 @@ void Button::draw(sf::RenderWindow& window, const sf::Font& font) const
     shape.setOutlineThickness(thickness);
     window.draw(shape);
 
+    const sf::FloatRect* textArea = &rect_;
+    if (icon_) {
+        const sf::FloatRect slot = ui::icons::iconSlotRect(rect_, style_.textSize);
+        const sf::FloatRect remaining = ui::icons::iconTextRect(rect_, style_.textSize);
+
+        // Probe the label against the remaining space first — a label too
+        // wide there keeps the whole rect (icon drops, text never overlaps).
+        sf::Text probe(font, label_, style_.textSize);
+        if (probe.getLocalBounds().size.x <= remaining.size.x - 4.f) {
+            ui::icons::drawIcon(window, *icon_, slot.position, slot.size.x,
+                                labelColor);
+            textArea = &remaining;
+        }
+    }
+
     sf::Text text(font, label_, style_.textSize);
     text.setFillColor(labelColor);
     const auto bounds = text.getLocalBounds();
     text.setPosition({
-        rect_.position.x + (rect_.size.x - bounds.size.x) / 2.f - bounds.position.x,
-        rect_.position.y + (rect_.size.y - bounds.size.y) / 2.f - bounds.position.y
+        textArea->position.x + (textArea->size.x - bounds.size.x) / 2.f - bounds.position.x,
+        textArea->position.y + (textArea->size.y - bounds.size.y) / 2.f - bounds.position.y
     });
     window.draw(text);
 }

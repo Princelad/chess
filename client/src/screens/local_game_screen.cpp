@@ -71,7 +71,8 @@ LocalGameScreen::LocalGameScreen(App& app, Color myColor,
     hud_.setGame(Board::fromStartPos(), {}, {});
     hud_.setInfo("Computer", myColor_, myTurn_, gameOver_);
 
-    backBtn_.setLabel("Back to Menu");
+    backBtn_.setLabel("Menu");
+    backBtn_.setIcon(ui::icons::IconKind::ArrowBack);
     backBtn_.setStyle(ui::buttonDanger());
     backBtn_.setRect(sf::FloatRect(
         sf::Vector2f(boardView_.panelX(), hud_.contentBottom()),
