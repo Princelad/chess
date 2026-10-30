@@ -755,10 +755,11 @@ change; 763-test suite stays green (CI discipline from 13.x continues)
   - [x] Unit-testable helpers pure (color derivations, contrast pair checks) so theme lookups have tests without a window (`tests/client/theme_test.cpp`, +11 tests: mix/shade clamping + alpha preservation, contrast symmetry + 21:1 white/black, readable-text flip, panel contrast floors ≥ 4.0, type/spacing monotonicity, variant distinctness/statefulness; suite 774 green)
   - Note: today's legacy text-on-card contrast actually measures ~3.9–4.3:1 — the test floor is set at truth and 14.5's restyle should RAISE it (update the asserts when values change)
 
-- [ ] **14.2 Icon system (`client/src/ui/icons.h` + SFML-drawn registry)**
-  - [ ] Small procedural icon set drawn in SFML (clock, flag, draw-hand, flip, hint bulb, medal, watcher eye, back arrow) — no external sprite dependencies, sized by the type scale
-  - [ ] Replace text-only button labels/headers where icons read better (11.6 theme cycler, HUD actions)
-  - [ ] Keep letter fallbacks working everywhere (the 6.2.2 letter-drawing discipline extends to icons)
+- [x] **14.2 Icon system (`client/src/ui/icons.h` + SFML-drawn registry)** — 8-icon procedural set, ours outright; the open-source-asset alternative was evaluated and declined (SFML 3 can't rasterize SVG; PNG atlases fight type-scale sizing; zero licensing overhead stays zero)
+  - [x] Small procedural icon set drawn in SFML (clock, flag, draw-hand, flip, hint bulb, medal, watcher eye, back arrow) — no external sprite dependencies, sized by the type scale (`drawIcon` compositions of Rectangle/Circle/Convex shapes; sizing ONLY via `iconBox(textSize)`, never hand-picked pixels)
+  - [x] Replace text-only button labels/headers where icons read better (11.6 theme cycler, HUD actions) (`Button::setIcon` leading slot; Resign→flag, Draw→hand, Leave/Menu→arrow, Hint→bulb, GameOver Menu→arrow, HUD clock glyphs, spectator eye+count, tournament banner medal; **labels always keep rendering beside icons** — an icon never replaces its text; two labels shortened to make slots fit at 96/140px: "Offer Draw"→"Draw", "Back to Menu"→"Menu"; Flip registered only, affordance lands with 15.x player cards)
+  - [x] Keep letter fallbacks working everywhere (the 6.2.2 letter-drawing discipline extends to icons) (button draw drops the icon when the measured label cannot fit the remaining space — text wins over icons, hierarchy enforced in `Button::draw`; HUD count re-sync: the watcher figure left the name string for an eye-icon unit drawn by `drawPlayerCard`)
+  - Tests: `tests/client/icons_test.cpp` (+5, headless layout math only — the draw path needs a target) — registry count, box monotonicity, slot containment, text-rect contract, narrow-control drop; suite 779
 
 - [ ] **14.3 Avatar system (`client/src/avatars.{h,cpp}`)**
   - [ ] Procedural avatars: deterministic pattern + color derived from a seed (config `profile.avatar` for self, FNV over opponent name for the other seat); geometric shapes via `sf::Shape`, initial-letter fallback
