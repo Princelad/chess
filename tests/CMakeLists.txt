@@ -56,6 +56,7 @@ if(BUILD_TESTING)
         client/widget_test.cpp
         client/theme_test.cpp
         client/icons_test.cpp
+        client/avatars_test.cpp
         client/archive_pgn_test.cpp
         client/game_over_transition_test.cpp
         uci/engine_test.cpp

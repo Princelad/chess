@@ -1,5 +1,6 @@
 #include "leaderboard_screen.h"
 
+#include "avatars.h"
 #include "ui/theme.h"
 
 #include "game_screen.h"
@@ -219,8 +220,19 @@ void LeaderboardScreen::draw(sf::RenderWindow& window)
     title_.draw(window, font);
     status_.draw(window, font);
 
-    for (auto& row : rowButtons_)
-        row.draw(window, font);
+    for (std::size_t i = 0; i < rowButtons_.size(); ++i) {
+        rowButtons_[i].draw(window, font);
+        // 14.3: player emblem at the row's leading edge, over the row
+        // tint; the centered gutter label keeps clear of it in practice
+        // (the rows' leader-label never reaches the left padding).
+        const std::size_t entryIdx = topRow_ + i;
+        if (entryIdx >= entries_.size()) continue;
+        const auto r = rowButtons_[i].rect();
+        avatars::drawAvatar(window, app_.avatarPack(),
+            avatars::seedFromName(entries_[entryIdx].name),
+            {PanelX + 26.f, r.position.y + (r.size.y - 20.f) * 0.5f},
+            20.f, &font, entries_[entryIdx].name);
+    }
     backBtn_.draw(window, font);
 }
 

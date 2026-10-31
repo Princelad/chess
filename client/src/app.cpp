@@ -98,6 +98,7 @@ void App::loadAssets()
     if (!fontOk)
         std::cerr << "Warning: no font loaded, text may be invisible\n";
     loadPieceTextures();
+    avatarPack_ = avatars::loadAvatarPack(); // 14.3 (missing = empty, silent)
 }
 
 bool App::loadPieceTextures()

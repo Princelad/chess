@@ -1,5 +1,6 @@
 #include "tournament_lobby_screen.h"
 
+#include "avatars.h"
 #include "ui/icons.h"
 #include "ui/theme.h"
 #include "game_screen.h"
@@ -232,10 +233,17 @@ void TournamentLobbyScreen::draw(sf::RenderWindow& window)
     headerPoints_.draw(window, font);
     headerRecord_.draw(window, font);
 
-    for (auto& widgets : rowWidgets_) {
+    for (std::size_t i = 0; i < rowWidgets_.size() && i < rows_.size(); ++i) {
+        auto& widgets = rowWidgets_[i];
         widgets.name.draw(window, font);
         widgets.points.draw(window, font);
         widgets.record.draw(window, font);
+        // 14.3: seat emblem in the row's left margin, vertically centered
+        // on the line.
+        avatars::drawAvatar(window, app_.avatarPack(),
+            avatars::seedFromName(rows_[i].name),
+            {NameX - 28.f, TableY + static_cast<float>(i) * RowH + 3.f},
+            18.f, &font, rows_[i].name);
     }
 
     if (!statusLabel_.text().empty())

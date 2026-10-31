@@ -1,5 +1,6 @@
 #include "hud.h"
 
+#include "avatars.h"
 #include "ui/icons.h"
 #include "ui/theme.h"
 #include "app.h"
@@ -61,6 +62,27 @@ sf::Color clockColor(double ms)
     if (ms < 10000.0) return ui::pal::dangerRed;
     if (ms < 30000.0) return ui::pal::dangerAmber;
     return ui::pal::textCell;
+}
+
+// 14.3 avatar seeds for the HUD cards. The self card honors the
+// profile.avatar re-roll knob; everything else derives from the seat
+// name, spectators reading the same both-cards form as the players.
+std::string selfAvatarName(const App& app)
+{
+    if (const auto& profile = app.profile();
+        profile.has_value() && !profile->isGuest)
+        return profile->name;
+    return app.lastName();
+}
+
+std::uint64_t selfAvatarSeed(const App& app)
+{
+    return avatars::seedFor(app.config(), selfAvatarName(app));
+}
+
+std::uint64_t nameAvatarSeed(const std::string& name)
+{
+    return avatars::seedFromName(name);
 }
 }
 
@@ -205,7 +227,8 @@ void Hud::draw(sf::RenderWindow& window, const sf::Font& font)
         std::string blackText = spectatorBlack_ + ratingSuffix(opponentRating_)
             + (!gameOver_ && !whiteToMove ? " - to move" : "");
         drawPlayerCard(window, font, blackText, Color::Black,
-                       OpponentNameY, OpponentCapturedY, false, opponentClock);
+                       OpponentNameY, OpponentCapturedY, false, opponentClock,
+                       0, nameAvatarSeed(spectatorBlack_), spectatorBlack_);
 
         std::string whiteText = spectatorWhite_ + ratingSuffix(localRating_)
             + (!gameOver_ && whiteToMove ? " - to move" : "");
@@ -213,12 +236,14 @@ void Hud::draw(sf::RenderWindow& window, const sf::Font& font)
         // unit drawn by drawPlayerCard.
         drawPlayerCard(window, font, whiteText, Color::White,
                        LocalNameY, LocalCapturedY, true, localClock,
-                       watcherCount_);
+                       watcherCount_, nameAvatarSeed(spectatorWhite_),
+                       spectatorWhite_);
     } else {
         std::string opponentText = "vs " + opponentName_
             + ratingSuffix(opponentRating_);
         drawPlayerCard(window, font, opponentText, opposite(myColor_),
-                       OpponentNameY, OpponentCapturedY, false, opponentClock);
+                       OpponentNameY, OpponentCapturedY, false, opponentClock,
+                       0, nameAvatarSeed(opponentName_), opponentName_);
 
         std::string colorStr = myColor_ == Color::White ? "White" : "Black";
         std::string localName = "You - " + colorStr + ratingSuffix(localRating_);
@@ -227,7 +252,8 @@ void Hud::draw(sf::RenderWindow& window, const sf::Font& font)
         localNameLabel_.setColor(myTurn_ ? ui::pal::okTurn
                                          : ui::pal::textFaded);
         drawPlayerCard(window, font, localName, myColor_,
-                       LocalNameY, LocalCapturedY, true, localClock);
+                       LocalNameY, LocalCapturedY, true, localClock,
+                       0, selfAvatarSeed(app_), selfAvatarName(app_));
     }
 
     if (!statusMsg_.empty()) {
@@ -257,11 +283,24 @@ void Hud::draw(sf::RenderWindow& window, const sf::Font& font)
 void Hud::drawPlayerCard(sf::RenderWindow& window, const sf::Font& font,
                          const std::string& name, Color cardColor,
                          float nameY, float capturedY, bool isLocal,
-                         const std::string& clockText, int watcherCount)
+                         const std::string& clockText, int watcherCount,
+                         std::uint64_t avatarSeed, const std::string& avatarName)
 {
     Label& nameLabel = isLocal ? localNameLabel_ : opponentNameLabel_;
     nameLabel.setText(name);
-    nameLabel.setPosition({panelX_, nameY});
+
+    // 14.3: avatar slot left of the name (pack tile when the pack loads,
+    // else the procedural seed emblem); the name shifts to make room.
+    float nameX = panelX_;
+    if (avatarSeed != 0) {
+        constexpr float AvatarSize = 18.f;
+        const auto nb = nameLabel.bounds(font);
+        const float avatarY = nameY + (nb.size.y - AvatarSize) * 0.5f;
+        avatars::drawAvatar(window, app_.avatarPack(), avatarSeed,
+                            {panelX_, avatarY}, AvatarSize, &font, avatarName);
+        nameX = panelX_ + AvatarSize + 6.f;
+    }
+    nameLabel.setPosition({nameX, nameY});
     nameLabel.draw(window, font);
 
     float right = panelX_ + panelW_;
