@@ -767,10 +767,11 @@ change; 763-test suite stays green (CI discipline from 13.x continues)
   - [x] Rendered on player cards (15.2 consumes it), leaderboard rows, spectator lobby rows (HUD `drawPlayerCard` avatar slot left of the name, self seed from `profile.avatar`/profile/lastName and seat-name seeds elsewhere, spectator mode reads the same both-cards form; leaderboard emblems at the row's leading edge from the entry name; arena lobby seat emblems in the left margin — 15.2/17.x restyles relocate these, the entry point stays `avatars::drawAvatar`)
   - Tests: `tests/client/avatars_test.cpp` (+8, headless pure math only — draw path needs a target) — seed determinism/spread, knob precedence, pack index spread, initial extraction, mirror symmetry, non-degenerate grids, palette register, empty-pack degrade; suite 787
 
-- [ ] **14.4 Board theme family refresh (`themes.h` palettes)**
-  - [ ] Add chess.com-iconography-inspired named boards — Green/Brown/Blue/Purple — OUR color values, appended after the existing names (the 11.6 persistence ordering rule: never reorder existing entries)
-  - [ ] Coordinates style toggle (extending `board.show_coordinates` beyond on/off: margin style = current, inside-squares style like chess.com), persisted like the theme
-  - [ ] Settings screen theme row cycles the new family; preview swatches in the settings status text
+- [x] **14.4 Board theme family refresh (`themes.h` palettes)**
+  - [x] Add chess.com-iconography-inspired named boards — Green/Brown/Blue/Purple — OUR color values, appended after the existing names (the 11.6 persistence ordering rule: never reorder existing entries) (Green/Blue turned out to already exist from 11.6, so the family stays name-stable: Brown + Purple appended after Moss; **Green retuned in place** to the chess.com-inspired look — 233,235,210 / 117,149,86, ours, not lifted RGBs; Blue/Dark/Wood/Moss values untouched)
+  - [x] Coordinates style toggle (extending `board.show_coordinates` beyond on/off: margin style = current, inside-squares style like chess.com), persisted like the theme (`board.coordinates` = "corner"/"inside" with junk degrading like the variant strings; the bool stays the on/off master; `BoardView` gained the style param — all four screen call sites pass it; inside = 0.28·sq glyphs, file letters bottom-center of the bottom rank, rank numbers center-left of the a-file; the "corner" branch is byte-for-byte the pre-14.4 rendering)
+  - [x] Settings screen theme row cycles the new family; preview swatches in the settings status text (cycler needed no code — `nextBoardTheme` counts `Count`; status now shows the two board colors as `#RRGGBB`; new coordinate-style cycler row added beside it with reset support)
+  - Tests: `tests/client/config_test.cpp` (+4) — appended-name order (persistence discipline), exact refreshed Green/Purple values, coordinate style round trip + junk degrade, named resolution; suite 791
 
 - [ ] **14.5 Runtime chrome + settings restyle**
   - [ ] Window background, title rendering, version badge; rounded panels + pill buttons + underline textfields as component defaults from tokens
