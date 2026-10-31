@@ -106,6 +106,17 @@ public:
         config_.save();
     }
 
+    // 14.4 coordinates style — where the labels sit when they show.
+    CoordinateStyle coordinateStyle() const
+    {
+        return coordinateStyleFromName(config_.get("board.coordinates", "corner"));
+    }
+    void setCoordinateStyle(CoordinateStyle style)
+    {
+        config_.set("board.coordinates", coordinateStyleName(style));
+        config_.save();
+    }
+
     const Config& config() const { return config_; }
     Config& config() { return config_; }
 

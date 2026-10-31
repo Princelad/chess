@@ -25,7 +25,8 @@ PuzzleScreen::PuzzleScreen(App& app)
                  static_cast<float>(App::WindowHeight),
                  Color::White,
                  app.boardTheme(),
-                 app.showCoordinates())
+                 app.showCoordinates(),
+                 app.coordinateStyle())
 {
     puzzles_ = loadPuzzlesFromDirs(assetRoots());
     streak_.best = app_.config().getInt("puzzle.best_streak", 0);

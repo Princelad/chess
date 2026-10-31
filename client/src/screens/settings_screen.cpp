@@ -12,6 +12,19 @@ constexpr float RowsX = 230.f;
 constexpr float RowsW = 500.f;
 constexpr float RowsTop = 130.f;
 constexpr float RowGap = 14.f;
+
+// 14.4: settings status doubles as the theme preview — the two board
+// colors as hex, so the cycler shows what landed without a live board.
+std::string hexColor(const sf::Color& color)
+{
+    static const char* digits = "0123456789ABCDEF";
+    std::string out = "#";
+    for (unsigned channel : {color.r, color.g, color.b}) {
+        out += digits[(channel >> 4) & 0xF];
+        out += digits[channel & 0xF];
+    }
+    return out;
+}
 }
 
 SettingsScreen::SettingsScreen(App& app)
@@ -69,11 +82,22 @@ SettingsScreen::SettingsScreen(App& app)
     themePrev_.setOnClick([this] {
         app_.setBoardTheme(nextBoardTheme(nextBoardTheme(app_.boardTheme())));
         updateThemeLabel();
+        const auto c = boardColorsFor(app_.boardTheme());
+        setStatus("Theme preview: " + hexColor(c.light) + " / " + hexColor(c.dark));
     });
     themeNext_.setOnClick([this] {
         app_.setBoardTheme(nextBoardTheme(app_.boardTheme()));
         updateThemeLabel();
+        const auto c = boardColorsFor(app_.boardTheme());
+        setStatus("Theme preview: " + hexColor(c.light) + " / " + hexColor(c.dark));
     });
+
+    coordStylePrev_.setLabel("Previous style");
+    coordStyleNext_.setLabel("Next style");
+    coordStylePrev_.setFocusable(false);
+    coordStyleNext_.setFocusable(false);
+    coordStylePrev_.setOnClick([this] { cycleCoordStyle(-1); });
+    coordStyleNext_.setOnClick([this] { cycleCoordStyle(1); });
 
     pieceSetPrev_.setLabel("Previous piece set");
     pieceSetNext_.setLabel("Next piece set");
@@ -102,6 +126,7 @@ SettingsScreen::SettingsScreen(App& app)
                                  : "Piece set: " + configured);
 
     updateThemeLabel();
+    updateCoordStyleLabel();
     updatePieceSetLabel();
     updateAnimDurLabel();
     updateSoundVolLabel();
@@ -119,6 +144,7 @@ void SettingsScreen::layoutRows()
           sf::Vector2f(RowsW, 34.f),  // animation
           sf::Vector2f(RowsW, 34.f),  // sound
           sf::Vector2f(RowsW, 34.f),  // theme
+          sf::Vector2f(RowsW, 34.f),  // coordinate style (14.4)
           sf::Vector2f(RowsW, 34.f),  // piece set (11.6)
           sf::Vector2f(RowsW, 36.f),  // piece set path
           sf::Vector2f(RowsW, 18.f),  // status
@@ -169,29 +195,30 @@ void SettingsScreen::layoutRows()
         });
     };
     placeNameRow(4, themePrev_, themeNext_, themeName_);
-    placeNameRow(5, pieceSetPrev_, pieceSetNext_, pieceSetName_);
+    placeNameRow(5, coordStylePrev_, coordStyleNext_, coordStyleName_);
+    placeNameRow(6, pieceSetPrev_, pieceSetNext_, pieceSetName_);
 
-    piecesCaption_.setPosition({ rows[6].position.x, rows[6].position.y - 20.f });
+    piecesCaption_.setPosition({ rows[7].position.x, rows[7].position.y - 20.f });
 
     const float fieldW = 300.f;
     const float applyW = 70.f;
-    const float y3 = rows[6].position.y + (rows[6].size.y - 32.f) / 2.f;
+    const float y3 = rows[7].position.y + (rows[7].size.y - 32.f) / 2.f;
     piecesField_.setRect(sf::FloatRect(
-        sf::Vector2f(rows[6].position.x, y3), sf::Vector2f(fieldW, 32.f)));
+        sf::Vector2f(rows[7].position.x, y3), sf::Vector2f(fieldW, 32.f)));
     applyBtn_.setRect(sf::FloatRect(
-        sf::Vector2f(rows[6].position.x + rows[6].size.x - applyW, y3),
+        sf::Vector2f(rows[7].position.x + rows[7].size.x - applyW, y3),
         sf::Vector2f(applyW, 32.f)));
 
     auto sb = status_.bounds(app_.font());
-    status_.setPosition({ rows[7].position.x, rows[7].position.y - sb.position.y });
+    status_.setPosition({ rows[8].position.x, rows[8].position.y - sb.position.y });
 
     const float resetW = 150.f;
     const float backW = 90.f;
-    const float y5 = rows[8].position.y + (rows[8].size.y - 34.f) / 2.f;
+    const float y5 = rows[9].position.y + (rows[9].size.y - 34.f) / 2.f;
     resetBtn_.setRect(sf::FloatRect(
-        sf::Vector2f(rows[8].position.x, y5), sf::Vector2f(resetW, 34.f)));
+        sf::Vector2f(rows[9].position.x, y5), sf::Vector2f(resetW, 34.f)));
     backBtn_.setRect(sf::FloatRect(
-        sf::Vector2f(rows[8].position.x + rows[8].size.x - backW, y5),
+        sf::Vector2f(rows[9].position.x + rows[9].size.x - backW, y5),
         sf::Vector2f(backW, 34.f)));
 }
 
@@ -200,6 +227,28 @@ void SettingsScreen::updateThemeLabel()
     themeName_.setText(boardThemeName(app_.boardTheme()));
     themeName_.setFontSize(15);
     themeName_.setColor(ui::pal::textBright);
+}
+
+// 14.4: settings status doubles as the theme preview — the two board
+// colors as hex, so the cycler shows what landed without a live board.
+void SettingsScreen::updateCoordStyleLabel()
+{
+    coordStyleName_.setText(coordinateStyleName(app_.coordinateStyle()));
+    coordStyleName_.setFontSize(15);
+    coordStyleName_.setColor(ui::pal::textBright);
+}
+
+void SettingsScreen::cycleCoordStyle(int dir)
+{
+    int idx = static_cast<int>(app_.coordinateStyle());
+    idx = (idx + dir) % static_cast<int>(CoordinateStyle::Count);
+    if (idx < 0) idx += static_cast<int>(CoordinateStyle::Count);
+    app_.setCoordinateStyle(static_cast<CoordinateStyle>(idx));
+    updateCoordStyleLabel();
+    setStatus(coordinateStyleName(app_.coordinateStyle())
+                  == coordinateStyleName(CoordinateStyle::Inside)
+          ? "Coordinates inside the squares (chess.com style)"
+          : "Coordinates at the square corners");
 }
 
 void SettingsScreen::updatePieceSetLabel()
@@ -255,6 +304,7 @@ void SettingsScreen::resetDefaults()
     app_.config().setBool("general.auto_queen", true);
     app_.config().set("board.colors", "classic");
     app_.config().setBool("board.show_coordinates", true);
+    app_.config().set("board.coordinates", "corner");
     app_.config().set("pieces.path", "");
     app_.config().set("pieces.set", "cburnett");
     app_.config().setInt("sound.volume", 100);
@@ -272,6 +322,7 @@ void SettingsScreen::resetDefaults()
     updateAnimDurLabel();
     soundCheck_.setChecked(true);
     updateSoundVolLabel();
+    updateCoordStyleLabel();
     piecesField_.setText("");
     piecesField_.setFocused(false);
     applyPiecesPath();
@@ -361,6 +412,7 @@ void SettingsScreen::focusNext(bool down)
         if (next < 0) next = FocusCount - 1;
         if (next >= FocusCount) next = 0;
         if (next == FocusThemePrev || next == FocusThemeNext ||
+            next == FocusCoordStylePrev || next == FocusCoordStyleNext ||
             next == FocusPieceSetPrev || next == FocusPieceSetNext ||
             next == FocusAnimDurPrev || next == FocusAnimDurNext ||
             next == FocusSoundVolPrev || next == FocusSoundVolNext)
@@ -409,6 +461,8 @@ void SettingsScreen::handleEvent(const sf::Event& event)
     if (soundVolNext_.handleEvent(event, local)) return;
     if (themePrev_.handleEvent(event, local)) return;
     if (themeNext_.handleEvent(event, local)) return;
+    if (coordStylePrev_.handleEvent(event, local)) return;
+    if (coordStyleNext_.handleEvent(event, local)) return;
     if (pieceSetPrev_.handleEvent(event, local)) return;
     if (pieceSetNext_.handleEvent(event, local)) return;
     if (piecesField_.handleEvent(event, local)) return;
@@ -446,6 +500,9 @@ void SettingsScreen::draw(sf::RenderWindow& window)
     themePrev_.draw(window, font);
     themeNext_.draw(window, font);
     themeName_.draw(window, font);
+    coordStylePrev_.draw(window, font);
+    coordStyleNext_.draw(window, font);
+    coordStyleName_.draw(window, font);
     pieceSetPrev_.draw(window, font);
     pieceSetNext_.draw(window, font);
     pieceSetName_.draw(window, font);

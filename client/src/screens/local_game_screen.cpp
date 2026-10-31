@@ -62,7 +62,8 @@ LocalGameScreen::LocalGameScreen(App& app, Color myColor,
                  static_cast<float>(App::WindowHeight),
                  myColor,
                  app.boardTheme(),
-                 app.showCoordinates())
+                 app.showCoordinates(),
+                 app.coordinateStyle())
     , hud_(app_, boardView_.panelX(),
            static_cast<float>(App::WindowWidth) - boardView_.panelX() - 8.f)
     , myTurn_(myColor == Color::White)

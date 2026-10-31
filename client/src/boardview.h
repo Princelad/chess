@@ -33,7 +33,8 @@ class BoardView {
 public:
     BoardView(float windowWidth, float windowHeight, Color playerColor,
               BoardTheme theme = BoardTheme::Classic,
-              bool showCoordinates = true);
+              bool showCoordinates = true,
+              CoordinateStyle coordsStyle = CoordinateStyle::Corner);
 
     void drawSquares(sf::RenderWindow& window) const;
     void drawHighlights(sf::RenderWindow& window, const HighlightState& hl,
@@ -62,6 +63,9 @@ public:
     sf::Vector2f boardOrigin() const { return boardOrigin_; }
     bool isFlipped() const { return flipped_; }
 
+    // 14.4: live style tweaks (settings toggles while a board is showing).
+    void setCoordStyle(CoordinateStyle style) { coordsStyle_ = style; }
+
     void setFlipped(bool flipped) { flipped_ = flipped; }
     void toggleFlipped() { flipped_ = !flipped_; }
 
@@ -82,6 +86,7 @@ private:
     bool flipped_;
     BoardColors colors_;
     bool showCoordinates_;
+    CoordinateStyle coordsStyle_ = CoordinateStyle::Corner;
 };
 
 } // namespace chess::client

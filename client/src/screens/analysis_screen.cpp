@@ -53,7 +53,8 @@ AnalysisScreen::AnalysisScreen(App& app,
                  static_cast<float>(App::WindowHeight),
                  Color::White,
                  app.boardTheme(),
-                 app.showCoordinates())
+                 app.showCoordinates(),
+                 app.coordinateStyle())
 {
     navigator_.setGame(std::move(initialBoard), std::move(moves), std::move(sanMoves));
     evals_.resize(navigator_.totalPlies() + 1);
