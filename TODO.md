@@ -736,7 +736,7 @@ takeback, rematch, chat polish, per-class ratings, login throttling
 
 ---
 
-## Phase 14 — Design system v2 (`client/`)
+## Phase 14 — Design system v2 (`client/`) — DONE (`v1.7.0`)
 
 **Goal:** a token-driven visual foundation, chess.com-style, rebuilt on our own
 assets: one theme module instead of the scattered hardcoded colors, a drawn
@@ -773,9 +773,12 @@ change; 763-test suite stays green (CI discipline from 13.x continues)
   - [x] Settings screen theme row cycles the new family; preview swatches in the settings status text (cycler needed no code — `nextBoardTheme` counts `Count`; status now shows the two board colors as `#RRGGBB`; new coordinate-style cycler row added beside it with reset support)
   - Tests: `tests/client/config_test.cpp` (+4) — appended-name order (persistence discipline), exact refreshed Green/Purple values, coordinate style round trip + junk degrade, named resolution; suite 791
 
-- [ ] **14.5 Runtime chrome + settings restyle**
-  - [ ] Window background, title rendering, version badge; rounded panels + pill buttons + underline textfields as component defaults from tokens
-  - [ ] Settings screen restyled on the token layer (larger touch rows, sectioned panels); "inspired by chess.com" note lands in README
+- [x] **14.5 Runtime chrome + settings restyle**
+  - [x] Window background, title rendering, version badge; rounded panels + pill buttons + underline textfields as component defaults from tokens (`version.h` `kAppVersion = "1.7.0"` feeds the `"chess v1.7.0"` window title and the menu's bottom-right badge; `ui::RoundedRectShape` (new header-only `sf::Shape`) drives the chrome — Button = pill (radius = height/2), Panel = `shape::panelRadius` 10, TextField = underline style (dark inset fill; the state accent is the underline bar, no side outline); settings cycler steppers became leading ArrowLeft/ArrowRight icons with empty labels — the registry is 10 kinds and the tofu-glyph trap (`◀`/`▶` miss in Inter) is why icons won over text)
+  - [x] Settings screen restyled on the token layer (larger touch rows, sectioned panels); "inspired by chess.com" note lands in README
+  - [x] Contrast floors RAISED with the restyle — the flat 601 luminance proxy moves both sides: bgApp (40,38,36) / bgCard (38,38,40) stepped down while textBody 224 / textBright 236 stepped up; `ThemePalette.TextIsReadableOnEveryPanelBackground` now asserts primary/bright > 4.5 and body > 4.3 on every text panel (worst case 4.63; the floors were >4.0 / >3.8 / >4.0 — raised IN the same change as the retune, never below)
+  - Settings: sectioned two-column layout — left "Gameplay" (3 rows) + "Sound" (2 rows), right "Board & pieces" (4 cycler/checkbox rows + the piece-set path block); focus enum + handlers untouched; footer status + buttons ride the left column's tail; plausible-chess.com-family look, our own palette values
+  - Tests: icons registry table (+ArrowLeft/ArrowRight), theme floors raised; suite 791
 
 ---
 
