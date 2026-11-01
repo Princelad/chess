@@ -2,10 +2,10 @@
 
 // 14.1 Design tokens — the single source every screen and widget paints from.
 //
-// Values mirror the pre-14.1 hardcoded palette verbatim (pure refactor);
-// the 14.4/14.5 visual refresh changes values HERE, not at the ~300 former
-// call sites. Pure helper functions live here so color derivations are
-// unit-testable without a window.
+// The 14.5 visual refresh retunes values HERE, not at the ~300 former
+// call sites: the chrome goes rounded (pill buttons, rounded panels,
+// underlined text fields) and the text family steps up so the panel
+// contrast floor rises with the restyle (test-pinned).
 
 #include <SFML/Graphics/Color.hpp>
 
@@ -77,13 +77,14 @@ constexpr sf::Color readableTextOn(sf::Color background)
 // ---------------------------------------------------------------------------
 
 namespace pal {
-    // Dark background family (app clear color = warm graphite)
-    inline constexpr sf::Color bgApp{ 48, 46, 43 };
+    // Dark background family (app clear color = warm graphite). 14.5 stepped
+    // the family down so the floor for body text clears it comfortably.
+    inline constexpr sf::Color bgApp{ 40, 38, 36 };
     inline constexpr sf::Color bgDeep{ 30, 30, 30 };      // chat log, overlays
     inline constexpr sf::Color bgSunken{ 25, 25, 25 };    // navigator well
     inline constexpr sf::Color bgPanel{ 28, 28, 30 };     // list screens panel
     inline constexpr sf::Color bgDetail{ 24, 24, 26 };    // history detail well
-    inline constexpr sf::Color bgCard{ 42, 42, 44 };      // row/card fills
+    inline constexpr sf::Color bgCard{ 38, 38, 40 };      // row/card fills
     inline constexpr sf::Color bgCardActive{ 52, 52, 56 };
     inline constexpr sf::Color bgCardHover{ 58, 58, 62 };
     inline constexpr sf::Color bgElevated{ 70, 70, 70 };  // disabled-row fills
@@ -93,8 +94,8 @@ namespace pal {
     inline constexpr sf::Color white{ 255, 255, 255 };
     inline constexpr sf::Color textHeader{ 235, 235, 235 };
     inline constexpr sf::Color textPrimary{ 240, 240, 240 };
-    inline constexpr sf::Color textBright{ 230, 230, 230 };
-    inline constexpr sf::Color textBody{ 220, 220, 220 };
+    inline constexpr sf::Color textBright{ 236, 236, 236 }; // 14.5: raised (floor)
+    inline constexpr sf::Color textBody{ 224, 224, 224 };   // 14.5: raised (floor)
     inline constexpr sf::Color textCell{ 210, 210, 210 }; // navigator/SAN cells
     inline constexpr sf::Color textSecondary{ 200, 200, 200 };
     inline constexpr sf::Color textSoft{ 170, 170, 170 };
@@ -173,6 +174,13 @@ namespace space {
 // Component style structs
 // ---------------------------------------------------------------------------
 
+// 14.5 chrome radii: buttons are full pills (radius derived from the rect
+// at draw time), panels take the fixed rounding.
+namespace shape {
+    constexpr float panelRadius = 10.f;
+    constexpr float fieldRadius = 6.f;
+}
+
 struct ButtonStyle
 {
     sf::Color idleFill{ 58, 56, 54 };
@@ -196,16 +204,18 @@ struct ButtonStyle
     }
 };
 
+// 14.5: the field look — dark inset fill, no side outline, the accent is
+// the underline bar (idle thin + gray, focused bold + bright).
 struct TextFieldStyle
 {
-    sf::Color fillIdle{ 58, 56, 54 };      // unfocused + enabled
-    sf::Color strokeIdle{ 100, 100, 100 };
-    sf::Color fillFocused{ 70, 68, 66 };   // focused
+    sf::Color fillIdle{ 40, 40, 44 };      // unfocused + enabled
+    sf::Color strokeIdle{ 110, 112, 118 }; // underline when idle
+    sf::Color fillFocused{ 50, 50, 55 };   // focused
     sf::Color strokeFocused{ 180, 180, 180 };
-    sf::Color fillDimmed{ 48, 46, 43 };    // disabled
+    sf::Color fillDimmed{ 34, 34, 38 };    // disabled
     sf::Color strokeDimmed{ 68, 66, 64 };
     sf::Color textDisabled{ 100, 100, 100 };
-    sf::Color placeholder{ 120, 120, 120 };
+    sf::Color placeholder{ 110, 110, 110 };
     sf::Color text{ 255, 255, 255 };
     sf::Color caret{ 255, 255, 255 };
 };

@@ -3,6 +3,7 @@
 #include "asset_paths.h"
 #include "screens/menu_screen.h"
 #include "ui/theme.h"
+#include "version.h"
 
 #include <algorithm>
 #include <iostream>
@@ -11,7 +12,7 @@ namespace chess::client {
 
 App::App()
     : window_(sf::VideoMode({WindowWidth, WindowHeight}),
-              "Chess",
+              std::string("chess v") + kAppVersion,
               sf::Style::Titlebar | sf::Style::Close | sf::Style::Resize)
     , viewport_(WindowWidth, WindowHeight)
     , config_(Config::defaultPath())

@@ -1,4 +1,5 @@
 #include "settings_screen.h"
+#include "ui/icons.h"
 #include "ui/theme.h"
 #include "widgets/layout.h"
 
@@ -8,10 +9,6 @@
 namespace chess::client {
 
 namespace {
-constexpr float RowsX = 230.f;
-constexpr float RowsW = 500.f;
-constexpr float RowsTop = 130.f;
-constexpr float RowGap = 14.f;
 
 // 14.4: settings status doubles as the theme preview — the two board
 // colors as hex, so the cycler shows what landed without a live board.
@@ -53,8 +50,10 @@ SettingsScreen::SettingsScreen(App& app)
         app_.config().save();
     });
 
-    animDurPrev_.setLabel("Previous duration");
-    animDurNext_.setLabel("Next duration");
+    animDurPrev_.setLabel("");
+    animDurPrev_.setIcon(ui::icons::IconKind::ArrowLeft);
+    animDurNext_.setLabel("");
+    animDurNext_.setIcon(ui::icons::IconKind::ArrowRight);
     animDurPrev_.setFocusable(false);
     animDurNext_.setFocusable(false);
     animDurPrev_.setOnClick([this] { cycleAnimDur(-1); });
@@ -68,15 +67,19 @@ SettingsScreen::SettingsScreen(App& app)
         app_.sounds().setEnabled(on);
     });
 
-    soundVolPrev_.setLabel("Previous volume");
-    soundVolNext_.setLabel("Next volume");
+    soundVolPrev_.setLabel("");
+    soundVolPrev_.setIcon(ui::icons::IconKind::ArrowLeft);
+    soundVolNext_.setLabel("");
+    soundVolNext_.setIcon(ui::icons::IconKind::ArrowRight);
     soundVolPrev_.setFocusable(false);
     soundVolNext_.setFocusable(false);
     soundVolPrev_.setOnClick([this] { cycleSoundVol(-1); });
     soundVolNext_.setOnClick([this] { cycleSoundVol(1); });
 
-    themePrev_.setLabel("Previous theme");
-    themeNext_.setLabel("Next theme");
+    themePrev_.setLabel("");
+    themePrev_.setIcon(ui::icons::IconKind::ArrowLeft);
+    themeNext_.setLabel("");
+    themeNext_.setIcon(ui::icons::IconKind::ArrowRight);
     themePrev_.setFocusable(false);
     themeNext_.setFocusable(false);
     themePrev_.setOnClick([this] {
@@ -92,15 +95,19 @@ SettingsScreen::SettingsScreen(App& app)
         setStatus("Theme preview: " + hexColor(c.light) + " / " + hexColor(c.dark));
     });
 
-    coordStylePrev_.setLabel("Previous style");
-    coordStyleNext_.setLabel("Next style");
+    coordStylePrev_.setLabel("");
+    coordStylePrev_.setIcon(ui::icons::IconKind::ArrowLeft);
+    coordStyleNext_.setLabel("");
+    coordStyleNext_.setIcon(ui::icons::IconKind::ArrowRight);
     coordStylePrev_.setFocusable(false);
     coordStyleNext_.setFocusable(false);
     coordStylePrev_.setOnClick([this] { cycleCoordStyle(-1); });
     coordStyleNext_.setOnClick([this] { cycleCoordStyle(1); });
 
-    pieceSetPrev_.setLabel("Previous piece set");
-    pieceSetNext_.setLabel("Next piece set");
+    pieceSetPrev_.setLabel("");
+    pieceSetPrev_.setIcon(ui::icons::IconKind::ArrowLeft);
+    pieceSetNext_.setLabel("");
+    pieceSetNext_.setIcon(ui::icons::IconKind::ArrowRight);
     pieceSetPrev_.setFocusable(false);
     pieceSetNext_.setFocusable(false);
     pieceSetPrev_.setOnClick([this] { cyclePieceSet(-1); });
@@ -136,90 +143,135 @@ SettingsScreen::SettingsScreen(App& app)
 
 void SettingsScreen::layoutRows()
 {
-    const auto rows = layout::vstack(
-        sf::FloatRect(sf::Vector2f(RowsX, RowsTop), sf::Vector2f(RowsW, 340.f)),
-        RowGap,
-        { sf::Vector2f(RowsW, 34.f),  // auto-queen
-          sf::Vector2f(RowsW, 34.f),  // coords
-          sf::Vector2f(RowsW, 34.f),  // animation
-          sf::Vector2f(RowsW, 34.f),  // sound
-          sf::Vector2f(RowsW, 34.f),  // theme
-          sf::Vector2f(RowsW, 34.f),  // coordinate style (14.4)
-          sf::Vector2f(RowsW, 34.f),  // piece set (11.6)
-          sf::Vector2f(RowsW, 36.f),  // piece set path
-          sf::Vector2f(RowsW, 18.f),  // status
-          sf::Vector2f(RowsW, 40.f) }); // buttons
+    // 14.5: sectioned panels — Gameplay + Sound stack down the left
+    // column, Board & pieces owns the right one; rows grow to touch size
+    // inside the panels.
+    constexpr float RowH = 34.f;
+    constexpr float RowGap = 8.f;
+    constexpr float PadX = 14.f;
+    constexpr float ColLX = 80.f;
+    constexpr float ColLW = 380.f;
+    constexpr float ColRX = 500.f;
+    constexpr float ColRW = 380.f;
+    constexpr float BtnW = 48.f;
+    constexpr float BtnH = 30.f;
+    constexpr float LabelH = 24.f;   // section caption strip above a panel
+    constexpr float PanelPad = 12.f; // row inset inside a panel
 
-    autoQueenCheck_.setRect(rows[0]);
-    coordsCheck_.setRect(rows[1]);
-    animCheck_.setRect(rows[2]);
+    // Left column band: Gameplay panel (3 rows) + gap + Sound panel (2
+    // rows); the right column holds Board & pieces (4 cycler/checkbox
+    // rows + the custom-path field block).
+    constexpr float GameH = 2 * PanelPad + 3 * RowH + 2 * RowGap;
+    constexpr float SoundH = 2 * PanelPad + 2 * RowH + RowGap;
+    constexpr float LeftTop = 110.f;
+    constexpr float SoundTop = LeftTop + LabelH + GameH + 18.f;
+    constexpr float BoardH = 2 * PanelPad + 4 * RowH + 3 * RowGap
+        + 18.f + 30.f + 6.f; // + caption + field row inside the panel
 
-    const float btnW = 48.f;
-    const float btnH = 30.f;
+    gameplayLabel_.setText("Gameplay");
+    gameplayLabel_.setFontSize(ui::type::Status);
+    gameplayLabel_.setColor(ui::pal::textSecondary);
+    gameplayLabel_.setPosition({ColLX + PadX,
+        LeftTop + (LabelH - gameplayLabel_.bounds(app_.font()).size.y) * 0.5f
+            - gameplayLabel_.bounds(app_.font()).position.y});
+    gameplayPanel_.setRect(sf::FloatRect(
+        sf::Vector2f(ColLX, LeftTop + LabelH), sf::Vector2f(ColLW, GameH)));
 
-    auto placeCycleRow = [&](Checkbox& check, Button& prev, Button& next,
-                             Label& name, int rowIdx) {
-        check.setRect(rows[rowIdx]);
-        const float yy = rows[rowIdx].position.y + (rows[rowIdx].size.y - btnH) / 2.f;
+    soundLabel_.setText("Sound");
+    soundLabel_.setFontSize(ui::type::Status);
+    soundLabel_.setColor(ui::pal::textSecondary);
+    soundLabel_.setPosition({ColLX + PadX,
+        SoundTop + (LabelH - soundLabel_.bounds(app_.font()).size.y) * 0.5f
+            - soundLabel_.bounds(app_.font()).position.y});
+    soundPanel_.setRect(sf::FloatRect(
+        sf::Vector2f(ColLX, SoundTop + LabelH), sf::Vector2f(ColLW, SoundH)));
+
+    boardLabel_.setText("Board & pieces");
+    boardLabel_.setFontSize(ui::type::Status);
+    boardLabel_.setColor(ui::pal::textSecondary);
+    boardLabel_.setPosition({ColRX + PadX,
+        LeftTop + (LabelH - boardLabel_.bounds(app_.font()).size.y) * 0.5f
+            - boardLabel_.bounds(app_.font()).position.y});
+    boardPanel_.setRect(sf::FloatRect(
+        sf::Vector2f(ColRX, LeftTop + LabelH), sf::Vector2f(ColRW, BoardH)));
+
+    const float leftRowX = ColLX + PadX;
+    const float leftRowW = ColLW - 2 * PadX;
+    const float gameRowY = LeftTop + LabelH + PanelPad;
+    const auto leftRowRect = [&](int row) {
+        return sf::FloatRect(
+            sf::Vector2f(leftRowX, gameRowY + row * (RowH + RowGap)),
+            sf::Vector2f(leftRowW, RowH));
+    };
+
+    autoQueenCheck_.setRect(leftRowRect(0));
+    animCheck_.setRect(leftRowRect(1));
+
+    const auto placeCycler = [&](const sf::FloatRect& r, Button& prev,
+                                 Button& next, Label& name) {
         prev.setRect(sf::FloatRect(
-            sf::Vector2f(rows[rowIdx].position.x, yy), sf::Vector2f(btnW, btnH)));
+            sf::Vector2f(r.position.x, r.position.y + (r.size.y - BtnH) / 2.f),
+            sf::Vector2f(BtnW, BtnH)));
         next.setRect(sf::FloatRect(
-            sf::Vector2f(rows[rowIdx].position.x + rows[rowIdx].size.x - btnW, yy),
-            sf::Vector2f(btnW, btnH)));
+            sf::Vector2f(r.position.x + r.size.x - BtnW,
+                         r.position.y + (r.size.y - BtnH) / 2.f),
+            sf::Vector2f(BtnW, BtnH)));
         auto nb = name.bounds(app_.font());
         name.setPosition({
-            rows[rowIdx].position.x + (rows[rowIdx].size.x - nb.size.x) / 2.f
-                - nb.position.x,
-            yy + (btnH - nb.size.y) / 2.f - nb.position.y
+            r.position.x + (r.size.x - nb.size.x) / 2.f - nb.position.x,
+            r.position.y + (r.size.y - nb.size.y) / 2.f - nb.position.y,
         });
     };
-    placeCycleRow(animCheck_, animDurPrev_, animDurNext_, animDurName_, 2);
-    placeCycleRow(soundCheck_, soundVolPrev_, soundVolNext_, soundVolName_, 3);
+    placeCycler(leftRowRect(2), animDurPrev_, animDurNext_, animDurName_);
 
-    const auto placeNameRow = [&](int rowIdx, Button& prev, Button& next,
-                                  Label& name) {
-        const float yName = rows[rowIdx].position.y
-            + (rows[rowIdx].size.y - btnH) / 2.f;
-        prev.setRect(sf::FloatRect(
-            sf::Vector2f(rows[rowIdx].position.x, yName),
-            sf::Vector2f(btnW, btnH)));
-        next.setRect(sf::FloatRect(
-            sf::Vector2f(rows[rowIdx].position.x + rows[rowIdx].size.x - btnW,
-                         yName),
-            sf::Vector2f(btnW, btnH)));
-        auto nb = name.bounds(app_.font());
-        name.setPosition({
-            rows[rowIdx].position.x + (rows[rowIdx].size.x - nb.size.x) / 2.f
-                - nb.position.x,
-            yName + (btnH - nb.size.y) / 2.f - nb.position.y
-        });
+    const float soundRowY = SoundTop + LabelH + PanelPad;
+    const auto soundRowRect = [&](int row) {
+        return sf::FloatRect(
+            sf::Vector2f(leftRowX, soundRowY + row * (RowH + RowGap)),
+            sf::Vector2f(leftRowW, RowH));
     };
-    placeNameRow(4, themePrev_, themeNext_, themeName_);
-    placeNameRow(5, coordStylePrev_, coordStyleNext_, coordStyleName_);
-    placeNameRow(6, pieceSetPrev_, pieceSetNext_, pieceSetName_);
+    soundCheck_.setRect(soundRowRect(0));
+    placeCycler(soundRowRect(1), soundVolPrev_, soundVolNext_, soundVolName_);
 
-    piecesCaption_.setPosition({ rows[7].position.x, rows[7].position.y - 20.f });
+    const float rightRowX = ColRX + PadX;
+    const float rightRowW = ColRW - 2 * PadX;
+    const float boardRowY = LeftTop + LabelH + PanelPad;
+    const auto boardRowRect = [&](int row) {
+        return sf::FloatRect(
+            sf::Vector2f(rightRowX, boardRowY + row * (RowH + RowGap)),
+            sf::Vector2f(rightRowW, RowH));
+    };
+    coordsCheck_.setRect(boardRowRect(0));
+    placeCycler(boardRowRect(1),
+                coordStylePrev_, coordStyleNext_, coordStyleName_);
+    placeCycler(boardRowRect(2), themePrev_, themeNext_, themeName_);
+    placeCycler(boardRowRect(3), pieceSetPrev_, pieceSetNext_, pieceSetName_);
 
-    const float fieldW = 300.f;
+    // Custom piece-set path block rides the Board panel's tail.
+    const float pathCaptionY = boardRowY + 4 * (RowH + RowGap);
+    piecesCaption_.setPosition({rightRowX, pathCaptionY});
+    const float fieldW = 250.f;
     const float applyW = 70.f;
-    const float y3 = rows[7].position.y + (rows[7].size.y - 32.f) / 2.f;
+    const float fieldY = pathCaptionY + 18.f + 6.f;
     piecesField_.setRect(sf::FloatRect(
-        sf::Vector2f(rows[7].position.x, y3), sf::Vector2f(fieldW, 32.f)));
+        sf::Vector2f(rightRowX, fieldY), sf::Vector2f(fieldW, 30.f)));
     applyBtn_.setRect(sf::FloatRect(
-        sf::Vector2f(rows[7].position.x + rows[7].size.x - applyW, y3),
-        sf::Vector2f(applyW, 32.f)));
+        sf::Vector2f(ColRX + ColRW - PadX - applyW, fieldY),
+        sf::Vector2f(applyW, 30.f)));
 
+    // Footer: status line + buttons ride the left column's tail.
     auto sb = status_.bounds(app_.font());
-    status_.setPosition({ rows[8].position.x, rows[8].position.y - sb.position.y });
+    const float footerY = SoundTop + LabelH + SoundH + 22.f;
+    status_.setPosition({ColLX + PadX - sb.position.x,
+                         footerY - sb.position.y});
 
     const float resetW = 150.f;
     const float backW = 90.f;
-    const float y5 = rows[9].position.y + (rows[9].size.y - 34.f) / 2.f;
+    const float btnY = footerY + 24.f;
     resetBtn_.setRect(sf::FloatRect(
-        sf::Vector2f(rows[9].position.x, y5), sf::Vector2f(resetW, 34.f)));
+        sf::Vector2f(ColLX + PadX, btnY), sf::Vector2f(resetW, 34.f)));
     backBtn_.setRect(sf::FloatRect(
-        sf::Vector2f(rows[9].position.x + rows[9].size.x - backW, y5),
-        sf::Vector2f(backW, 34.f)));
+        sf::Vector2f(ColRX + ColRW - backW, btnY), sf::Vector2f(backW, 34.f)));
 }
 
 void SettingsScreen::updateThemeLabel()
@@ -486,6 +538,14 @@ void SettingsScreen::draw(sf::RenderWindow& window)
         60.f
     });
     title_.draw(window, font);
+
+    // 14.5: section panels under their captions, then the widgets on top.
+    gameplayPanel_.draw(window);
+    soundPanel_.draw(window);
+    boardPanel_.draw(window);
+    gameplayLabel_.draw(window, font);
+    soundLabel_.draw(window, font);
+    boardLabel_.draw(window, font);
 
     autoQueenCheck_.draw(window, font);
     coordsCheck_.draw(window, font);

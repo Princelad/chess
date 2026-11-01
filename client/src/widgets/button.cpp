@@ -1,6 +1,7 @@
 #include "button.h"
 
 #include <SFML/Graphics/RenderWindow.hpp>
+#include <ui/rounded_rect.h>
 
 namespace chess::client {
 
@@ -83,7 +84,9 @@ void Button::draw(sf::RenderWindow& window, const sf::Font& font) const
         thickness = 2.f;
     }
 
-    sf::RectangleShape shape(rect_.size);
+    // 14.5 chrome: buttons are pills from the shared shape — radius = half
+    // the height (clamped inside RoundedRectShape).
+    ui::RoundedRectShape shape(rect_.size, rect_.size.y * 0.5f);
     shape.setPosition(rect_.position);
     shape.setFillColor(fill);
     shape.setOutlineColor(outline);

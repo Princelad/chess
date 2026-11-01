@@ -4,6 +4,7 @@
 #include "widgets/button.h"
 #include "widgets/checkbox.h"
 #include "widgets/label.h"
+#include "widgets/panel.h"
 #include "widgets/text_field.h"
 
 namespace chess::client {
@@ -58,6 +59,14 @@ private:
     App& app_;
     Label title_;
     Label hint_;
+
+    // 14.5: sectioned panels (larger touch rows, grouped chrome).
+    Panel gameplayPanel_;
+    Label gameplayLabel_;
+    Panel soundPanel_;
+    Label soundLabel_;
+    Panel boardPanel_;
+    Label boardLabel_;
 
     Checkbox autoQueenCheck_;
     Checkbox coordsCheck_;

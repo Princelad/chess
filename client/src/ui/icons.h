@@ -39,9 +39,11 @@ enum class IconKind
     Medal,     // tournament/leaderboard achievement
     Eye,       // spectator watcher count (12.4)
     ArrowBack, // leave / back to menu
+    ArrowLeft, // settings cycler prev (visible stepper)
+    ArrowRight, // settings cycler next
 };
 
-constexpr int iconKindCount() { return 8; }
+constexpr int iconKindCount() { return 10; }
 
 // Icon square for text of `textSizePx` (e.g. ui::type::Heading -> ~23px).
 inline float iconBox(unsigned textSizePx)
@@ -162,9 +164,16 @@ inline void drawIcon(sf::RenderTarget& target, IconKind kind,
         circle(0.50f * u, 0.50f * u, 0.11f * u); // pupil
         break;
     }
+    case IconKind::ArrowLeft: // same glyph as leave/back, distinct meaning
     case IconKind::ArrowBack: {
         tri(0.04f * u, 0.50f * u, 0.36f * u, 0.26f * u, 0.36f * u, 0.74f * u);
         rect(0.32f * u, 0.43f * u, 0.62f * u, 0.14f * u);
+        break;
+    }
+    case IconKind::ArrowRight: {
+        // Mirrored stepper: head right, tail trailing left.
+        tri(0.96f * u, 0.50f * u, 0.64f * u, 0.26f * u, 0.64f * u, 0.74f * u);
+        rect(0.06f * u, 0.43f * u, 0.62f * u, 0.14f * u);
         break;
     }
     }

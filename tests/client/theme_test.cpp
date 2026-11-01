@@ -77,12 +77,12 @@ TEST(ThemePalette, TextIsReadableOnEveryPanelBackground)
         ui::pal::bgCard,
     };
     for (const auto bg : family) {
-        // Today's legacy values clear 4.2:1 on the darkest panel and 3.9:1 on
-        // cards; 14.5's restyle should RAISE this floor (and these asserts),
-        // not tighten below it.
-        EXPECT_GT(ui::contrastRatio(ui::pal::textPrimary, bg), 4.0f);
-        EXPECT_GT(ui::contrastRatio(ui::pal::textBody, bg), 3.8f);
-        EXPECT_GT(ui::contrastRatio(ui::pal::textBright, bg), 4.0f);
+        // 14.5 raised the floors with the restyle (WCAG AA: 4.5 for the
+        // primary/bright text, 4.3 for body) — bgApp stepped down and the
+        // text family stepped up together.
+        EXPECT_GT(ui::contrastRatio(ui::pal::textPrimary, bg), 4.5f);
+        EXPECT_GT(ui::contrastRatio(ui::pal::textBody, bg), 4.3f);
+        EXPECT_GT(ui::contrastRatio(ui::pal::textBright, bg), 4.5f);
     }
 }
 

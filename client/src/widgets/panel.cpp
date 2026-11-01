@@ -1,5 +1,7 @@
 #include "panel.h"
 
+#include <ui/rounded_rect.h>
+
 namespace chess::client {
 
 Panel::Panel(sf::FloatRect rect, sf::Color fill, sf::Color outline,
@@ -13,7 +15,8 @@ Panel::Panel(sf::FloatRect rect, sf::Color fill, sf::Color outline,
 
 void Panel::draw(sf::RenderWindow& window) const
 {
-    sf::RectangleShape shape(rect_.size);
+    // 14.5 chrome: rounded panel from the shared shape.
+    ui::RoundedRectShape shape(rect_.size, ui::shape::panelRadius);
     shape.setPosition(rect_.position);
     shape.setFillColor(fill_);
     shape.setOutlineColor(outline_);

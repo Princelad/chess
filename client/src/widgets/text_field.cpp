@@ -1,5 +1,7 @@
 #include "text_field.h"
 
+#include <ui/rounded_rect.h>
+
 #include <algorithm>
 
 namespace chess::client {
@@ -83,22 +85,25 @@ void TextField::draw(sf::RenderWindow& window, const sf::Font& font) const
 {
     const bool dimmed = !enabled_;
 
-    sf::RectangleShape box(rect_.size);
+    // 14.5 field look: dark inset fill (small rounding), no side outline —
+    // the state accent is the underline bar below the box.
+    ui::RoundedRectShape box(rect_.size, ui::shape::fieldRadius);
     box.setPosition(rect_.position);
-    if (focused_ && !dimmed) {
-        box.setFillColor(style_.fillFocused);
-        box.setOutlineColor(style_.strokeFocused);
-        box.setOutlineThickness(2.f);
-    } else if (dimmed) {
-        box.setFillColor(style_.fillDimmed);
-        box.setOutlineColor(style_.strokeDimmed);
-        box.setOutlineThickness(1.f);
-    } else {
-        box.setFillColor(style_.fillIdle);
-        box.setOutlineColor(style_.strokeIdle);
-        box.setOutlineThickness(1.f);
-    }
+    box.setFillColor(focused_ && !dimmed ? style_.fillFocused
+                                         : (dimmed ? style_.fillDimmed
+                                                   : style_.fillIdle));
+    box.setOutlineColor(sf::Color::Transparent);
+    box.setOutlineThickness(0.f);
     window.draw(box);
+
+    const float underlineH = focused_ && !dimmed ? 2.5f : 1.5f;
+    sf::RectangleShape underline(
+        {rect_.size.x - 16.f, underlineH});
+    underline.setPosition({rect_.position.x + 8.f,
+                           rect_.position.y + rect_.size.y - 5.f});
+    underline.setFillColor(dimmed ? style_.strokeDimmed
+        : (focused_ ? style_.strokeFocused : style_.strokeIdle));
+    window.draw(underline);
 
     const bool showPlaceholder = text_.empty() && !focused_;
     const std::string shownText = masked_
