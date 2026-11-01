@@ -8,11 +8,13 @@
 namespace chess::client {
 
 BoardView::BoardView(float windowWidth, float windowHeight, Color playerColor,
-                     BoardTheme theme, bool showCoordinates)
+                     BoardTheme theme, bool showCoordinates,
+                     CoordinateStyle coordsStyle)
     : margin_(20.f)
     , flipped_(playerColor == Color::Black)
     , colors_(boardColorsFor(theme))
     , showCoordinates_(showCoordinates)
+    , coordsStyle_(coordsStyle)
 {
     float availW = windowWidth * 0.65f - margin_;
     float availH = windowHeight - 2.f * margin_;
@@ -274,11 +276,55 @@ void BoardView::drawLabels(sf::RenderWindow& window, const sf::Font& font) const
 {
     if (!showCoordinates_) return;
 
-    unsigned int fontSize = static_cast<unsigned int>(squareSize_ * 0.2f);
-    if (fontSize < 10) fontSize = 10;
-
     const char files[] = "abcdefgh";
     const char ranks[] = "12345678";
+
+    if (coordsStyle_ == CoordinateStyle::Inside) {
+        // 14.4 chess.com-like prominence: bigger glyphs sitting inside
+        // the squares — file letters bottom-center of the bottom rank,
+        // rank numbers center-left of the a-file column.
+        unsigned int fontSize = static_cast<unsigned int>(squareSize_ * 0.28f);
+        if (fontSize < 11) fontSize = 11;
+
+        for (int i = 0; i < 8; ++i) {
+            int file = flipped_ ? (7 - i) : i;
+            int rank = flipped_ ? (7 - i) : i;
+
+            {
+                int rank0 = flipped_ ? 7 : 0;
+                bool light = (file + rank0) % 2 != 0;
+                auto pos = squareToPixel(file, rank0);
+                sf::Text text(font, std::string(1, files[file]), fontSize);
+                text.setFillColor(labelColorFor(light ? colors_.light : colors_.dark));
+                const auto b = text.getLocalBounds();
+                text.setPosition({
+                    pos.x + (squareSize_ - b.size.x) * 0.5f - b.position.x,
+                    pos.y + squareSize_ - b.size.y - squareSize_ * 0.06f
+                        - b.position.y,
+                });
+                window.draw(text);
+            }
+
+            {
+                int file0 = flipped_ ? 7 : 0;
+                bool light = (file0 + rank) % 2 != 0;
+                auto pos = squareToPixel(file0, rank);
+                sf::Text text(font, std::string(1, ranks[rank]), fontSize);
+                text.setFillColor(labelColorFor(light ? colors_.light : colors_.dark));
+                const auto b = text.getLocalBounds();
+                text.setPosition({
+                    pos.x + squareSize_ * 0.09f - b.position.x,
+                    pos.y + (squareSize_ - b.size.y) * 0.5f - b.position.y,
+                });
+                window.draw(text);
+            }
+        }
+        return;
+    }
+
+    // Corner style (pre-14.4 rendering): tiny labels at the square edges.
+    unsigned int fontSize = static_cast<unsigned int>(squareSize_ * 0.2f);
+    if (fontSize < 10) fontSize = 10;
 
     for (int i = 0; i < 8; ++i) {
         int file = flipped_ ? (7 - i) : i;

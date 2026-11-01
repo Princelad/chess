@@ -736,7 +736,7 @@ takeback, rematch, chat polish, per-class ratings, login throttling
 
 ---
 
-## Phase 14 — Design system v2 (`client/`)
+## Phase 14 — Design system v2 (`client/`) — DONE (`v1.7.0`)
 
 **Goal:** a token-driven visual foundation, chess.com-style, rebuilt on our own
 assets: one theme module instead of the scattered hardcoded colors, a drawn
@@ -748,30 +748,37 @@ fonts, or branding (our own palette values, our own drawings; README gains an
 **Exit version:** `v1.7.0` — all screens restyled on tokens; zero behavior
 change; 763-test suite stays green (CI discipline from 13.x continues)
 
-- [ ] **14.1 Design tokens (`client/src/ui/theme.h`)**
-  - [ ] Central module: spacing scale, type scale, color palette (dark background family, panel/card/button/accent tokens), component style structs; the single source every later phase paints from
-  - [ ] Migrate the widget layer first: `Button`/`TextField`/`Panel`/`Label`/`Checkbox` take styles from tokens instead of per-screen literal colors
-  - [ ] Sweep screens to remove magic colors/sizes connect/menu/settings/game screens draw directly — screens pass composition, tokens pass paint
-  - [ ] Unit-testable helpers pure (color derivations, contrast pair checks) so theme lookups have tests without a window
+- [x] **14.1 Design tokens (`client/src/ui/theme.h`)** — pure refactor: every token value mirrors the pre-14.1 hardcoded palette verbatim, so the phase's visual refresh (14.4/14.5) changes values HERE, not at the call sites
+  - [x] Central module: spacing scale, type scale, color palette (dark background family, panel/card/button/accent tokens), component style structs; the single source every later phase paints from (header-only like `themes.h`/`chat_log.h`; `pal` namespace = shared families, `overlay` = promo-picker/dialog chrome shared by GameScreen/LocalGame/Puzzle, `type`/`space` scales)
+  - [x] Migrate the widget layer first: `Button`/`TextField`/`Panel`/`Label`/`Checkbox` take styles from tokens instead of per-screen literal colors (`Button::setColors` 9-arg DELETED — `setStyle(const ui::ButtonStyle&)`; 15 `constexpr` variant factories `buttonDanger/Success/ConnectBlue/…` each copy one screens' exact trio; MoveNavigator paints from `pal` too)
+  - [x] Sweep screens to remove magic colors/sizes connect/menu/settings/game screens draw directly — screens pass composition, tokens pass paint (~300 `sf::Color` literals down to 10, each of which is a screened-unique accent tone with a trailing comment naming it: ECO bronze, arena slate family, puzzle header sage, chat stub grays, eval-bar track; `boardview.cpp` + `chat_log.h` deliberately untouched — board semantics, 14.4/15.5 territory)
+  - [x] Unit-testable helpers pure (color derivations, contrast pair checks) so theme lookups have tests without a window (`tests/client/theme_test.cpp`, +11 tests: mix/shade clamping + alpha preservation, contrast symmetry + 21:1 white/black, readable-text flip, panel contrast floors ≥ 4.0, type/spacing monotonicity, variant distinctness/statefulness; suite 774 green)
+  - Note: today's legacy text-on-card contrast actually measures ~3.9–4.3:1 — the test floor is set at truth and 14.5's restyle should RAISE it (update the asserts when values change)
 
-- [ ] **14.2 Icon system (`client/src/ui/icons.h` + SFML-drawn registry)**
-  - [ ] Small procedural icon set drawn in SFML (clock, flag, draw-hand, flip, hint bulb, medal, watcher eye, back arrow) — no external sprite dependencies, sized by the type scale
-  - [ ] Replace text-only button labels/headers where icons read better (11.6 theme cycler, HUD actions)
-  - [ ] Keep letter fallbacks working everywhere (the 6.2.2 letter-drawing discipline extends to icons)
+- [x] **14.2 Icon system (`client/src/ui/icons.h` + SFML-drawn registry)** — 8-icon procedural set, ours outright; the open-source-asset alternative was evaluated and declined (SFML 3 can't rasterize SVG; PNG atlases fight type-scale sizing; zero licensing overhead stays zero)
+  - [x] Small procedural icon set drawn in SFML (clock, flag, draw-hand, flip, hint bulb, medal, watcher eye, back arrow) — no external sprite dependencies, sized by the type scale (`drawIcon` compositions of Rectangle/Circle/Convex shapes; sizing ONLY via `iconBox(textSize)`, never hand-picked pixels)
+  - [x] Replace text-only button labels/headers where icons read better (11.6 theme cycler, HUD actions) (`Button::setIcon` leading slot; Resign→flag, Draw→hand, Leave/Menu→arrow, Hint→bulb, GameOver Menu→arrow, HUD clock glyphs, spectator eye+count, tournament banner medal; **labels always keep rendering beside icons** — an icon never replaces its text; two labels shortened to make slots fit at 96/140px: "Offer Draw"→"Draw", "Back to Menu"→"Menu"; Flip registered only, affordance lands with 15.x player cards)
+  - [x] Keep letter fallbacks working everywhere (the 6.2.2 letter-drawing discipline extends to icons) (button draw drops the icon when the measured label cannot fit the remaining space — text wins over icons, hierarchy enforced in `Button::draw`; HUD count re-sync: the watcher figure left the name string for an eye-icon unit drawn by `drawPlayerCard`)
+  - Tests: `tests/client/icons_test.cpp` (+5, headless layout math only — the draw path needs a target) — registry count, box monotonicity, slot containment, text-rect contract, narrow-control drop; suite 779
 
-- [ ] **14.3 Avatar system (`client/src/avatars.{h,cpp}`)**
-  - [ ] Procedural avatars: deterministic pattern + color derived from a seed (config `profile.avatar` for self, FNV over opponent name for the other seat); geometric shapes via `sf::Shape`, initial-letter fallback
-  - [ ] Optional CC0 bundled avatar pack under `assets/avatars/` loaded through `assetRoots()` (13.2's env var applies) — missing pack degrades silently to procedural
-  - [ ] Rendered on player cards (15.2 consumes it), leaderboard rows, spectator lobby rows
+- [x] **14.3 Avatar system (`client/src/avatars.{h,cpp}`)**
+  - [x] Procedural avatars: deterministic pattern + color derived from a seed (config `profile.avatar` for self, FNV over opponent name for the other seat); geometric shapes via `sf::Shape`, initial-letter fallback (header-only pure base: FNV-1a seed, `profile.avatar` re-roll knob beats the displayed name, mirrored 5×5 identicon cells, curated deep/light color pairs — never a raw hue computation, contrast stays guaranteed; `sf::RectangleShape` emblem; initial rides a flat tile below 17px where the grid collapses)
+  - [x] Optional CC0 bundled avatar pack under `assets/avatars/` loaded through `assetRoots()` (13.2's env var applies) — missing pack degrades silently to procedural (**Twemoji tiles**, CC BY 4.0 — the CC0-first sourcing found no clean avatar set, Twemoji attributed in `assets/avatars/README.md` per the piece-set pattern; tile names are Unicode codepoints so an upstream refresh is unambiguous; loader takes `assets/avatars/` under the FIRST root that has it, empty/missing = procedural silently, pack tile wins over procedural everywhere)
+  - [x] Rendered on player cards (15.2 consumes it), leaderboard rows, spectator lobby rows (HUD `drawPlayerCard` avatar slot left of the name, self seed from `profile.avatar`/profile/lastName and seat-name seeds elsewhere, spectator mode reads the same both-cards form; leaderboard emblems at the row's leading edge from the entry name; arena lobby seat emblems in the left margin — 15.2/17.x restyles relocate these, the entry point stays `avatars::drawAvatar`)
+  - Tests: `tests/client/avatars_test.cpp` (+8, headless pure math only — draw path needs a target) — seed determinism/spread, knob precedence, pack index spread, initial extraction, mirror symmetry, non-degenerate grids, palette register, empty-pack degrade; suite 787
 
-- [ ] **14.4 Board theme family refresh (`themes.h` palettes)**
-  - [ ] Add chess.com-iconography-inspired named boards — Green/Brown/Blue/Purple — OUR color values, appended after the existing names (the 11.6 persistence ordering rule: never reorder existing entries)
-  - [ ] Coordinates style toggle (extending `board.show_coordinates` beyond on/off: margin style = current, inside-squares style like chess.com), persisted like the theme
-  - [ ] Settings screen theme row cycles the new family; preview swatches in the settings status text
+- [x] **14.4 Board theme family refresh (`themes.h` palettes)**
+  - [x] Add chess.com-iconography-inspired named boards — Green/Brown/Blue/Purple — OUR color values, appended after the existing names (the 11.6 persistence ordering rule: never reorder existing entries) (Green/Blue turned out to already exist from 11.6, so the family stays name-stable: Brown + Purple appended after Moss; **Green retuned in place** to the chess.com-inspired look — 233,235,210 / 117,149,86, ours, not lifted RGBs; Blue/Dark/Wood/Moss values untouched)
+  - [x] Coordinates style toggle (extending `board.show_coordinates` beyond on/off: margin style = current, inside-squares style like chess.com), persisted like the theme (`board.coordinates` = "corner"/"inside" with junk degrading like the variant strings; the bool stays the on/off master; `BoardView` gained the style param — all four screen call sites pass it; inside = 0.28·sq glyphs, file letters bottom-center of the bottom rank, rank numbers center-left of the a-file; the "corner" branch is byte-for-byte the pre-14.4 rendering)
+  - [x] Settings screen theme row cycles the new family; preview swatches in the settings status text (cycler needed no code — `nextBoardTheme` counts `Count`; status now shows the two board colors as `#RRGGBB`; new coordinate-style cycler row added beside it with reset support)
+  - Tests: `tests/client/config_test.cpp` (+4) — appended-name order (persistence discipline), exact refreshed Green/Purple values, coordinate style round trip + junk degrade, named resolution; suite 791
 
-- [ ] **14.5 Runtime chrome + settings restyle**
-  - [ ] Window background, title rendering, version badge; rounded panels + pill buttons + underline textfields as component defaults from tokens
-  - [ ] Settings screen restyled on the token layer (larger touch rows, sectioned panels); "inspired by chess.com" note lands in README
+- [x] **14.5 Runtime chrome + settings restyle**
+  - [x] Window background, title rendering, version badge; rounded panels + pill buttons + underline textfields as component defaults from tokens (`version.h` `kAppVersion = "1.7.0"` feeds the `"chess v1.7.0"` window title and the menu's bottom-right badge; `ui::RoundedRectShape` (new header-only `sf::Shape`) drives the chrome — Button = pill (radius = height/2), Panel = `shape::panelRadius` 10, TextField = underline style (dark inset fill; the state accent is the underline bar, no side outline); settings cycler steppers became leading ArrowLeft/ArrowRight icons with empty labels — the registry is 10 kinds and the tofu-glyph trap (`◀`/`▶` miss in Inter) is why icons won over text)
+  - [x] Settings screen restyled on the token layer (larger touch rows, sectioned panels); "inspired by chess.com" note lands in README
+  - [x] Contrast floors RAISED with the restyle — the flat 601 luminance proxy moves both sides: bgApp (40,38,36) / bgCard (38,38,40) stepped down while textBody 224 / textBright 236 stepped up; `ThemePalette.TextIsReadableOnEveryPanelBackground` now asserts primary/bright > 4.5 and body > 4.3 on every text panel (worst case 4.63; the floors were >4.0 / >3.8 / >4.0 — raised IN the same change as the retune, never below)
+  - Settings: sectioned two-column layout — left "Gameplay" (3 rows) + "Sound" (2 rows), right "Board & pieces" (4 cycler/checkbox rows + the piece-set path block); focus enum + handlers untouched; footer status + buttons ride the left column's tail; plausible-chess.com-family look, our own palette values
+  - Tests: icons registry table (+ArrowLeft/ArrowRight), theme floors raised; suite 791
 
 ---
 

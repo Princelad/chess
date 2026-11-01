@@ -4,6 +4,7 @@
 #include "widgets/button.h"
 #include "widgets/checkbox.h"
 #include "widgets/label.h"
+#include "widgets/panel.h"
 #include "widgets/text_field.h"
 
 namespace chess::client {
@@ -28,6 +29,8 @@ private:
         FocusSoundVolNext,
         FocusThemePrev,
         FocusThemeNext,
+        FocusCoordStylePrev,
+        FocusCoordStyleNext,
         FocusPieceSetPrev,
         FocusPieceSetNext,
         FocusPiecesField,
@@ -41,6 +44,8 @@ private:
     void focusNext(bool down);
     void applyFocus();
     void updateThemeLabel();
+    void updateCoordStyleLabel();
+    void cycleCoordStyle(int dir);
     void updatePieceSetLabel();
     void cyclePieceSet(int dir);
     void updateAnimDurLabel();
@@ -54,6 +59,14 @@ private:
     App& app_;
     Label title_;
     Label hint_;
+
+    // 14.5: sectioned panels (larger touch rows, grouped chrome).
+    Panel gameplayPanel_;
+    Label gameplayLabel_;
+    Panel soundPanel_;
+    Label soundLabel_;
+    Panel boardPanel_;
+    Label boardLabel_;
 
     Checkbox autoQueenCheck_;
     Checkbox coordsCheck_;
@@ -71,6 +84,12 @@ private:
     Button themePrev_;
     Button themeNext_;
     Label themeName_;
+
+    // 14.4: where the coordinates sit (corner / inside), cycled like the
+    // theme; the show_coordinates checkbox stays the on/off master.
+    Button coordStylePrev_;
+    Button coordStyleNext_;
+    Label coordStyleName_;
 
     Button pieceSetPrev_;
     Button pieceSetNext_;

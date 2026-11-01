@@ -1,6 +1,7 @@
 #pragma once
 
 #include <SFML/Graphics.hpp>
+#include <ui/theme.h>
 
 #include <functional>
 #include <string>
@@ -28,6 +29,8 @@ public:
     void setFocused(bool focused) { focused_ = focused && enabled_; }
     bool isFocused() const { return focused_; }
 
+    void setStyle(const ui::CheckboxStyle& style) { style_ = style; }
+
     void setOnToggle(std::function<void(bool)> onToggle) { onToggle_ = std::move(onToggle); }
 
     // Returns true if the event was consumed (click toggle or Space/Enter while focused).
@@ -46,6 +49,7 @@ private:
     bool focused_ = false;
     bool hovered_ = false;
     std::function<void(bool)> onToggle_;
+    ui::CheckboxStyle style_;
 };
 
 } // namespace chess::client

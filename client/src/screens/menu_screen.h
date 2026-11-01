@@ -26,6 +26,7 @@ private:
     int focused_ = 0;
     Label title_;
     Label hint_;
+    Label version_; // 14.5 runtime chrome badge
 
     void focusNext(bool down);
     void layoutButtons();

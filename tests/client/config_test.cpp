@@ -207,6 +207,52 @@ TEST(Themes, NextCyclesThroughCount)
     EXPECT_EQ(t, BoardTheme::Classic);
 }
 
+TEST(Themes, AppendedFamilyKeepsLegacyNamesInOrder)
+{
+    // 11.6 persistence discipline: values are stored by name, so adding
+    // themes may only APPEND — every 11.6 name keeps its enum slot and
+    // 14.4's chess.com-inspired family lands after Moss.
+    EXPECT_EQ(boardThemeName(BoardTheme::Classic), std::string("Classic"));
+    EXPECT_EQ(boardThemeName(BoardTheme::Green), std::string("Green"));
+    EXPECT_EQ(boardThemeName(BoardTheme::Blue), std::string("Blue"));
+    EXPECT_EQ(boardThemeName(BoardTheme::Dark), std::string("Dark"));
+    EXPECT_EQ(boardThemeName(BoardTheme::Wood), std::string("Wood"));
+    EXPECT_EQ(boardThemeName(BoardTheme::Moss), std::string("Moss"));
+    EXPECT_EQ(boardThemeName(BoardTheme::Brown), std::string("Brown"));
+    EXPECT_EQ(boardThemeName(BoardTheme::Purple), std::string("Purple"));
+}
+
+TEST(Themes, RefreshedGreenKeepsOurValues)
+{
+    // 14.4 retuned the family look; pin the exact palette so a later
+    // edit is a deliberate choice, not an accident.
+    const auto green = boardColorsFor(BoardTheme::Green);
+    EXPECT_EQ(green.light, (sf::Color(233, 235, 210)));
+    EXPECT_EQ(green.dark, (sf::Color(117, 149, 86)));
+    const auto purple = boardColorsFor(BoardTheme::Purple);
+    EXPECT_EQ(purple.light, (sf::Color(220, 208, 231)));
+    EXPECT_EQ(purple.dark, (sf::Color(124, 95, 158)));
+}
+
+TEST(CoordinateStyle, RoundTripAndJunkDegradesToCorner)
+{
+    for (int i = 0; i < static_cast<int>(CoordinateStyle::Count); ++i) {
+        auto style = static_cast<CoordinateStyle>(i);
+        EXPECT_EQ(coordinateStyleFromName(coordinateStyleName(style)), style);
+    }
+    // Unknown tags degrade like the variant strings — never crash.
+    EXPECT_EQ(coordinateStyleFromName("bogus"), CoordinateStyle::Corner);
+    EXPECT_EQ(coordinateStyleFromName(""), CoordinateStyle::Corner);
+    EXPECT_EQ(coordinateStyleFromName(""), coordinateStyleFromName(
+        coordinateStyleName(CoordinateStyle::Corner)));
+}
+
+TEST(CoordinateStyle, NamedStyleResolves)
+{
+    EXPECT_EQ(coordinateStyleFromName("inside"), CoordinateStyle::Inside);
+    EXPECT_EQ(coordinateStyleFromName("corner"), CoordinateStyle::Corner);
+}
+
 TEST(Themes, NameRoundTrip)
 {
     for (int i = 0; i < static_cast<int>(BoardTheme::Count); ++i) {

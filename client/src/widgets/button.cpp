@@ -1,27 +1,14 @@
 #include "button.h"
 
+#include <SFML/Graphics/RenderWindow.hpp>
+#include <ui/rounded_rect.h>
+
 namespace chess::client {
 
 Button::Button(sf::FloatRect rect, std::string label)
     : rect_(rect)
     , label_(std::move(label))
 {
-}
-
-void Button::setColors(sf::Color idleFill, sf::Color hoverFill, sf::Color pressedFill,
-                       sf::Color disabledFill, sf::Color disabledLabel,
-                       sf::Color label, sf::Color outline, sf::Color activeOutline,
-                       sf::Color focusOutline)
-{
-    idleFill_ = idleFill;
-    hoverFill_ = hoverFill;
-    pressedFill_ = pressedFill;
-    disabledFill_ = disabledFill;
-    disabledLabel_ = disabledLabel;
-    labelColor_ = label;
-    outline_ = outline;
-    activeOutline_ = activeOutline;
-    focusOutline_ = focusOutline;
 }
 
 void Button::activate()
@@ -75,41 +62,58 @@ void Button::draw(sf::RenderWindow& window, const sf::Font& font) const
     float thickness = 1.f;
 
     if (!enabled_) {
-        fill = disabledFill_;
-        outline = outline_;
-        labelColor = disabledLabel_;
+        fill = style_.disabledFill;
+        outline = style_.outline;
+        labelColor = style_.disabledLabel;
     } else if (pressedIn_) {
-        fill = pressedFill_;
-        outline = activeOutline_;
-        labelColor = labelColor_;
+        fill = style_.pressedFill;
+        outline = style_.activeOutline;
+        labelColor = style_.label;
     } else if (hovered_) {
-        fill = hoverFill_;
-        outline = activeOutline_;
-        labelColor = labelColor_;
+        fill = style_.hoverFill;
+        outline = style_.activeOutline;
+        labelColor = style_.label;
     } else {
-        fill = idleFill_;
-        outline = outline_;
-        labelColor = labelColor_;
+        fill = style_.idleFill;
+        outline = style_.outline;
+        labelColor = style_.label;
     }
 
     if (focused_) {
-        outline = focusOutline_;
+        outline = style_.focusOutline;
         thickness = 2.f;
     }
 
-    sf::RectangleShape shape(rect_.size);
+    // 14.5 chrome: buttons are pills from the shared shape — radius = half
+    // the height (clamped inside RoundedRectShape).
+    ui::RoundedRectShape shape(rect_.size, rect_.size.y * 0.5f);
     shape.setPosition(rect_.position);
     shape.setFillColor(fill);
     shape.setOutlineColor(outline);
     shape.setOutlineThickness(thickness);
     window.draw(shape);
 
-    sf::Text text(font, label_, 20);
+    const sf::FloatRect* textArea = &rect_;
+    if (icon_) {
+        const sf::FloatRect slot = ui::icons::iconSlotRect(rect_, style_.textSize);
+        const sf::FloatRect remaining = ui::icons::iconTextRect(rect_, style_.textSize);
+
+        // Probe the label against the remaining space first — a label too
+        // wide there keeps the whole rect (icon drops, text never overlaps).
+        sf::Text probe(font, label_, style_.textSize);
+        if (probe.getLocalBounds().size.x <= remaining.size.x - 4.f) {
+            ui::icons::drawIcon(window, *icon_, slot.position, slot.size.x,
+                                labelColor);
+            textArea = &remaining;
+        }
+    }
+
+    sf::Text text(font, label_, style_.textSize);
     text.setFillColor(labelColor);
     const auto bounds = text.getLocalBounds();
     text.setPosition({
-        rect_.position.x + (rect_.size.x - bounds.size.x) / 2.f - bounds.position.x,
-        rect_.position.y + (rect_.size.y - bounds.size.y) / 2.f - bounds.position.y
+        textArea->position.x + (textArea->size.x - bounds.size.x) / 2.f - bounds.position.x,
+        textArea->position.y + (textArea->size.y - bounds.size.y) / 2.f - bounds.position.y
     });
     window.draw(text);
 }

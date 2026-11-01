@@ -5,6 +5,7 @@ src/connection.cpp
     src/board_interaction.cpp
     src/config.cpp
     src/sfx.cpp
+    src/avatars.cpp
     src/widgets/label.cpp
     src/widgets/panel.cpp
     src/widgets/button.cpp

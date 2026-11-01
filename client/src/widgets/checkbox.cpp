@@ -51,11 +51,11 @@ void Checkbox::draw(sf::RenderWindow& window, const sf::Font& font) const
     // Box background
     sf::RectangleShape bg({ boxSide, boxSide });
     bg.setPosition(boxPos);
-    bg.setFillColor(checked_ ? sf::Color(60, 140, 60) : sf::Color(50, 50, 50));
+    bg.setFillColor(checked_ ? style_.fillChecked : style_.fillUnchecked);
     bg.setOutlineThickness(1.f);
-    bg.setOutlineColor(focused_ ? sf::Color(180, 180, 180) :
-                       hovered_  ? sf::Color(120, 120, 120) :
-                                   sf::Color(80, 80, 80));
+    bg.setOutlineColor(focused_ ? style_.strokeFocused :
+                       hovered_  ? style_.strokeHovered :
+                                   style_.strokeIdle);
     window.draw(bg);
 
     // Check mark (white filled square inside when checked)
@@ -63,16 +63,16 @@ void Checkbox::draw(sf::RenderWindow& window, const sf::Font& font) const
         float pad = boxSide * 0.25f;
         sf::RectangleShape mark({ boxSide - 2.f * pad, boxSide - 2.f * pad });
         mark.setPosition({ boxPos.x + pad, boxPos.y + pad });
-        mark.setFillColor(sf::Color(240, 240, 240));
+        mark.setFillColor(style_.mark);
         window.draw(mark);
     }
 
     // Label
     float labelX = boxPos.x + boxSide + 6.f;
     sf::Text text(font, label_, fontSize_);
-    text.setFillColor(focused_ ? sf::Color(240, 240, 240) :
-                      enabled_ ? sf::Color(200, 200, 200) :
-                                  sf::Color(90, 90, 90));
+    text.setFillColor(focused_ ? style_.textFocused :
+                      enabled_ ? style_.textEnabled :
+                                 style_.textDisabled);
     auto lb = text.getLocalBounds();
     text.setPosition({ labelX - lb.position.x,
                        rect_.position.y + (rect_.size.y - lb.size.y) * 0.5f - lb.position.y });

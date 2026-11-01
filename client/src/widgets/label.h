@@ -1,6 +1,7 @@
 #pragma once
 
 #include <SFML/Graphics.hpp>
+#include <ui/theme.h>
 
 #include <string>
 
@@ -9,8 +10,8 @@ namespace chess::client {
 class Label {
 public:
     Label() = default;
-    Label(std::string text, unsigned int fontSize = 14,
-          sf::Color color = sf::Color(220, 220, 220));
+    Label(std::string text, unsigned int fontSize = ui::type::Body,
+          sf::Color color = ui::pal::textBody);
 
     void setText(std::string text) { text_ = std::move(text); }
     const std::string& text() const { return text_; }
@@ -32,8 +33,8 @@ public:
 
 private:
     std::string text_;
-    unsigned int fontSize_ = 14;
-    sf::Color color_ = sf::Color(220, 220, 220);
+    unsigned int fontSize_ = ui::type::Body;
+    sf::Color color_ = ui::pal::textBody;
     sf::Vector2f position_ = {0.f, 0.f};
 };
 

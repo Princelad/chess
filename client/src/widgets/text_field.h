@@ -1,6 +1,7 @@
 #pragma once
 
 #include <SFML/Graphics.hpp>
+#include <ui/theme.h>
 
 #include <cstddef>
 #include <functional>
@@ -39,6 +40,8 @@ public:
     // Optional callback fired when Enter is pressed while focused.
     void setOnCommit(std::function<void()> onCommit) { onCommit_ = std::move(onCommit); }
 
+    void setStyle(const ui::TextFieldStyle& style) { style_ = style; }
+
     // Returns true if the event was consumed by the field.
     bool handleEvent(const sf::Event& event, const sf::Vector2f& localMouse);
 
@@ -47,6 +50,7 @@ public:
 
 private:
     sf::FloatRect rect_;
+    ui::TextFieldStyle style_;
     std::string text_;
     std::size_t maxLength_ = 64;
     std::string placeholder_;

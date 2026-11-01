@@ -14,6 +14,7 @@
 #include "piece_sets.h"
 #include "sfx.h"
 #include "themes.h"
+#include "avatars.h"
 
 #include <SFML/Graphics.hpp>
 
@@ -105,6 +106,17 @@ public:
         config_.save();
     }
 
+    // 14.4 coordinates style — where the labels sit when they show.
+    CoordinateStyle coordinateStyle() const
+    {
+        return coordinateStyleFromName(config_.get("board.coordinates", "corner"));
+    }
+    void setCoordinateStyle(CoordinateStyle style)
+    {
+        config_.set("board.coordinates", coordinateStyleName(style));
+        config_.save();
+    }
+
     const Config& config() const { return config_; }
     Config& config() { return config_; }
 
@@ -119,6 +131,11 @@ public:
     // Reload piece textures from the configured piece-set path; falls back to
     // the previous textures if loading fails. Returns true on full success.
     bool reloadPieces();
+
+    // 14.3 avatar pack (loaded once at startup; missing dir = empty pack,
+    // every draw site degrades to the procedural emblem).
+    const avatars::AvatarPack& avatarPack() const { return avatarPack_; }
+    void setAvatarPack(avatars::AvatarPack pack) { avatarPack_ = std::move(pack); }
 
     static constexpr unsigned int WindowWidth = 960;
     static constexpr unsigned int WindowHeight = 640;
@@ -137,6 +154,7 @@ private:
     std::optional<sf::Font> font_;
     std::array<sf::Texture, 12> pieceTextures_;
     bool piecesLoaded_ = false;
+    avatars::AvatarPack avatarPack_;
     std::string lastHost_ = "localhost";
     std::string lastPort_ = "5555";
     std::string lastName_;

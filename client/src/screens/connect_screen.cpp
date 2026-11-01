@@ -1,4 +1,6 @@
 #include "connect_screen.h"
+
+#include "ui/theme.h"
 #include "game_screen.h"
 #include "history_screen.h"
 #include "leaderboard_screen.h"
@@ -27,8 +29,8 @@ ConnectScreen::ConnectScreen(App& app)
     fields_[2].setText(app.lastName());
     for (int i = 0; i < static_cast<int>(FieldCount); ++i) {
         labels_[i].setText(FieldLabels[i]);
-        labels_[i].setFontSize(20);
-        labels_[i].setColor(sf::Color(200, 200, 200));
+        labels_[i].setFontSize(ui::type::Heading);
+        labels_[i].setColor(ui::pal::textSecondary);
         fields_[i].setMaxLength(32);
     }
     // Time control presets (11.1): cycled by the picker button, first entry
@@ -46,13 +48,9 @@ ConnectScreen::ConnectScreen(App& app)
         }
     }
     tcLabel_.setText("Time control:");
-    tcLabel_.setFontSize(20);
-    tcLabel_.setColor(sf::Color(200, 200, 200));
-    tcBtn_.setColors(sf::Color(70, 74, 96), sf::Color(84, 88, 112),
-                     sf::Color(58, 62, 82), sf::Color(45, 48, 66),
-                     sf::Color(150, 150, 150), sf::Color(255, 255, 255),
-                     sf::Color(60, 64, 86), sf::Color(160, 168, 200),
-                     sf::Color(200, 208, 240));
+    tcLabel_.setFontSize(ui::type::Heading);
+    tcLabel_.setColor(ui::pal::textSecondary);
+    tcBtn_.setStyle(ui::buttonCycle());
     tcBtn_.setOnClick([this] { selectTimeControl(); });
     updateTimeControlLabel();
     // Game variant presets (12.1): cycled by the picker beside the time
@@ -77,13 +75,9 @@ ConnectScreen::ConnectScreen(App& app)
         app_.config().set("general.variant", variants_[0]);
     }
     variantLabel_.setText("Variant:");
-    variantLabel_.setFontSize(20);
-    variantLabel_.setColor(sf::Color(200, 200, 200));
-    variantBtn_.setColors(sf::Color(70, 74, 96), sf::Color(84, 88, 112),
-                          sf::Color(58, 62, 82), sf::Color(45, 48, 66),
-                          sf::Color(150, 150, 150), sf::Color(255, 255, 255),
-                          sf::Color(60, 64, 86), sf::Color(160, 168, 200),
-                          sf::Color(200, 208, 240));
+    variantLabel_.setFontSize(ui::type::Heading);
+    variantLabel_.setColor(ui::pal::textSecondary);
+    variantBtn_.setStyle(ui::buttonCycle());
     variantBtn_.setOnClick([this] { selectVariant(); });
     updateVariantLabel();
     // Password: masked input, longer allowed than names, guest by default.
@@ -100,61 +94,41 @@ ConnectScreen::ConnectScreen(App& app)
     connectBtn_.setLabel("Connect");
     connectBtn_.setRect(sf::FloatRect(sf::Vector2f(FieldX, BtnY),
                                       sf::Vector2f(200.f, 40.f)));
-    connectBtn_.setColors(sf::Color(76, 175, 80), sf::Color(90, 190, 95),
-                          sf::Color(60, 150, 70), sf::Color(40, 80, 45),
-                          sf::Color(150, 150, 150), sf::Color(255, 255, 255),
-                          sf::Color(60, 140, 65), sf::Color(160, 220, 160),
-                          sf::Color(220, 255, 220));
+    connectBtn_.setStyle(ui::buttonConnect());
     connectBtn_.setOnClick([this] { tryConnectOrRetry(); });
 
     archiveBtn_.setLabel("Match archive");
-    archiveBtn_.setColors(sf::Color(60, 90, 160), sf::Color(75, 105, 180),
-                          sf::Color(52, 80, 140), sf::Color(45, 60, 90),
-                          sf::Color(150, 150, 150), sf::Color(255, 255, 255),
-                          sf::Color(52, 78, 135), sf::Color(160, 190, 240),
-                          sf::Color(210, 230, 255));
+    archiveBtn_.setStyle(ui::buttonBlue());
     archiveBtn_.setOnClick([this] { startBrowse(BrowseTarget::Archive); });
 
     leaderboardBtn_.setLabel("Leaderboard");
-    leaderboardBtn_.setColors(sf::Color(46, 62, 58), sf::Color(58, 78, 72),
-                              sf::Color(52, 70, 64), sf::Color(40, 55, 52),
-                              sf::Color(150, 150, 150), sf::Color(240, 250, 240),
-                              sf::Color(70, 110, 90), sf::Color(140, 200, 170),
-                              sf::Color(180, 235, 205));
+    leaderboardBtn_.setStyle(ui::buttonMint());
     leaderboardBtn_.setOnClick([this] { startBrowse(BrowseTarget::Leaderboard); });
 
     // Arena (12.3): a third browse-style entry — connect, optionally log
     // in, then switch into the tournament lobby for this tc/variant.
     arenaBtn_.setLabel("Arena");
-    arenaBtn_.setColors(sf::Color(96, 74, 50), sf::Color(118, 92, 60),
-                        sf::Color(80, 62, 42), sf::Color(66, 52, 35),
-                        sf::Color(150, 150, 150), sf::Color(255, 250, 240),
-                        sf::Color(70, 110, 90), sf::Color(140, 200, 170),
-                        sf::Color(180, 235, 205));
+    arenaBtn_.setStyle(ui::buttonBronze());
     arenaBtn_.setOnClick([this] { startBrowse(BrowseTarget::Arena); });
 
     // Watch (12.4): a fourth browse-style entry — connect, optionally log
     // in, then spectate. The name field is the spectate target: it follows
     // that named player's live game on either side.
     watchBtn_.setLabel("Watch");
-    watchBtn_.setColors(sf::Color(60, 80, 130), sf::Color(74, 98, 160),
-                        sf::Color(50, 68, 110), sf::Color(40, 55, 88),
-                        sf::Color(150, 160, 180), sf::Color(240, 245, 255),
-                        sf::Color(55, 85, 130), sf::Color(130, 170, 230),
-                        sf::Color(180, 210, 250));
+    watchBtn_.setStyle(ui::buttonSlate());
     watchBtn_.setOnClick([this] { startBrowse(BrowseTarget::Watch); });
 
     title_.setText("Chess");
-    title_.setFontSize(36);
-    title_.setColor(sf::Color(255, 255, 255));
+    title_.setFontSize(ui::type::Display);
+    title_.setColor(ui::pal::white);
 
     hint_.setText("Tab to switch fields, Enter to connect, Esc to go back");
-    hint_.setFontSize(14);
-    hint_.setColor(sf::Color(120, 120, 120));
+    hint_.setFontSize(ui::type::Body);
+    hint_.setColor(ui::pal::textFaded);
 
     status_.setText("Enter your name (password optional) and press Enter to connect.");
     status_.setFontSize(18);
-    status_.setColor(sf::Color(180, 180, 180));
+    status_.setColor(ui::pal::textFaded);
 
     layoutWidgets();
 }
@@ -450,7 +424,7 @@ void ConnectScreen::update(float dtSec)
                 // connection so the user can fix the fields and retry.
                 error_.setText(err->message);
                 status_.setText("Fix the fields and press Enter to retry.");
-                status_.setColor(sf::Color(180, 180, 180));
+                status_.setColor(ui::pal::textFaded);
                 for (auto& field : fields_) field.setEnabled(true);
                 return;
             }

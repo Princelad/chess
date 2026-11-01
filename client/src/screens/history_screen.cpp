@@ -1,5 +1,7 @@
 #include "history_screen.h"
 
+#include "ui/theme.h"
+
 #include "analysis_screen.h"
 #include "game_screen.h"
 
@@ -43,24 +45,24 @@ HistoryScreen::HistoryScreen(App& app, bool mineOnlyDefault)
     , mineOnly_(mineOnlyDefault)
     , bg_(sf::FloatRect(sf::Vector2f(PanelX, PanelY),
                         sf::Vector2f(PanelW, PanelH)),
-          sf::Color(28, 28, 30), sf::Color(90, 90, 90), 1.f)
+          ui::pal::bgPanel, ui::overlay::panelStroke, 1.f)
     , detailPanel_(sf::FloatRect(sf::Vector2f(PanelX + 20.f, 170.f),
                                  sf::Vector2f(PanelW - 40.f, 330.f)),
-                   sf::Color(24, 24, 26), sf::Color(70, 70, 70), 1.f)
+                   ui::pal::bgDetail, ui::pal::bgElevated, 1.f)
 {
     title_.setText("Match archive");
-    title_.setFontSize(30);
-    title_.setColor(sf::Color(240, 240, 240));
+    title_.setFontSize(ui::type::Result);
+    title_.setColor(ui::pal::textPrimary);
 
     status_.setFontSize(15);
-    status_.setColor(sf::Color(170, 170, 170));
+    status_.setColor(ui::pal::textSoft);
 
     detailTitle_.setFontSize(18);
-    detailTitle_.setColor(sf::Color(235, 235, 235));
+    detailTitle_.setColor(ui::pal::textHeader);
     detailMeta_.setFontSize(14);
-    detailMeta_.setColor(sf::Color(160, 160, 160));
+    detailMeta_.setColor(ui::pal::textMuted);
     detailSans_.setFontSize(13);
-    detailSans_.setColor(sf::Color(140, 140, 140));
+    detailSans_.setColor(ui::pal::textLow);
     detailSans_.setText("");
 
     mineToggleable_ = app_.profile().has_value() && !app_.profile()->isGuest;
@@ -193,11 +195,7 @@ void HistoryScreen::layoutWidgets()
             Button& row = rowButtons_.back();
             const std::int64_t id = entry.id;
             row.setOnClick([this, id] { openDetail(id); });
-            row.setColors(sf::Color(42, 42, 44), sf::Color(58, 58, 62),
-                          sf::Color(52, 52, 56), sf::Color(42, 42, 44),
-                          sf::Color(120, 120, 120), sf::Color(220, 220, 220),
-                          sf::Color(90, 90, 90), sf::Color(200, 200, 120),
-                          sf::Color(220, 220, 140));
+            row.setStyle(ui::buttonRowHistory());
             y += RowH + 2.f;
         }
     }

@@ -182,6 +182,16 @@ Screen where you enter the server address, port, and your name.
 - `assets/fonts/` — Inter font files
 - `tests/` — GoogleTest suite
 
+## Design
+
+The client's visual language is inspired by chess.com's modern game-hub
+conventions — pill buttons, rounded panels, underlined text fields,
+inside-squares board coordinates, and a warm-graphite chrome — rebuilt
+from scratch on our own design-token palette. No chess.com artwork,
+fonts, brand marks, or proprietary colors are used; see
+`client/src/ui/theme.h` for the token source and `assets/` for the
+bundled art.
+
 ## License and attribution
 
 Bundled piece sets live in `assets/pieces/<set>/` (160×160 RGBA PNGs

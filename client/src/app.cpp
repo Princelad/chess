@@ -2,6 +2,8 @@
 
 #include "asset_paths.h"
 #include "screens/menu_screen.h"
+#include "ui/theme.h"
+#include "version.h"
 
 #include <algorithm>
 #include <iostream>
@@ -10,7 +12,7 @@ namespace chess::client {
 
 App::App()
     : window_(sf::VideoMode({WindowWidth, WindowHeight}),
-              "Chess",
+              std::string("chess v") + kAppVersion,
               sf::Style::Titlebar | sf::Style::Close | sf::Style::Resize)
     , viewport_(WindowWidth, WindowHeight)
     , config_(Config::defaultPath())
@@ -97,6 +99,7 @@ void App::loadAssets()
     if (!fontOk)
         std::cerr << "Warning: no font loaded, text may be invisible\n";
     loadPieceTextures();
+    avatarPack_ = avatars::loadAvatarPack(); // 14.3 (missing = empty, silent)
 }
 
 bool App::loadPieceTextures()
@@ -203,7 +206,7 @@ void App::run()
             accumulator -= FixedDt;
         }
 
-        window_.clear(sf::Color(48, 46, 43));
+        window_.clear(ui::pal::bgApp);
         window_.setView(view_);
         if (screen_) screen_->draw(window_);
         window_.display();
