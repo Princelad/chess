@@ -12,6 +12,7 @@ src/connection.cpp
     src/widgets/text_field.cpp
     src/widgets/move_navigator.cpp
     src/widgets/checkbox.cpp
+    src/widgets/player_card.cpp
     src/screens/connect_screen.cpp
     src/screens/menu_screen.cpp
     src/screens/settings_screen.cpp

@@ -2,9 +2,12 @@
 #include "widgets/checkbox.h"
 #include "widgets/label.h"
 #include "widgets/layout.h"
+#include "widgets/player_card.h"
 #include "widgets/text_field.h"
 
 #include <gtest/gtest.h>
+
+#include "ui/theme.h"
 
 namespace chess::client {
 namespace {
@@ -294,6 +297,89 @@ TEST(WidgetTextField, DisabledIgnoresFocusClickTypeAndEnter)
     field.setFocused(true);
     EXPECT_FALSE(field.handleEvent(keyPress(sf::Keyboard::Key::Enter), {12.f, 12.f}));
     EXPECT_EQ(commits, 0);
+}
+
+// --- 15.2 player card -------------------------------------------------------
+// The 9.3 residual "player-card composition untested" closes here: the
+// card's pre-render decisions (clock text, heat thresholds, rating
+// suffix, slot geometry) are pure math, exercised headlessly — only the
+// glyph/sprite drawing needs a window.
+
+namespace {
+
+std::string clockAt(double ms) { return formatClockText(ms); }
+
+} // namespace
+
+TEST(WidgetPlayerCard, ClockFormatsMssAndUnderMinuteTenths)
+{
+    // Zero floors at 0.0, never negative text.
+    EXPECT_EQ(clockAt(0.0), "0.0");
+    EXPECT_EQ(clockAt(-5000.0), "0.0");
+    // Under a minute: whole tenths, no fractional noise.
+    EXPECT_EQ(clockAt(1234.0), "1.2");
+    EXPECT_EQ(clockAt(42000.0), "42.0");
+    EXPECT_EQ(clockAt(59900.0), "59.9");
+    EXPECT_EQ(clockAt(59949.9), "59.9");
+    // Rounding: past 59.95 s the half-up tenth hits 600 -> "1:00".
+    EXPECT_EQ(clockAt(59991.9), "1:00");
+    // A minute and beyond: m:ss with zero padding.
+    EXPECT_EQ(clockAt(60000.0), "1:00");
+    EXPECT_EQ(clockAt(61000.0), "1:01");
+    EXPECT_EQ(clockAt(60200.0), "1:00");
+    EXPECT_EQ(clockAt(3600000.0), "60:00");
+}
+
+TEST(WidgetPlayerCard, ClockHeatFollowsTheElevenOneThresholds)
+{
+    EXPECT_EQ(clockHeatColor(9999.0), ui::pal::dangerRed);
+    EXPECT_EQ(clockHeatColor(10000.0), ui::pal::dangerAmber);
+    EXPECT_EQ(clockHeatColor(29999.0), ui::pal::dangerAmber);
+    EXPECT_EQ(clockHeatColor(30000.0), ui::pal::textCell);
+}
+
+TEST(WidgetPlayerCard, RatingSuffixRoundsAndOmitsWhenUnknown)
+{
+    EXPECT_EQ(cardRatingSuffix(std::nullopt), "");
+    EXPECT_EQ(cardRatingSuffix(
+                  std::optional<std::pair<double, double>>({1650.0, 132.0})),
+              "  (1650 \xc2\xb1 132)");
+    // Half-up rounding of the Glicko numbers.
+    EXPECT_EQ(cardRatingSuffix(
+                  std::optional<std::pair<double, double>>({1649.6, 131.4})),
+              "  (1650 \xc2\xb1 131)");
+}
+
+TEST(WidgetPlayerCard, SlotsTrackTheComposerBand)
+{
+    PlayerCard card;
+    card.setRect(sf::FloatRect({640.f, 14.f}, {312.f, 44.f}));
+    EXPECT_FLOAT_EQ(card.rect().position.y, 14.f);
+
+    // Name row sits 6 px into the band at its pre-15.1 height;
+    // captured glyphs sit 28 px in, inset by the card's side padding.
+    const auto name = card.nameSlot();
+    EXPECT_FLOAT_EQ(name.position.x, 640.f);
+    EXPECT_FLOAT_EQ(name.position.y, 20.f);
+    EXPECT_FLOAT_EQ(name.size.y, 15.f);
+    const auto caps = card.capturedSlot();
+    EXPECT_FLOAT_EQ(caps.position.x, 647.f);
+    EXPECT_FLOAT_EQ(caps.position.y, 42.f);
+    EXPECT_FLOAT_EQ(caps.size.x, 312.f - 14.f);
+    EXPECT_FLOAT_EQ(caps.size.y, 15.f);
+}
+
+TEST(WidgetPlayerCard, StateDefaultsAreQuiet)
+{
+    PlayerCardState state;
+    EXPECT_FALSE(state.thinking);
+    EXPECT_FALSE(state.myTurn);
+    EXPECT_EQ(state.connection, 0);
+    EXPECT_FALSE(state.premovePending);
+    EXPECT_EQ(state.watcherCount, 0);
+    EXPECT_FALSE(state.remainingMs.has_value()); // unlimited game
+    EXPECT_EQ(state.captured, nullptr);
+    EXPECT_EQ(state.materialDiff, 0);
 }
 
 } // namespace

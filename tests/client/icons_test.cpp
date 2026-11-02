@@ -16,7 +16,8 @@ TEST(IconsRegistry, DeclaresExactlyTheDocumentedSet)
         ui::icons::IconKind::Clock,   ui::icons::IconKind::Flag,
         ui::icons::IconKind::HandDraw, ui::icons::IconKind::Flip,
         ui::icons::IconKind::Bulb,    ui::icons::IconKind::Medal,
-        ui::icons::IconKind::Eye,     ui::icons::IconKind::ArrowBack,
+        ui::icons::IconKind::Eye,     ui::icons::IconKind::Link,
+        ui::icons::IconKind::ArrowBack,
         ui::icons::IconKind::ArrowLeft, ui::icons::IconKind::ArrowRight,
     };
     EXPECT_EQ(std::size(all), ui::icons::iconKindCount());

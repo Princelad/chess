@@ -603,7 +603,10 @@ void LocalGameScreen::handleEvent(const sf::Event& event)
 
 void LocalGameScreen::update(float dtSec)
 {
-    hud_.update(0.f);
+    hud_.update(dtSec);
+    // 15.2: the engine card's thinking dot mirrors the search state
+    // (setInfo already carries myTurn for the own card's dot).
+    hud_.setOpponentThinking(engineThinking_ && !gameOver_);
     anim_.update(dtSec);
 
     takebackBtn_.setEnabled(!gameOver_ && !engineFailed_ && myTurn_

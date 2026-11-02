@@ -1,9 +1,10 @@
 #pragma once
 
 #include "board_layout.h"
-#include "widgets/label.h"
 #include "widgets/move_navigator.h"
+#include "widgets/player_card.h"
 #include "widgets/panel.h"
+#include "widgets/label.h"
 #include "eco.h"
 #include <chess/move.h>
 #include <chess/types.h>
@@ -62,6 +63,11 @@ public:
                     Color sideToMove);
     void setStatus(const std::string& msg, float duration);
     void setGameOver(bool gameOver) { gameOver_ = gameOver; }
+    // 15.2 state affordances: opponent presence (link icon; 0 none,
+    // 1 connected, 2 away) and the queued-premove badge on the own card.
+    void setOpponentConnection(int state) { opponentConnection_ = state; }
+    void setOpponentThinking(bool thinking) { opponentThinking_ = thinking; }
+    void setPremoveVisible(bool visible) { premovePending_ = visible; }
     void handleScroll(float delta) { navigator_.handleScroll(delta); }
     void update(float dtSec);
     void draw(sf::RenderWindow& window, const sf::Font& font);
@@ -70,12 +76,6 @@ public:
     float moveListBottom() const;
 
 private:
-    void drawPlayerCard(sf::RenderWindow& window, const sf::Font& font,
-                        const std::string& name, Color cardColor,
-                        float nameY, float capturedY, bool isLocal,
-                        const std::string& clockText, int watcherCount = 0,
-                        std::uint64_t avatarSeed = 0,
-                        const std::string& avatarName = "");
     // Current shown remaining of one side, honoring local ticking since the
     // last server sync for the side on the move.
     double shownRemainingMs(Color side) const;
@@ -99,6 +99,16 @@ private:
     std::string spectatorBlack_;
     int watcherCount_ = 0;
 
+    // 15.2 card affordances.
+    int opponentConnection_ = 0; // Link icon: 0 none / 1 connected / 2 away
+    bool opponentThinking_ = false;
+    bool premovePending_ = false;
+
+    // 15.2: the player card widget renders both seats (spectator mode
+    // speaks in seat names; local mode wraps opponent/local).
+    PlayerCard opponentCard_;
+    PlayerCard localCard_;
+
     // Chess clocks (11.1). remainingMs_[0]=White, [1]=Black, values sampled
     // at the last server move; the side on the move ticks locally in
     // update() between syncs. Infinite clocks stay disabled.
@@ -117,8 +127,6 @@ private:
     std::optional<Opening> opening_;
     Label openingLabel_;
 
-    Label opponentNameLabel_;
-    Label localNameLabel_;
     Label statusLabel_;
     Label headerLabel_;
 };

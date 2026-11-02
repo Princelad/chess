@@ -12,46 +12,7 @@ namespace chess::client {
 
 namespace {
 constexpr float StatusFontSize = 14;
-constexpr float NameFontSize = 16;
 constexpr float HeaderFontSize = 12;
-constexpr float CapturedPieceSize = 15.f;
-constexpr float CapturedStep = 17.f;
-constexpr int MaxCapturedShown = 16;
-
-// "1650 ± 132" suffix for a player card name line; omitted when unknown
-// (e.g. guests or unrated games).
-std::string ratingSuffix(const std::optional<std::pair<double, double>>& rating)
-{
-    if (!rating.has_value()) return "";
-    const auto value = static_cast<long long>(rating->first + 0.5);
-    const auto deviation = static_cast<long long>(rating->second + 0.5);
-    return "  (" + std::to_string(value) + " \u00b1 " + std::to_string(deviation) + ")";
-}
-
-// Clock display: "m:ss" normally, tenths under a minute ("42.3"), the
-// usual online-chess shape.
-std::string clockText(double ms)
-{
-    const double s = std::max(0.0, ms) / 1000.0;
-    if (s < 60.0) {
-        const int tenths = static_cast<int>(s * 10.0 + 0.5);
-        if (tenths >= 600) // rounding pushed us back to the minute
-            return "1:00";
-        return std::to_string(tenths / 10) + "."
-               + std::to_string(tenths % 10);
-    }
-    const int total = static_cast<int>(s + 0.5);
-    return std::to_string(total / 60) + ":"
-           + (total % 60 < 10 ? "0" : "") + std::to_string(total % 60);
-}
-
-// Low time heats up: red inside the last 10 s, amber until 30 s.
-sf::Color clockColor(double ms)
-{
-    if (ms < 10000.0) return ui::pal::dangerRed;
-    if (ms < 30000.0) return ui::pal::dangerAmber;
-    return ui::pal::textCell;
-}
 
 // 14.3 avatar seeds for the HUD cards. The self card honors the
 // profile.avatar re-roll knob; everything else derives from the seat
@@ -79,12 +40,6 @@ Hud::Hud(App& app, const layout::BoardLayout& panelLayout)
     : app_(app)
     , panel_(panelLayout)
 {
-    opponentNameLabel_.setFontSize(NameFontSize);
-    opponentNameLabel_.setColor(ui::pal::textFaded);
-
-    localNameLabel_.setFontSize(NameFontSize);
-    localNameLabel_.setColor(ui::pal::textFaded);
-
     statusLabel_.setFontSize(StatusFontSize);
     statusLabel_.setColor(ui::pal::warn);
 
@@ -96,6 +51,10 @@ Hud::Hud(App& app, const layout::BoardLayout& panelLayout)
     openingLabel_.setColor(sf::Color(150, 140, 110)); // ECO bronze (HUD-only)
 
     navigator_.setLayout(panel_.moveList, panel_.navRow);
+
+    // 15.2: the card widget owns each seat band composed by the composer.
+    opponentCard_.setRect(panel_.opponentCard);
+    localCard_.setRect(panel_.localCard);
 }
 
 void Hud::setGame(const Board& initialBoard, std::vector<chess::Move> moves,
@@ -158,6 +117,9 @@ void Hud::update(float dtSec)
     }
     if (clocksOn_ && !gameOver_)
         sinceSyncSec_ += dtSec;
+    // The dots pulse from the same clock while they show.
+    opponentCard_.update(dtSec);
+    localCard_.update(dtSec);
 }
 
 double Hud::shownRemainingMs(Color side) const
@@ -196,50 +158,76 @@ float Hud::moveListBottom() const
 
 void Hud::draw(sf::RenderWindow& window, const sf::Font& font)
 {
-    std::string opponentClock, localClock;
-    if (clocksOn_) {
-        opponentClock = clockText(shownRemainingMs(opposite(myColor_)));
-        localClock = clockText(shownRemainingMs(myColor_));
-    }
-
     if (spectatorMode_) {
         // Both cards speak in seat names, there is no "You". The view is
         // White-oriented (the screen forces myColor_ to White), so the
-        // to-move annotation rides the card the navigator shows.
+        // top band is the black seat, the bottom the white one (12.4's
+        // rating mapping unchanged). The to-move annotation is the
+        // pulsing dot now instead of a name suffix.
         const bool whiteToMove =
             navigator_.finalBoard().sideToMove() == Color::White;
-        std::string blackText = spectatorBlack_ + ratingSuffix(opponentRating_)
-            + (!gameOver_ && !whiteToMove ? " - to move" : "");
-        drawPlayerCard(window, font, blackText, Color::Black,
-                       panel_.opponentNameY, panel_.opponentCapturedY, false,
-                       opponentClock, 0, nameAvatarSeed(spectatorBlack_),
-                       spectatorBlack_);
+        const bool live = !gameOver_;
 
-        std::string whiteText = spectatorWhite_ + ratingSuffix(localRating_)
-            + (!gameOver_ && whiteToMove ? " - to move" : "");
-        // 14.2: the count moved out of the name string into an eye-icon
-        // unit drawn by drawPlayerCard.
-        drawPlayerCard(window, font, whiteText, Color::White,
-                       panel_.localNameY, panel_.localCapturedY, true,
-                       localClock, watcherCount_, nameAvatarSeed(spectatorWhite_),
-                       spectatorWhite_);
+        PlayerCardState black;
+        black.nameLine = spectatorBlack_;
+        black.rating = opponentRating_;
+        black.nameColor = ui::pal::textFaded;
+        black.avatarSeed = nameAvatarSeed(spectatorBlack_);
+        black.avatarName = spectatorBlack_;
+        black.remainingMs = clocksOn_
+            ? std::optional<double>(shownRemainingMs(Color::Black))
+            : std::nullopt;
+        black.captured = &navigator_.capturedBy(Color::Black).pieces;
+        black.materialDiff = navigator_.materialAdvantage(Color::Black);
+        black.myTurn = live && !whiteToMove;
+        opponentCard_.draw(window, font, app_, black);
+
+        PlayerCardState white;
+        white.nameLine = spectatorWhite_;
+        white.rating = localRating_;
+        white.nameColor = ui::pal::textFaded;
+        white.avatarSeed = nameAvatarSeed(spectatorWhite_);
+        white.avatarName = spectatorWhite_;
+        white.remainingMs = clocksOn_
+            ? std::optional<double>(shownRemainingMs(Color::White))
+            : std::nullopt;
+        white.captured = &navigator_.capturedBy(Color::White).pieces;
+        white.materialDiff = navigator_.materialAdvantage(Color::White);
+        white.myTurn = live && whiteToMove;
+        white.watcherCount = watcherCount_;
+        localCard_.draw(window, font, app_, white);
     } else {
-        std::string opponentText = "vs " + opponentName_
-            + ratingSuffix(opponentRating_);
-        drawPlayerCard(window, font, opponentText, opposite(myColor_),
-                       panel_.opponentNameY, panel_.opponentCapturedY, false,
-                       opponentClock, 0, nameAvatarSeed(opponentName_),
-                       opponentName_);
+        PlayerCardState opponent;
+        opponent.nameLine = "vs " + opponentName_;
+        opponent.rating = opponentRating_;
+        opponent.nameColor = ui::pal::textFaded;
+        opponent.avatarSeed = nameAvatarSeed(opponentName_);
+        opponent.avatarName = opponentName_;
+        opponent.remainingMs = clocksOn_
+            ? std::optional<double>(shownRemainingMs(opposite(myColor_)))
+            : std::nullopt;
+        opponent.captured = &navigator_.capturedBy(opposite(myColor_)).pieces;
+        opponent.materialDiff = navigator_.materialAdvantage(opposite(myColor_));
+        opponent.thinking = opponentThinking_ && !gameOver_;
+        opponent.connection = opponentConnection_;
+        opponentCard_.draw(window, font, app_, opponent);
 
-        std::string colorStr = myColor_ == Color::White ? "White" : "Black";
-        std::string localName = "You - " + colorStr + ratingSuffix(localRating_);
-        if (!gameOver_)
-            localName += myTurn_ ? "  -  Your turn" : "  -  Waiting...";
-        localNameLabel_.setColor(myTurn_ ? ui::pal::okTurn
-                                         : ui::pal::textFaded);
-        drawPlayerCard(window, font, localName, myColor_,
-                       panel_.localNameY, panel_.localCapturedY, true,
-                       localClock, 0, selfAvatarSeed(app_), selfAvatarName(app_));
+        PlayerCardState local;
+        local.nameLine = "You - "
+            + std::string(myColor_ == Color::White ? "White" : "Black");
+        local.rating = localRating_;
+        local.nameColor = myTurn_ && !gameOver_ ? ui::pal::okTurn
+                                                : ui::pal::textFaded;
+        local.avatarSeed = selfAvatarSeed(app_);
+        local.avatarName = selfAvatarName(app_);
+        local.remainingMs = clocksOn_
+            ? std::optional<double>(shownRemainingMs(myColor_))
+            : std::nullopt;
+        local.captured = &navigator_.capturedBy(myColor_).pieces;
+        local.materialDiff = navigator_.materialAdvantage(myColor_);
+        local.myTurn = myTurn_ && !gameOver_;
+        local.premovePending = premovePending_;
+        localCard_.draw(window, font, app_, local);
     }
 
     if (!statusMsg_.empty()) {
@@ -265,105 +253,6 @@ void Hud::draw(sf::RenderWindow& window, const sf::Font& font)
     }
 
     navigator_.draw(window, font, app_);
-}
-
-void Hud::drawPlayerCard(sf::RenderWindow& window, const sf::Font& font,
-                         const std::string& name, Color cardColor,
-                         float nameY, float capturedY, bool isLocal,
-                         const std::string& clockText, int watcherCount,
-                         std::uint64_t avatarSeed, const std::string& avatarName)
-{
-    Label& nameLabel = isLocal ? localNameLabel_ : opponentNameLabel_;
-    nameLabel.setText(name);
-
-    // 14.3: avatar slot left of the name (pack tile when the pack loads,
-    // else the procedural seed emblem); the name shifts to make room.
-    const float panelX_ = panel_.panelX;
-    const float panelW_ = panel_.panelWidth;
-    float nameX = panelX_;
-    if (avatarSeed != 0) {
-        constexpr float AvatarSize = 18.f;
-        const auto nb = nameLabel.bounds(font);
-        const float avatarY = nameY + (nb.size.y - AvatarSize) * 0.5f;
-        avatars::drawAvatar(window, app_.avatarPack(), avatarSeed,
-                            {panelX_, avatarY}, AvatarSize, &font, avatarName);
-        nameX = panelX_ + AvatarSize + 6.f;
-    }
-    nameLabel.setPosition({nameX, nameY});
-    nameLabel.draw(window, font);
-
-    float right = panelX_ + panelW_;
-
-    if (!clockText.empty()) {
-        sf::Text clock(font, clockText, 14);
-        clock.setFillColor(clockColor(shownRemainingMs(cardColor)));
-        const float clockW = clock.getLocalBounds().size.x;
-        clock.setPosition({right - clockW, nameY});
-        window.draw(clock);
-
-        // 14.2: small clock glyph beside the figure, vertically centered
-        // on the text's glyph box.
-        const float iconS = ui::icons::iconBox(14);
-        const auto cb = clock.getLocalBounds();
-        const float clockCy = nameY + cb.position.y + cb.size.y * 0.5f;
-        ui::icons::drawIcon(window, ui::icons::IconKind::Clock,
-                            {right - clockW - iconS - 4.f, clockCy - iconS * 0.5f},
-                            iconS, clock.getFillColor());
-        right -= clockW + iconS + 14.f;
-    }
-
-    if (watcherCount > 0) {
-        // Spectator stands (12.4): eye + count on the white card's name
-        // row, between the name text and the clock figure.
-        sf::Text count(font, std::to_string(watcherCount), 14);
-        count.setFillColor(ui::pal::textFaded);
-        const float countW = count.getLocalBounds().size.x;
-        count.setPosition({right - countW, nameY});
-        window.draw(count);
-
-        const float iconS = ui::icons::iconBox(14);
-        const auto cb = count.getLocalBounds();
-        const float countCy = nameY + cb.position.y + cb.size.y * 0.5f;
-        ui::icons::drawIcon(window, ui::icons::IconKind::Eye,
-                            {right - countW - iconS - 4.f, countCy - iconS * 0.5f},
-                            iconS, ui::pal::textFaded);
-        right -= countW + iconS + 14.f;
-    }
-
-    int advantage = navigator_.materialAdvantage(cardColor);
-    if (advantage > 0) {
-        sf::Text diff(font, "+" + std::to_string(advantage), 14);
-        diff.setFillColor(ui::pal::okDim);
-        float x = right - diff.getLocalBounds().size.x;
-        diff.setPosition({x, nameY});
-        window.draw(diff);
-    }
-
-    const auto& captured = navigator_.capturedBy(cardColor).pieces;
-    float x = panelX_;
-    int shown = std::min(MaxCapturedShown, static_cast<int>(captured.size()));
-
-    for (int i = 0; i < shown; ++i) {
-        const Piece piece = captured[i];
-
-        if (app_.piecesLoaded()) {
-            const auto& tex = app_.pieceTexture(piece.color, piece.type);
-            sf::Sprite sprite(tex);
-            float scale = CapturedPieceSize / static_cast<float>(tex.getSize().x);
-            sprite.setScale({scale, scale});
-            sprite.setPosition({x, capturedY});
-            window.draw(sprite);
-        } else {
-            const char letters[] = { 'P', 'N', 'B', 'R', 'Q', 'K' };
-            sf::Text letter(font, std::string(1, letters[static_cast<int>(piece.type)]), 13);
-            letter.setFillColor(piece.color == Color::White
-                ? ui::pal::textBody : ui::pal::textFaded);
-            letter.setPosition({x, capturedY});
-            window.draw(letter);
-        }
-
-        x += CapturedStep;
-    }
 }
 
 } // namespace chess::client

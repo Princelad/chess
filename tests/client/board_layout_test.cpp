@@ -71,6 +71,17 @@ TEST(BoardLayout, CardStackMatchesTheFormerHudTable)
     // Former Hud::contentBottom: nav row bottom + 4.
     EXPECT_FLOAT_EQ(l.actionRowY, 432.f);
     EXPECT_FLOAT_EQ(l.actionRowH, 30.f);
+
+    // 15.2 card bands: full-width rows framing name (at +6) and captured
+    // (+28) without shifting either — 44 px tall each seat.
+    EXPECT_FLOAT_EQ(l.opponentCard.position.x, 640.f);
+    EXPECT_FLOAT_EQ(l.opponentCard.position.y, 14.f);  // 20 - 6
+    EXPECT_FLOAT_EQ(l.opponentCard.size.x, 312.f);
+    EXPECT_FLOAT_EQ(l.opponentCard.size.y, 44.f);
+    EXPECT_FLOAT_EQ(l.localCard.position.x, 640.f);
+    EXPECT_FLOAT_EQ(l.localCard.position.y, 60.f);     // 66 - 6
+    EXPECT_FLOAT_EQ(l.localCard.size.x, 312.f);
+    EXPECT_FLOAT_EQ(l.localCard.size.y, 44.f);
 }
 
 TEST(BoardLayout, ActionRowPlacesEqualPitchButtons)

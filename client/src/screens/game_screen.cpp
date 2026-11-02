@@ -785,6 +785,11 @@ void GameScreen::handleEvent(const sf::Event& event)
 void GameScreen::update(float dtSec)
 {
     hud_.update(dtSec);
+    // 15.2 card affordances, recomputed per frame: the thinking dot marks
+    // the seat that holds the move being searched/considered, the link
+    // icon dips to "away" only while the 11.2 grace window runs.
+    hud_.setOpponentThinking(!spectator_ && !myTurn_ && !gameOver_);
+    hud_.setOpponentConnection(spectator_ ? 0 : opponentConnection_);
     chatInput_.update(dtSec);
     anim_.update(dtSec);
 
@@ -894,11 +899,13 @@ void GameScreen::update(float dtSec)
             applySpectateState(*spectateState);
         }
         else if (auto* reconn = std::get_if<chess::net::OpponentReconnectingMsg>(&msg)) {
+            hud_.setOpponentConnection(2);
             hud_.setStatus("Opponent lost connection",
                            static_cast<float>(reconn->graceSeconds));
             addSystemChat("Opponent lost connection");
         }
         else if (std::holds_alternative<chess::net::OpponentResumedMsg>(msg)) {
+            hud_.setOpponentConnection(1);
             hud_.setStatus("Opponent reconnected", 3.f);
             addSystemChat("Opponent reconnected");
         }
@@ -1241,6 +1248,9 @@ void GameScreen::draw(sf::RenderWindow& window)
 {
     auto& font = app_.font();
     const Board& shown = hud_.navigator().board();
+
+    // 15.2: the own card shows the queued-premove badge while one is set.
+    hud_.setPremoveVisible(premove_.has_value() && !gameOver_);
 
     if (!hud_.navigator().atEnd() && !annotations_.empty())
         annotations_.clear();

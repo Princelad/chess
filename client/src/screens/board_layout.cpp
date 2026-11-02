@@ -41,6 +41,15 @@ BoardLayout composeBoardLayout(float windowWidth, float windowHeight,
         // First action row sits just below the nav buttons.
         l.actionRowY = l.navRow.position.y + l.navRow.size.y + 4.f;
         l.actionRowH = 30.f;
+
+        // Card bands frame the four card rows (name at +6, captured at
+        // +28 inside each 44-px band).
+        l.opponentCard = sf::FloatRect(
+            sf::Vector2f(l.panelX, l.opponentNameY - 6.f),
+            sf::Vector2f(l.panelWidth, 44.f));
+        l.localCard = sf::FloatRect(
+            sf::Vector2f(l.panelX, l.localNameY - 6.f),
+            sf::Vector2f(l.panelWidth, 44.f));
     }
 
     // Chat bundle: pinned between the action row and the window bottom

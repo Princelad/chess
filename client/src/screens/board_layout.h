@@ -51,6 +51,13 @@ struct BoardLayout {
     float actionRowY = 0.f; // first action row top (former contentBottom)
     float actionRowH = 30.f;
 
+    // Player card bands (opts.cards): a full card backdrop spanning both
+    //rows of one seat (name row on top, captured glyphs below). Name /
+    // captured rows keep their exact pre-15.1 Y positions — the bands
+    // frame them without shifting anything.
+    sf::FloatRect opponentCard{};
+    sf::FloatRect localCard{};
+
     // Action slot in the card stack's action row: a left-to-right run of
     // equal-pitch buttons starting at the panel edge (the writer of the
     // 96/6 and 140/8 shapes the screens quoted before the composer).

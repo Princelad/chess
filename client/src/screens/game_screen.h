@@ -127,6 +127,9 @@ private:
     bool spectator_ = false;
     std::string whiteName_;
     int spectatorCount_ = 0;
+    // 15.2 connection affordance for the opponent card's link icon:
+    // 1 connected, 2 away (mid-grace, 11.2).
+    int opponentConnection_ = 1;
 
     std::vector<ChatEntry> chatLog_;
     TextField chatInput_;
