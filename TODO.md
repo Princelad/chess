@@ -792,9 +792,10 @@ every board-bearing screen instead of each screen hand-drawing a panel.
 SpectateScreen (12.4) and PuzzleScreen render through the shared composer;
 input parity tests green; zero protocol/server changes
 
-- [ ] **15.1 Shared board composer (`client/src/screens/board_layout.{h,cpp}`)**
-  - [ ] One layout module: top player card band, board rect, bottom player card band, right action stack — parameterized per screen (PuzzleScreen has no cards; Analysis has eval bar slot; Spectate is read-only)
-  - [ ] Migrate the five board-bearing screens onto it; screens keep their event handling, composer owns geometry only (single writer rule for rect math)
+- [x] **15.1 Shared board composer (`client/src/screens/board_layout.{h,cpp}`)**
+  - [x] One layout module: top player card band, board rect, bottom player card band, right action stack — parameterized per screen (PuzzleScreen has no cards; Analysis has eval bar slot; Spectate is read-only)
+  - [x] Migrate the five board-bearing screens onto it; screens keep their event handling, composer owns geometry only (single writer rule for rect math)
+  - Tests: `tests/client/board_layout_test.cpp` (+8) — panel-width single definition, card-stack table, action pitches (96/6, 90/8, 140/8), chat bundle pinning, analysis/puzzle stacks, window-shape re-derivation; suite 799
 
 - [ ] **15.2 Player card widget (`client/src/widgets/player_card.{h,cpp}`, 9.3's residual closure)**
   - [ ] Avatar (14.3) + name + rating suffix + captured-material row + material diff in one card; "thinking…" dot, connection icon, premove ghost badge states
