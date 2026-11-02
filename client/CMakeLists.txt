@@ -24,7 +24,8 @@ src/connection.cpp
     src/screens/tournament_lobby_screen.cpp
     src/puzzles.cpp
     src/screens/analysis_screen.cpp
-    src/screens/hud.cpp)
+    src/screens/hud.cpp
+    src/screens/board_layout.cpp)
 target_include_directories(chessclient PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(chessclient PUBLIC chessnet chesscore chessuci
     ${CHESS_SFML_GRAPHICS_TARGET}

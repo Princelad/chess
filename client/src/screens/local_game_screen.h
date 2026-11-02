@@ -54,6 +54,8 @@ private:
     App& app_;
     Color myColor_;
     BoardView boardView_;
+    // 15.1: composed panel geometry (shared board composer consumer).
+    layout::BoardLayout panelLayout_;
     HighlightState hl_;
     BoardAnnotations annotations_;
     DragTracker drag_;

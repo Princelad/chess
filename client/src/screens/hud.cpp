@@ -11,17 +11,6 @@
 namespace chess::client {
 
 namespace {
-constexpr float OpponentNameY = 20.f;
-constexpr float OpponentCapturedY = 42.f;
-constexpr float LocalNameY = 66.f;
-constexpr float LocalCapturedY = 88.f;
-constexpr float StatusY = 112.f;
-constexpr float SeparatorY = 134.f;
-constexpr float MoveHeaderY = 144.f;
-constexpr float MoveListTop = 162.f;
-constexpr float MoveListBottom = 398.f;
-constexpr float NavBtnY = 402.f;
-constexpr float NavBtnH = 26.f;
 constexpr float StatusFontSize = 14;
 constexpr float NameFontSize = 16;
 constexpr float HeaderFontSize = 12;
@@ -86,10 +75,9 @@ std::uint64_t nameAvatarSeed(const std::string& name)
 }
 }
 
-Hud::Hud(App& app, float panelX, float panelWidth)
+Hud::Hud(App& app, const layout::BoardLayout& panelLayout)
     : app_(app)
-    , panelX_(panelX)
-    , panelW_(panelWidth)
+    , panel_(panelLayout)
 {
     opponentNameLabel_.setFontSize(NameFontSize);
     opponentNameLabel_.setColor(ui::pal::textFaded);
@@ -107,11 +95,7 @@ Hud::Hud(App& app, float panelX, float panelWidth)
     openingLabel_.setFontSize(HeaderFontSize);
     openingLabel_.setColor(sf::Color(150, 140, 110)); // ECO bronze (HUD-only)
 
-    navigator_.setLayout(
-        sf::FloatRect(sf::Vector2f(panelX_, MoveListTop),
-                      sf::Vector2f(panelW_, MoveListBottom - MoveListTop)),
-        sf::FloatRect(sf::Vector2f(panelX_, NavBtnY),
-                      sf::Vector2f(panelW_, NavBtnH)));
+    navigator_.setLayout(panel_.moveList, panel_.navRow);
 }
 
 void Hud::setGame(const Board& initialBoard, std::vector<chess::Move> moves,
@@ -202,12 +186,12 @@ void Hud::refreshOpening()
 
 float Hud::contentBottom() const
 {
-    return NavBtnY + NavBtnH + 4.f;
+    return panel_.actionRowY;
 }
 
 float Hud::moveListBottom() const
 {
-    return MoveListBottom;
+    return panel_.moveList.position.y + panel_.moveList.size.y;
 }
 
 void Hud::draw(sf::RenderWindow& window, const sf::Font& font)
@@ -227,23 +211,25 @@ void Hud::draw(sf::RenderWindow& window, const sf::Font& font)
         std::string blackText = spectatorBlack_ + ratingSuffix(opponentRating_)
             + (!gameOver_ && !whiteToMove ? " - to move" : "");
         drawPlayerCard(window, font, blackText, Color::Black,
-                       OpponentNameY, OpponentCapturedY, false, opponentClock,
-                       0, nameAvatarSeed(spectatorBlack_), spectatorBlack_);
+                       panel_.opponentNameY, panel_.opponentCapturedY, false,
+                       opponentClock, 0, nameAvatarSeed(spectatorBlack_),
+                       spectatorBlack_);
 
         std::string whiteText = spectatorWhite_ + ratingSuffix(localRating_)
             + (!gameOver_ && whiteToMove ? " - to move" : "");
         // 14.2: the count moved out of the name string into an eye-icon
         // unit drawn by drawPlayerCard.
         drawPlayerCard(window, font, whiteText, Color::White,
-                       LocalNameY, LocalCapturedY, true, localClock,
-                       watcherCount_, nameAvatarSeed(spectatorWhite_),
+                       panel_.localNameY, panel_.localCapturedY, true,
+                       localClock, watcherCount_, nameAvatarSeed(spectatorWhite_),
                        spectatorWhite_);
     } else {
         std::string opponentText = "vs " + opponentName_
             + ratingSuffix(opponentRating_);
         drawPlayerCard(window, font, opponentText, opposite(myColor_),
-                       OpponentNameY, OpponentCapturedY, false, opponentClock,
-                       0, nameAvatarSeed(opponentName_), opponentName_);
+                       panel_.opponentNameY, panel_.opponentCapturedY, false,
+                       opponentClock, 0, nameAvatarSeed(opponentName_),
+                       opponentName_);
 
         std::string colorStr = myColor_ == Color::White ? "White" : "Black";
         std::string localName = "You - " + colorStr + ratingSuffix(localRating_);
@@ -252,28 +238,29 @@ void Hud::draw(sf::RenderWindow& window, const sf::Font& font)
         localNameLabel_.setColor(myTurn_ ? ui::pal::okTurn
                                          : ui::pal::textFaded);
         drawPlayerCard(window, font, localName, myColor_,
-                       LocalNameY, LocalCapturedY, true, localClock,
-                       0, selfAvatarSeed(app_), selfAvatarName(app_));
+                       panel_.localNameY, panel_.localCapturedY, true,
+                       localClock, 0, selfAvatarSeed(app_), selfAvatarName(app_));
     }
 
     if (!statusMsg_.empty()) {
         statusLabel_.setText(statusMsg_);
-        statusLabel_.setPosition({panelX_, StatusY});
+        statusLabel_.setPosition({panel_.panelX, panel_.statusY});
         statusLabel_.draw(window, font);
     }
 
-    sf::RectangleShape sep({panelW_, 1.f});
-    sep.setPosition({panelX_, SeparatorY});
+    sf::RectangleShape sep({panel_.panelWidth, 1.f});
+    sep.setPosition({panel_.panelX, panel_.separatorY});
     sep.setFillColor(ui::pal::stroke);
     window.draw(sep);
 
-    headerLabel_.setPosition({panelX_, MoveHeaderY});
+    headerLabel_.setPosition({panel_.panelX, panel_.moveHeaderY});
     headerLabel_.draw(window, font);
 
     // Opening name rides the "Moves" row, right-aligned (11.5).
     if (!openingLabel_.text().empty()) {
         const float openingW = openingLabel_.size(font).x;
-        openingLabel_.setPosition({panelX_ + panelW_ - openingW, MoveHeaderY});
+        openingLabel_.setPosition({panel_.panelX + panel_.panelWidth - openingW,
+                                   panel_.moveHeaderY});
         openingLabel_.draw(window, font);
     }
 
@@ -291,6 +278,8 @@ void Hud::drawPlayerCard(sf::RenderWindow& window, const sf::Font& font,
 
     // 14.3: avatar slot left of the name (pack tile when the pack loads,
     // else the procedural seed emblem); the name shifts to make room.
+    const float panelX_ = panel_.panelX;
+    const float panelW_ = panel_.panelWidth;
     float nameX = panelX_;
     if (avatarSeed != 0) {
         constexpr float AvatarSize = 18.f;

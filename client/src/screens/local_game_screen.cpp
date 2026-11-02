@@ -15,7 +15,6 @@
 namespace chess::client {
 
 namespace {
-constexpr float BtnH = 30.f;
 
 net::GameOverReason detectDrawReason(const Board& board)
 {
@@ -64,8 +63,11 @@ LocalGameScreen::LocalGameScreen(App& app, Color myColor,
                  app.boardTheme(),
                  app.showCoordinates(),
                  app.coordinateStyle())
-    , hud_(app_, boardView_.panelX(),
-           static_cast<float>(App::WindowWidth) - boardView_.panelX() - 8.f)
+    , panelLayout_(layout::composeBoardLayout(
+          static_cast<float>(App::WindowWidth),
+          static_cast<float>(App::WindowHeight), boardView_,
+          layout::BoardLayoutOptions{true, false, false}))
+    , hud_(app_, panelLayout_)
     , myTurn_(myColor == Color::White)
     , engineDepth_(depth)
 {
@@ -75,15 +77,11 @@ LocalGameScreen::LocalGameScreen(App& app, Color myColor,
     backBtn_.setLabel("Menu");
     backBtn_.setIcon(ui::icons::IconKind::ArrowBack);
     backBtn_.setStyle(ui::buttonDanger());
-    backBtn_.setRect(sf::FloatRect(
-        sf::Vector2f(boardView_.panelX(), hud_.contentBottom()),
-        sf::Vector2f(140.f, BtnH)));
+    backBtn_.setRect(panelLayout_.actionRect(0, 140.f, 8.f));
     backBtn_.setOnClick([this] { returnToMenu(); });
 
     takebackBtn_.setLabel("Takeback");
-    takebackBtn_.setRect(sf::FloatRect(
-        sf::Vector2f(boardView_.panelX() + 148.f, hud_.contentBottom()),
-        sf::Vector2f(140.f, BtnH)));
+    takebackBtn_.setRect(panelLayout_.actionRect(1, 140.f, 8.f));
     takebackBtn_.setOnClick([this] { takeback(); });
 
     autoQueenCheck_.setOnToggle([this](bool checked) {
@@ -501,8 +499,7 @@ void LocalGameScreen::handleEvent(const sf::Event& event)
     }
 
     if (const auto* we = event.getIf<sf::Event::MouseWheelScrolled>()) {
-        float px = boardView_.panelX();
-        if (app_.toLocal(we->position).x >= px) {
+        if (app_.toLocal(we->position).x >= panelLayout_.panelX) {
             hud_.handleScroll(we->delta);
             return;
         }

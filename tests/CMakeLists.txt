@@ -68,7 +68,8 @@ if(BUILD_TESTING)
         e2e/chess960_test.cpp
         e2e/arena_test.cpp
         e2e/spectator_test.cpp
-        client/puzzle_test.cpp)
+        client/puzzle_test.cpp
+        client/board_layout_test.cpp)
 
     target_link_libraries(chess-tests PRIVATE chesscore chessnet chessclient chessserver chessuci chessdb GTest::gtest_main)
     target_compile_definitions(chess-tests PRIVATE

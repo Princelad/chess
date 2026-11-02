@@ -17,7 +17,6 @@
 namespace chess::client {
 
 namespace {
-constexpr float BtnH = 30.f;
 constexpr float InputH = 28.f;
 // Reconnect loop timings (11.2): one retry per second, at most ~30 s of
 // trying — the server side grace is as long, so an unresponsive server
@@ -49,8 +48,11 @@ GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName,
                  app.boardTheme(),
                  app.showCoordinates(),
                  app.coordinateStyle())
-    , hud_(app_, boardView_.panelX(),
-           static_cast<float>(App::WindowWidth) - boardView_.panelX() - 8.f)
+    , panelLayout_(layout::composeBoardLayout(
+          static_cast<float>(App::WindowWidth),
+          static_cast<float>(App::WindowHeight), boardView_,
+          layout::BoardLayoutOptions{true, false, true}))
+    , hud_(app_, panelLayout_)
     , myTurn_(myColor == Color::White)
 {
     // 12.1: a Chess960 welcome carries the Start Position the server rolled
@@ -232,42 +234,27 @@ void GameScreen::leaveWatch()
 
 void GameScreen::layoutPanel()
 {
-    float px = boardView_.panelX();
+    // 15.1: the composer owns the geometry — the screen only places its
+    // widgets into the shared rows. The three action buttons keep the
+    // roomier 96/6 pitch; the accept/decline prompt pair keeps 90/8.
+    resignBtn_.setRect(panelLayout_.actionRect(0, 96.f));
 
-    // Three action buttons share the panel row (96px each with gaps); the
-    // accept/decline prompt buttons keep the roomier two-button layout.
-    resignBtn_.setRect(sf::FloatRect(sf::Vector2f(px, hud_.contentBottom()),
-                                     sf::Vector2f(96.f, BtnH)));
-    offerDrawBtn_.setRect(sf::FloatRect(sf::Vector2f(px + 102.f, hud_.contentBottom()),
-                                        sf::Vector2f(96.f, BtnH)));
-    takebackBtn_.setRect(sf::FloatRect(sf::Vector2f(px + 204.f, hud_.contentBottom()),
-                                       sf::Vector2f(96.f, BtnH)));
+    offerDrawBtn_.setRect(panelLayout_.actionRect(1, 96.f));
+
+    takebackBtn_.setRect(panelLayout_.actionRect(2, 96.f));
 
     // The spectator leave button takes the first slot (12.4).
-    leaveBtn_.setRect(sf::FloatRect(sf::Vector2f(px, hud_.contentBottom()),
-                                    sf::Vector2f(96.f, BtnH)));
+    leaveBtn_.setRect(panelLayout_.actionRect(0, 96.f));
 
-    declineBtn_.setRect(sf::FloatRect(sf::Vector2f(px, hud_.contentBottom()),
-                                      sf::Vector2f(90.f, BtnH)));
-    acceptBtn_.setRect(sf::FloatRect(sf::Vector2f(px + 98.f, hud_.contentBottom()),
-                                     sf::Vector2f(90.f, BtnH)));
+    declineBtn_.setRect(panelLayout_.actionRect(0, 90.f, 8.f));
+    acceptBtn_.setRect(panelLayout_.actionRect(1, 90.f, 8.f));
 
-    float btnY = hud_.contentBottom();
-    float chatSepY = btnY + BtnH + 8.f;
-    chatLabel_.setPosition({px, chatSepY + 6.f});
-
-    float logTop = chatSepY + 24.f;
-    float inputY = static_cast<float>(App::WindowHeight) - 20.f - InputH;
-    float logBottom = inputY - 8.f;
-    chatLogBg_.setRect(sf::FloatRect(
-        sf::Vector2f(px, logTop),
-        sf::Vector2f(static_cast<float>(App::WindowWidth) - px - 8.f, logBottom - logTop)));
+    chatLabel_.setPosition({panelLayout_.panelX, panelLayout_.chatLabelY});
+    chatLogBg_.setRect(panelLayout_.chatPanel);
     chatLogBg_.setFill(ui::pal::bgDeep);
     chatLogBg_.setOutline(ui::pal::bgElevated);
 
-    chatInput_.setRect(sf::FloatRect(
-        sf::Vector2f(px, inputY),
-        sf::Vector2f(static_cast<float>(App::WindowWidth) - px - 8.f, InputH)));
+    chatInput_.setRect(panelLayout_.chatInput);
 }
 
 void GameScreen::selectPiece(int file, int rank)
@@ -681,8 +668,7 @@ void GameScreen::handleEvent(const sf::Event& event)
     }
 
     if (const auto* we = event.getIf<sf::Event::MouseWheelScrolled>()) {
-        float px = boardView_.panelX();
-        if (app_.toLocal(we->position).x >= px) {
+        if (app_.toLocal(we->position).x >= panelLayout_.panelX) {
             hud_.handleScroll(we->delta);
             return;
         }
@@ -1160,12 +1146,14 @@ void GameScreen::drawButtons(sf::RenderWindow& window)
     auto& font = app_.font();
 
     if (drawOfferPending_) {
-        drawOfferLabel_.setPosition({boardView_.panelX(), hud_.contentBottom() - 20.f});
+        drawOfferLabel_.setPosition({panelLayout_.panelX,
+                                     panelLayout_.actionRowY - 20.f});
         drawOfferLabel_.draw(window, font);
         declineBtn_.draw(window, font);
         acceptBtn_.draw(window, font);
     } else if (takebackOfferPending_) {
-        takebackLabel_.setPosition({boardView_.panelX(), hud_.contentBottom() - 20.f});
+        takebackLabel_.setPosition({panelLayout_.panelX,
+                                    panelLayout_.actionRowY - 20.f});
         takebackLabel_.draw(window, font);
         declineBtn_.draw(window, font);
         acceptBtn_.draw(window, font);
@@ -1178,22 +1166,20 @@ void GameScreen::drawButtons(sf::RenderWindow& window)
 
 void GameScreen::drawChat(sf::RenderWindow& window)
 {
-    float px = boardView_.panelX();
+    const float px = panelLayout_.panelX;
+    const float panelW = panelLayout_.panelWidth;
     auto& font = app_.font();
-    float panelW = static_cast<float>(App::WindowWidth) - px - 8.f;
-    float btnY = hud_.contentBottom();
-    float chatSepY = btnY + BtnH + 8.f;
 
     sf::RectangleShape sep({panelW, 1.f});
-    sep.setPosition({px, chatSepY});
+    sep.setPosition({px, panelLayout_.chatSeparatorY});
     sep.setFillColor(ui::pal::stroke);
     window.draw(sep);
 
     chatLabel_.draw(window, font);
 
-    float logTop = chatSepY + 24.f;
-    float inputY = static_cast<float>(App::WindowHeight) - 20.f - InputH;
-    float logBottom = inputY - 8.f;
+    const float logTop = panelLayout_.chatPanel.position.y;
+    const float logBottom = panelLayout_.chatPanel.position.y
+        + panelLayout_.chatPanel.size.y;
 
     chatLogBg_.draw(window);
 

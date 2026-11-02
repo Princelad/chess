@@ -1,5 +1,6 @@
 #pragma once
 
+#include "board_layout.h"
 #include "widgets/label.h"
 #include "widgets/move_navigator.h"
 #include "widgets/panel.h"
@@ -21,7 +22,10 @@ class App;
 
 class Hud {
 public:
-    Hud(App& app, float panelX, float panelWidth);
+    // 15.1: the Hud is a pure consumer of the shared board composer — it
+    // owns no rect math, it reads the card-stack rows the composer lays
+    // out for the screen.
+    Hud(App& app, const layout::BoardLayout& panelLayout);
 
     void setGame(const Board& initialBoard, std::vector<chess::Move> moves,
                  std::vector<std::string> sans);
@@ -80,8 +84,7 @@ private:
     void refreshOpening();
 
     App& app_;
-    float panelX_ = 0.f;
-    float panelW_ = 0.f;
+    layout::BoardLayout panel_;
 
     std::string opponentName_;
     std::optional<std::pair<double, double>> localRating_;

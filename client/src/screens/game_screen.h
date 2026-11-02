@@ -95,6 +95,9 @@ private:
     App& app_;
     Color myColor_;
     BoardView boardView_;
+    // 15.1: the composed panel geometry, initialized with the board view
+    // and consumed by the Hud and every panel rect decision below.
+    layout::BoardLayout panelLayout_;
     HighlightState hl_;
     BoardAnnotations annotations_;
     DragTracker drag_;
