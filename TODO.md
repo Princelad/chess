@@ -803,9 +803,10 @@ input parity tests green; zero protocol/server changes
   - [x] Widget-level unit test: extend the client/widget test file — the 9.3 residual "player-card composition untested" closes here (headless composition via `sf::RenderTarget`-free logic slice)
   - Tests: `tests/client/widget_test.cpp` (+5) — clock boundaries (incl. the 59.95 → "1:00" half-up tenth), heat thresholds (red <10 s / amber <30 s), rating-suffix rounding, band slot math, quiet-state defaults; `board_layout_test.cpp` +card-band pins; icons registry 11; suite 804
 
-- [ ] **15.3 Move-list panel restyle**
-  - [ ] Alternating row shading + current-ply highlight + move-number gutter in the 9.3 navigator; scroll auto-follows the live ply (only when the user is at the tail — never yank during browsing)
-  - [ ] ECO opening (11.5) stays the header; draw-offer/takeback prompt rows restyled as banners
+- [x] **15.3 Move-list panel restyle**
+  - [x] Alternating row shading + current-ply highlight + move-number gutter in the 9.3 navigator; scroll auto-follows the live ply (only when the user is at the tail — never yank during browsing)
+  - [x] ECO opening (11.5) stays the header; draw-offer/takeback prompt rows restyled as banners
+  - Tests: `tests/client/move_navigator_test.cpp` (+4) — zebra parity (`shadedLine`), row-height `visibleLines` rules, tail auto-follow (append at end scrolls, append while browsing moves neither ply nor scroll); suite 808
 
 - [ ] **15.4 Quick-message strip + chat restyle**
   - [ ] Three canned chips ("Good luck", "Good game", "Thanx for the game") above the chat panel, online GameScreen only; zero protocol change (she sends ordinary `ChatMsg`)
