@@ -797,10 +797,11 @@ input parity tests green; zero protocol/server changes
   - [x] Migrate the five board-bearing screens onto it; screens keep their event handling, composer owns geometry only (single writer rule for rect math)
   - Tests: `tests/client/board_layout_test.cpp` (+8) — panel-width single definition, card-stack table, action pitches (96/6, 90/8, 140/8), chat bundle pinning, analysis/puzzle stacks, window-shape re-derivation; suite 799
 
-- [ ] **15.2 Player card widget (`client/src/widgets/player_card.{h,cpp}`, 9.3's residual closure)**
-  - [ ] Avatar (14.3) + name + rating suffix + captured-material row + material diff in one card; "thinking…" dot, connection icon, premove ghost badge states
-  - [ ] Clock pill styling for 11.1's figures (m:ss / tenths / amber-red thresholds preserved; no display for unlimited)
-  - [ ] Widget-level unit test: extend the client/widget test file — the 9.3 residual "player-card composition untested" closes here (headless composition via `sf::RenderTarget`-free logic slice)
+- [x] **15.2 Player card widget (`client/src/widgets/player_card.{h,cpp}`, 9.3's residual closure)**
+  - [x] Avatar (14.3) + name + rating suffix + captured-material row + material diff in one card; "thinking…" dot, connection icon, premove ghost badge states
+  - [x] Clock pill styling for 11.1's figures (m:ss / tenths / amber-red thresholds preserved; no display for unlimited)
+  - [x] Widget-level unit test: extend the client/widget test file — the 9.3 residual "player-card composition untested" closes here (headless composition via `sf::RenderTarget`-free logic slice)
+  - Tests: `tests/client/widget_test.cpp` (+5) — clock boundaries (incl. the 59.95 → "1:00" half-up tenth), heat thresholds (red <10 s / amber <30 s), rating-suffix rounding, band slot math, quiet-state defaults; `board_layout_test.cpp` +card-band pins; icons registry 11; suite 804
 
 - [ ] **15.3 Move-list panel restyle**
   - [ ] Alternating row shading + current-ply highlight + move-number gutter in the 9.3 navigator; scroll auto-follows the live ply (only when the user is at the tail — never yank during browsing)
