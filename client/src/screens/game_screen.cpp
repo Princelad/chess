@@ -1,6 +1,7 @@
 #include "game_screen.h"
 
 #include "ui/theme.h"
+#include "ui/rounded_rect.h"
 #include "game_over_screen.h"
 #include "connect_screen.h"
 #include "keyboard.h"
@@ -84,9 +85,8 @@ GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName,
     chatLabel_.setFontSize(14);
     chatLabel_.setColor(ui::pal::textMuted);
 
-    drawOfferLabel_.setText("Draw offered:");
-    drawOfferLabel_.setFontSize(14);
-    drawOfferLabel_.setColor(ui::pal::warn);
+    promptLabel_.setFontSize(14);
+    promptLabel_.setColor(ui::pal::warn);
 
     resignBtn_.setLabel("Resign");
     resignBtn_.setIcon(ui::icons::IconKind::Flag);
@@ -129,10 +129,6 @@ GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName,
             takebackOfferPending_ = false;
         }
     });
-
-    takebackLabel_.setText("Takeback asked:");
-    takebackLabel_.setFontSize(14);
-    takebackLabel_.setColor(ui::pal::warn);
 
     takebackBtn_.setLabel("Takeback");
     takebackBtn_.setStyle(ui::buttonPlum());
@@ -1153,15 +1149,11 @@ void GameScreen::drawButtons(sf::RenderWindow& window)
     auto& font = app_.font();
 
     if (drawOfferPending_) {
-        drawOfferLabel_.setPosition({panelLayout_.panelX,
-                                     panelLayout_.actionRowY - 20.f});
-        drawOfferLabel_.draw(window, font);
+        drawPromptBanner(window, "Draw offered:");
         declineBtn_.draw(window, font);
         acceptBtn_.draw(window, font);
     } else if (takebackOfferPending_) {
-        takebackLabel_.setPosition({panelLayout_.panelX,
-                                    panelLayout_.actionRowY - 20.f});
-        takebackLabel_.draw(window, font);
+        drawPromptBanner(window, "Takeback asked:");
         declineBtn_.draw(window, font);
         acceptBtn_.draw(window, font);
     } else if (!gameOver_) {
@@ -1169,6 +1161,33 @@ void GameScreen::drawButtons(sf::RenderWindow& window)
         offerDrawBtn_.draw(window, font);
         takebackBtn_.draw(window, font);
     }
+}
+
+// 15.3: the draw/takeback prompts render as one framed banner (card fill,
+// warn stroke) behind the question text and the accept/decline pair,
+// instead of a bare floating label row.
+void GameScreen::drawPromptBanner(sf::RenderWindow& window, const char* text)
+{
+    auto& font = app_.font();
+
+    constexpr float LabelRow = 20.f;   // the old label band above the row
+    constexpr float BannerRadius = 8.f;
+    const sf::FloatRect banRect(
+        sf::Vector2f(panelLayout_.panelX, panelLayout_.actionRowY - LabelRow - 4.f),
+        sf::Vector2f(panelLayout_.panelWidth, LabelRow + 4.f
+            + panelLayout_.actionRowH + 4.f));
+
+    ui::RoundedRectShape ban(banRect.size, BannerRadius);
+    ban.setPosition(banRect.position);
+    ban.setFillColor(ui::pal::bgCard);
+    ban.setOutlineColor(ui::pal::warnSoft);
+    ban.setOutlineThickness(1.f);
+    window.draw(ban);
+
+    promptLabel_.setText(text);
+    promptLabel_.setPosition({banRect.position.x + 12.f,
+                              panelLayout_.actionRowY - LabelRow});
+    promptLabel_.draw(window, font);
 }
 
 void GameScreen::drawChat(sf::RenderWindow& window)

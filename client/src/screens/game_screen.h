@@ -71,6 +71,7 @@ private:
     void sendChat();
     void refreshRatingsHud();
     void drawButtons(sf::RenderWindow& window);
+    void drawPromptBanner(sf::RenderWindow& window, const char* text);
     void drawChat(sf::RenderWindow& window);
     void drawHelpOverlay(sf::RenderWindow& window);
     void finishGameOver();
@@ -138,8 +139,7 @@ private:
 
     void addChatLine(const std::string& name, const std::string& text);
     void addSystemChat(const std::string& text);
-    Label drawOfferLabel_;
-    Label takebackLabel_;
+    Label promptLabel_;
     Button resignBtn_;
     Button offerDrawBtn_;
     Button takebackBtn_;

@@ -7,6 +7,7 @@
 
 #include <SFML/Graphics.hpp>
 
+#include <algorithm>
 #include <array>
 #include <optional>
 #include <string>
@@ -67,6 +68,12 @@ public:
     // Layout / events / drawing
     void setLayout(sf::FloatRect gridRect, sf::FloatRect navRect);
     void handleScroll(float delta);
+    // 15.3 pure restyle math (unit-tested headlessly):
+    //  - visibleLines: full line rows that fit a list height.
+    //  - shadedLine: zebra parity (odd move numbers shade), 0 = empty line.
+    static int visibleLines(float listHeight);
+    static bool shadedLine(int moveNumber);
+    int scrollLine() const { return moveScroll_; } // test/probe observer
     // Returns true when the event was consumed by the navigator (nav keys,
     // grid click, or nav-button click).
     bool handleEvent(const sf::Event& event, const sf::Vector2f& local);

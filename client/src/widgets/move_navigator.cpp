@@ -1,5 +1,7 @@
 #include "move_navigator.h"
 #include "app.h"
+#include "ui/rounded_rect.h"
+#include "ui/theme.h"
 
 #include <algorithm>
 #include <cmath>
@@ -52,11 +54,18 @@ void recordCapture(CapturedMaterial& mat, Piece captured)
     mat.value += pieceValue(captured.type);
     mat.pieces.push_back(captured);
 }
+}
 
-int visibleLines(float listHeight)
+int MoveNavigator::visibleLines(float listHeight)
 {
     return std::max(1, static_cast<int>((listHeight - 2.f) / RowH));
 }
+
+// 15.3 zebra: move-number parity drives the stripe — odd numbered lines
+// (1., 3., 5., …) shade, and the ply-0 slot never does.
+bool MoveNavigator::shadedLine(int moveNumber)
+{
+    return moveNumber > 0 && moveNumber % 2 == 1;
 }
 
 void MoveNavigator::setGame(Board initialBoard, std::vector<chess::Move> moves,
@@ -306,12 +315,25 @@ void MoveNavigator::drawGrid(sf::RenderWindow& window, const sf::Font& font)
     float colW = (gridRect_.size.x - GridPadLeft - NumColW - ColGap) / 2.f;
     float whiteX = px + GridPadLeft + NumColW + CellPad;
     float blackX = whiteX + colW + ColGap;
-    float numX = px + GridPadLeft;
+    // 15.3 move-number gutter: the "n." right-aligns against the white
+    // column, so the number always hugs the move it opens.
+    float numRight = whiteX - CellPad;
+
+    // Zebra pass first: odd move-number lines shade across the whole row
+    // (gutter included), inset past the well's outline.
+    for (int r = moveScroll_; r < endPair; ++r) {
+        if (!shadedLine(r + 1)) continue;
+        float yTop = top + static_cast<float>(r - moveScroll_) * RowH;
+        sf::RectangleShape shade({gridRect_.size.x - 2.f, RowH});
+        shade.setPosition({px + 1.f, yTop});
+        shade.setFillColor(ui::pal::rowStripe);
+        window.draw(shade);
+    }
 
     sf::Text numText(font, "", static_cast<unsigned int>(FontSize));
     numText.setFillColor(ui::pal::textFaint);
     sf::Text moveText(font, "", static_cast<unsigned int>(FontSize));
-    moveText.setFillColor(sf::Color(210, 210, 210));
+    moveText.setFillColor(ui::pal::textCell);
 
     std::size_t maxChars = std::max<std::size_t>(
         4, static_cast<std::size_t>((colW - 8.f) / 6.f));
@@ -327,8 +349,11 @@ void MoveNavigator::drawGrid(sf::RenderWindow& window, const sf::Font& font)
         auto drawCell = [&](int ply, float cellX, const std::string& san) {
             if (ply > totalPlies()) return;
 
+            // 15.3: the current ply reads as a rounded pill; the cursor
+            // line's SAN brightens so the selected move pops from the cell.
             if (ply == currentPly_) {
-                sf::RectangleShape hl({colW, RowH});
+                constexpr float HlRadius = RowH * 0.5f;
+                ui::RoundedRectShape hl({colW + CellPad, RowH}, HlRadius);
                 hl.setPosition({cellX - CellPad, yTop});
                 hl.setFillColor(sf::Color(ui::pal::selectionBlue.r,
                                           ui::pal::selectionBlue.g,
@@ -345,12 +370,15 @@ void MoveNavigator::drawGrid(sf::RenderWindow& window, const sf::Font& font)
             if (san.empty()) return;
             std::string text = truncateUtf8(san, maxChars);
             moveText.setString(text);
+            moveText.setFillColor(ply == currentPly_ ? ui::pal::white
+                                                     : ui::pal::textCell);
             moveText.setPosition({cellX, yTop + 1.f});
             window.draw(moveText);
         };
 
         numText.setString(std::to_string(r + 1) + ".");
-        numText.setPosition({numX, yTop + 1.f});
+        numText.setPosition({numRight - numText.getLocalBounds().size.x,
+                             yTop + 1.f});
         window.draw(numText);
 
         std::string whiteSan = (whitePly < static_cast<int>(sans_.size()))

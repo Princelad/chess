@@ -85,6 +85,7 @@ namespace pal {
     inline constexpr sf::Color bgPanel{ 28, 28, 30 };     // list screens panel
     inline constexpr sf::Color bgDetail{ 24, 24, 26 };    // history detail well
     inline constexpr sf::Color bgCard{ 38, 38, 40 };      // row/card fills
+    inline constexpr sf::Color rowStripe{ 255, 255, 255, 18 }; // navigator zebra line (15.3)
     inline constexpr sf::Color bgCardActive{ 52, 52, 56 };
     inline constexpr sf::Color bgCardHover{ 58, 58, 62 };
     inline constexpr sf::Color bgElevated{ 70, 70, 70 };  // disabled-row fills
