@@ -813,9 +813,10 @@ input parity tests green; zero protocol/server changes
   - [x] Chat panel restyle on 11.8's three-part line renderer (tokens for width/truncation math)
   - Tests: `tests/client/board_layout_test.cpp` chip-row/shrunken-log pins, `tests/client/chat_test.cpp` +1 (`chatMaxChars` estimator); suite 809
 
-- [ ] **15.5 Input & motion polish**
-  - [ ] Square-hover highlight under cursor, drag shadow fidelity, annotation arrow width/opacity from tokens, animated "waiting" spinner for engine/server think states
-  - [ ] Board entrance animation optional (config `animation.entrance`, default off)
+- [x] **15.5 Input & motion polish**
+  - [x] Square-hover highlight under cursor, drag shadow fidelity, annotation arrow width/opacity from tokens, animated "waiting" spinner for engine/server think states
+  - [x] Board entrance animation optional (config `animation.entrance`, default off)
+  - Tests: `tests/client/theme_test.cpp` +3 (annotation geometry/color pins, drag-shadow tokens), `tests/client/motion_test.cpp` +7 (spinner alpha math, entrance opacity ramp); suite 819
 
 - [ ] **15.6 Consistency pass**
   - [ ] GameOverScreen / TournamentLobbyScreen / LeaderboardScreen / HistoryScreen restyled via the composer + tokens; promotion picker restyled (bigger cells, token stroke)
