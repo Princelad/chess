@@ -1,5 +1,6 @@
 #include "local_game_screen.h"
 
+#include "entrance.h"
 #include "ui/theme.h"
 #include "game_over_screen.h"
 #include "keyboard.h"
@@ -71,6 +72,10 @@ LocalGameScreen::LocalGameScreen(App& app, Color myColor,
     , myTurn_(myColor == Color::White)
     , engineDepth_(depth)
 {
+    // 15.5 board entrance: opt-in config key (default off), ctor-armed.
+    if (app_.config().getBool("animation.entrance", false))
+        entranceSec_ = 0.f;
+
     hud_.setGame(Board::fromStartPos(), {}, {});
     hud_.setInfo("Computer", myColor_, myTurn_, gameOver_);
 
@@ -231,6 +236,7 @@ void LocalGameScreen::deselect()
 void LocalGameScreen::syncViewHighlights()
 {
     const Board& shown = hud_.navigator().board();
+    hl_.hoverSquare = boardView_.pixelToSquare(cursor_);
     hl_.lastMoveFrom = hud_.navigator().lastMoveFrom();
     hl_.lastMoveTo = hud_.navigator().lastMoveTo();
     hl_.cursorSquare = keyCursor_;
@@ -604,6 +610,9 @@ void LocalGameScreen::handleEvent(const sf::Event& event)
 void LocalGameScreen::update(float dtSec)
 {
     hud_.update(dtSec);
+    // 15.5 board entrance: advance the fade while the timer runs.
+    if (entranceSec_ && *entranceSec_ < kEntranceSec)
+        *entranceSec_ += dtSec;
     // 15.2: the engine card's thinking dot mirrors the search state
     // (setInfo already carries myTurn for the own card's dot).
     hud_.setOpponentThinking(engineThinking_ && !gameOver_);
@@ -640,7 +649,9 @@ void LocalGameScreen::draw(sf::RenderWindow& window)
     syncViewHighlights();
     boardView_.drawHighlights(window, hl_, shown);
     boardView_.drawLabels(window, font);
-    boardView_.drawPieces(window, font, shown, app_, &anim_);
+    // 15.5: the entrance fade rides the piece layer (squares stay put).
+    boardView_.drawPieces(window, font, shown, app_, &anim_,
+        entranceSec_ ? entranceOpacity(*entranceSec_) : 1.f);
     boardView_.drawAnnotations(window, annotations_.arrows(), annotations_.circles());
 
     if (drag_.isDragging() && dragFrom_) {

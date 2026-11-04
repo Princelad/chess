@@ -121,6 +121,10 @@ private:
     bool drawOfferPending_ = false;
     // Premove (11.4): at most one queued move while the opponent thinks.
     std::optional<Premove> premove_;
+    // 15.5 board entrance: elapsed seconds of the piece fade-in; nullopt
+    // = `animation.entrance` disabled (default). Armed only in the ctor —
+    // resume/takeback rebuilds never replay the fade.
+    std::optional<float> entranceSec_;
     GameOverTransition gameOverTransition_;
 
     std::string opponentName_;

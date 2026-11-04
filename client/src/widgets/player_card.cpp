@@ -3,6 +3,7 @@
 #include "avatars.h"
 #include "ui/icons.h"
 #include "ui/rounded_rect.h"
+#include "ui/spinner.h"
 #include "ui/theme.h"
 #include "app.h"
 
@@ -191,15 +192,13 @@ void PlayerCard::draw(sf::RenderWindow& window, const sf::Font& font,
     float dotX = nameX + nb.size.x + 8.f;
 
     if (state.thinking) {
-        const float r = 3.5f;
-        sf::Color dotColor = ui::pal::okTurn;
-        dotColor.a = static_cast<std::uint8_t>(
-            255.f * thinkingAlpha(pulseSec_));
-        sf::CircleShape dot(r);
-        dot.setPosition({dotX, nameCy - r});
-        dot.setFillColor(dotColor);
-        window.draw(dot);
-        dotX += 2.f * r + 5.f;
+        // 15.5: the waiting state spins — 8 ticks sweep the wheel while
+        // the engine/search or the server's reply is in flight.
+        const float radius = 6.f;
+        ui::drawSpinner(window, { dotX + radius, nameCy },
+                        radius, pulseSec_ / ui::spinner::SweepSec,
+                        ui::pal::okTurn);
+        dotX += 2.f * radius + 5.f;
     } else if (state.myTurn) {
         const float r = 3.5f;
         sf::Color dotColor = ui::pal::okTurn;

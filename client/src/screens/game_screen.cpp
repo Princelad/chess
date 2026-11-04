@@ -1,5 +1,7 @@
 #include "game_screen.h"
 
+#include "entrance.h"
+#include "ui/rounded_rect.h"
 #include "ui/theme.h"
 #include "ui/rounded_rect.h"
 #include "game_over_screen.h"
@@ -56,6 +58,11 @@ GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName,
     , hud_(app_, panelLayout_)
     , myTurn_(myColor == Color::White)
 {
+    // 15.5 board entrance: opt-in config key (default off). Armed only
+    // here — resume/takeback rebuilds never replay the fade.
+    if (app_.config().getBool("animation.entrance", false))
+        entranceSec_ = 0.f;
+
     // 12.1: a Chess960 welcome carries the Start Position the server rolled
     // at pairing; empty = standard start, junk = fall back (never crash).
     hud_.setGame(startBoard(), {}, {});
@@ -398,6 +405,7 @@ void GameScreen::flushPremove()
 void GameScreen::syncViewHighlights()
 {
     const Board& shown = hud_.navigator().board();
+    hl_.hoverSquare = boardView_.pixelToSquare(cursor_);
     hl_.lastMoveFrom = hud_.navigator().lastMoveFrom();
     hl_.lastMoveTo = hud_.navigator().lastMoveTo();
     hl_.cursorSquare = keyCursor_;
@@ -818,6 +826,10 @@ void GameScreen::handleEvent(const sf::Event& event)
 void GameScreen::update(float dtSec)
 {
     hud_.update(dtSec);
+    // 15.5 board entrance: advance the fade while the timer runs; the
+    // optional holds the elapsed seconds (nullopt = feature disabled).
+    if (entranceSec_ && *entranceSec_ < kEntranceSec)
+        *entranceSec_ += dtSec;
     // 15.2 card affordances, recomputed per frame: the thinking dot marks
     // the seat that holds the move being searched/considered, the link
     // icon dips to "away" only while the 11.2 grace window runs.
@@ -1317,7 +1329,9 @@ void GameScreen::draw(sf::RenderWindow& window)
     syncViewHighlights();
     boardView_.drawHighlights(window, hl_, shown);
     boardView_.drawLabels(window, font);
-    boardView_.drawPieces(window, font, shown, app_, &anim_);
+    // 15.5: the entrance fade rides the piece layer (squares stay put).
+    boardView_.drawPieces(window, font, shown, app_, &anim_,
+        entranceSec_ ? entranceOpacity(*entranceSec_) : 1.f);
 
     // Premove ghost (11.4): the queued piece translucent on its putative
     // landing square. Live position only — a stepper is reading history.

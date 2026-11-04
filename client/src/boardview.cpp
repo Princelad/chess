@@ -1,6 +1,7 @@
 #include "boardview.h"
 #include "app.h"
 #include "move_animator.h"
+#include "ui/theme.h"
 
 #include <algorithm>
 #include <cmath>
@@ -64,7 +65,9 @@ void BoardView::drawAnnotations(sf::RenderWindow& window,
                                 const std::vector<AnnotatedArrow>& arrows,
                                 const std::vector<std::pair<int, int>>& circles) const
 {
-    static const sf::Color AnnColor(220, 130, 40, 170);
+    // 15.5: geometry + color from ui::board tokens (was one local AnnColor
+    // and inline fractions — identical values, now single-sourced).
+    const sf::Color AnnColor = ui::board::annotation;
 
     for (const auto& a : arrows) {
         sf::Vector2f from = squareCenter(a.from.first, a.from.second);
@@ -74,9 +77,9 @@ void BoardView::drawAnnotations(sf::RenderWindow& window,
         if (len < 1.f) continue;
         sf::Vector2f unit = dir / len;
 
-        float shaftLen = len - squareSize_ * 0.35f;
+        float shaftLen = len - squareSize_ * ui::board::arrowHeadLen;
         sf::Vector2f shaftEnd = from + unit * shaftLen;
-        float shaftW = squareSize_ * 0.09f;
+        float shaftW = squareSize_ * ui::board::arrowShaftW;
         sf::Vector2f perp(-unit.y, unit.x);
 
         sf::ConvexShape shaft(4);
@@ -87,7 +90,7 @@ void BoardView::drawAnnotations(sf::RenderWindow& window,
         shaft.setFillColor(AnnColor);
         window.draw(shaft);
 
-        float headW = squareSize_ * 0.22f;
+        float headW = squareSize_ * ui::board::arrowHeadW;
         sf::ConvexShape head(3);
         head.setPoint(0, to);
         head.setPoint(1, shaftEnd + perp * headW);
@@ -98,11 +101,11 @@ void BoardView::drawAnnotations(sf::RenderWindow& window,
 
     for (const auto& c : circles) {
         sf::Vector2f center = squareCenter(c.first, c.second);
-        float radius = squareSize_ * 0.32f;
+        float radius = squareSize_ * ui::board::circleRadius;
         sf::CircleShape ring(radius);
         ring.setFillColor(sf::Color::Transparent);
         ring.setOutlineColor(AnnColor);
-        ring.setOutlineThickness(squareSize_ * 0.06f);
+        ring.setOutlineThickness(squareSize_ * ui::board::circleStroke);
         ring.setOrigin({ radius, radius });
         ring.setPosition(center);
         window.draw(ring);
@@ -113,13 +116,21 @@ void BoardView::drawDraggedPiece(sf::RenderWindow& window, const sf::Font& font,
                                  chess::Piece piece, sf::Vector2f cursor,
                                  const App& app) const
 {
-    sf::CircleShape shadow(squareSize_ * 0.55f);
-    shadow.setFillColor(sf::Color(0, 0, 0, 70));
+    // 15.5 drag shadow fidelity: a squashed elliptical blob under the
+    // piece (scaled circle) instead of a flat circle, and the piece
+    // itself lifts slightly above the board plane while held.
+    const float rx = squareSize_ * ui::board::dragShadowRadiusX;
+    const float ry = squareSize_ * ui::board::dragShadowRadiusY;
+    sf::CircleShape shadow(rx);
+    shadow.setScale({ 1.f, rx > 0.f ? ry / rx : 1.f });
+    shadow.setFillColor(sf::Color(0, 0, 0, ui::board::dragShadowAlpha));
     shadow.setOrigin({ shadow.getRadius(), shadow.getRadius() });
-    shadow.setPosition(cursor + sf::Vector2f(0.f, squareSize_ * 0.12f));
+    shadow.setPosition(cursor + sf::Vector2f(0.f,
+        squareSize_ * ui::board::dragShadowDrop));
     window.draw(shadow);
 
-    drawPieceAtCenter(window, font, piece, cursor, app);
+    drawPieceAtCenter(window, font, piece, cursor, app,
+                      ui::board::dragLiftScale);
 }
 
 void BoardView::drawGhostPiece(sf::RenderWindow& window, const sf::Font& font,
@@ -159,17 +170,22 @@ void BoardView::drawGhostPiece(sf::RenderWindow& window, const sf::Font& font,
 
 void BoardView::drawPieceAtCenter(sf::RenderWindow& window, const sf::Font& font,
                                   chess::Piece piece, sf::Vector2f center,
-                                  const App& app) const
+                                  const App& app, float liftScale,
+                                  float opacity) const
 {
-    float pieceSize = squareSize_ * 0.8f;
-    sf::Vector2f topLeft = center - sf::Vector2f(pieceSize / 2.f, pieceSize / 2.f);
+    const float scaledSize = squareSize_ * 0.8f * liftScale;
+    sf::Vector2f topLeft = center - sf::Vector2f(scaledSize / 2.f, scaledSize / 2.f);
 
     if (app.piecesLoaded()) {
         const auto& tex = app.pieceTexture(piece.color, piece.type);
         sf::Sprite sprite(tex);
-        float scale = pieceSize / static_cast<float>(tex.getSize().x);
+        float scale = scaledSize / static_cast<float>(tex.getSize().x);
         sprite.setScale({ scale, scale });
         sprite.setPosition(topLeft);
+        // 15.5: lift scale rides geometry; entrance fade rides alpha, so a
+        // dragged piece stays full while the rest fades in.
+        sprite.setColor(sf::Color(255, 255, 255,
+            static_cast<std::uint8_t>(255.f * opacity)));
         window.draw(sprite);
     } else {
         static const char pieceLetters[] = { 'P', 'N', 'B', 'R', 'Q', 'K' };
@@ -178,12 +194,14 @@ void BoardView::drawPieceAtCenter(sf::RenderWindow& window, const sf::Font& font
         sf::Text letter(font,
                         std::string(1, pieceLetters[static_cast<int>(piece.type)]),
                         letterSize);
-        letter.setFillColor(piece.color == Color::White
-            ? sf::Color(240, 240, 240) : sf::Color(40, 40, 40));
+        sf::Color letterColor = piece.color == Color::White
+            ? sf::Color(240, 240, 240) : sf::Color(40, 40, 40);
+        letterColor.a = static_cast<std::uint8_t>(letterColor.a * opacity);
+        letter.setFillColor(letterColor);
         auto lb = letter.getLocalBounds();
         letter.setPosition({
-            topLeft.x + (pieceSize - lb.size.x) / 2.f - lb.position.x,
-            topLeft.y + (pieceSize - lb.size.y) / 2.f - lb.position.y
+            topLeft.x + (scaledSize - lb.size.x) / 2.f - lb.position.x,
+            topLeft.y + (scaledSize - lb.size.y) / 2.f - lb.position.y
         });
         window.draw(letter);
     }
@@ -215,6 +233,11 @@ void BoardView::drawSquareTint(sf::RenderWindow& window, int file, int rank,
 void BoardView::drawHighlights(sf::RenderWindow& window, const HighlightState& hl,
                                 const Board& board) const
 {
+    // 15.5 hover wash first, so every other highlight paints over it.
+    if (hl.hoverSquare)
+        drawSquareTint(window, hl.hoverSquare->first, hl.hoverSquare->second,
+                       ui::board::hoverSquare);
+
     if (hl.lastMoveFrom)
         drawSquareTint(window, hl.lastMoveFrom->first, hl.lastMoveFrom->second,
                        sf::Color(255, 255, 0, 80));
@@ -357,8 +380,11 @@ void BoardView::drawLabels(sf::RenderWindow& window, const sf::Font& font) const
 
 void BoardView::drawPieces(sf::RenderWindow& window, const sf::Font& font,
                            const Board& board, const App& app,
-                           const MoveAnimator* anim) const
+                           const MoveAnimator* anim,
+                           float pieceOpacity) const
 {
+    if (pieceOpacity <= 0.f) return; // 15.5 entrance not started
+
     float pieceSize = squareSize_ * 0.8f;
     float offset = (squareSize_ - pieceSize) / 2.f;
 
@@ -394,13 +420,17 @@ void BoardView::drawPieces(sf::RenderWindow& window, const sf::Font& font,
                 float pieceScale = pieceSize / static_cast<float>(tex.getSize().x);
                 sprite.setScale({ pieceScale, pieceScale });
                 sprite.setPosition({ pos.x + offset, pos.y + offset });
+                sprite.setColor(sf::Color(255, 255, 255,
+                    static_cast<std::uint8_t>(255.f * pieceOpacity)));
                 window.draw(sprite);
             } else {
                 bool lightSquare = (file + rank) % 2 != 0;
                 sf::Text letter(font, std::string(1, pieceLetters[static_cast<int>(piece.type)]), letterSize);
-                letter.setFillColor(piece.color == Color::White
+                sf::Color letterColor = piece.color == Color::White
                     ? (lightSquare ? sf::Color(80, 80, 80) : sf::Color(240, 240, 240))
-                    : (lightSquare ? sf::Color(40, 40, 40) : sf::Color(200, 200, 200)));
+                    : (lightSquare ? sf::Color(40, 40, 40) : sf::Color(200, 200, 200));
+                letterColor.a = static_cast<std::uint8_t>(letterColor.a * pieceOpacity);
+                letter.setFillColor(letterColor);
                 auto lb = letter.getGlobalBounds();
                 letter.setPosition({
                     pos.x + (squareSize_ - lb.size.x) / 2.f - lb.position.x,
@@ -423,7 +453,7 @@ void BoardView::drawPieces(sf::RenderWindow& window, const sf::Font& font,
                          static_cast<int>(chess::rankOf(step.to)));
         const sf::Vector2f pos =
             fromCenter + p * (toCenter - fromCenter);
-        drawPieceAtCenter(window, font, step.piece, pos, app);
+        drawPieceAtCenter(window, font, step.piece, pos, app, 1.f, pieceOpacity);
     }
 }
 

@@ -392,6 +392,7 @@ void PuzzleScreen::clearBoardInput()
 
 void PuzzleScreen::syncViewHighlights()
 {
+    hl_.hoverSquare = boardView_.pixelToSquare(cursor_);
     hl_.lastMoveFrom = lastFrom_;
     hl_.lastMoveTo = lastTo_;
     hl_.cursorSquare = keyCursor_;

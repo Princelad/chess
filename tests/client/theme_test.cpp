@@ -145,5 +145,38 @@ TEST(ThemeButtons, VariantDefaultsMatchTheWidgetDefaults)
     EXPECT_EQ(ui::buttonSuccessBright().label.a, 255);
 }
 
+// --- 15.5 board-semantics tokens (the 14.1 exclusion of boardview ends) -----
+
+TEST(ThemeBoard, AnnotationGeometryPinsThePre15Dot5Fractions)
+{
+    // boardview.cpp's inline constants moved here verbatim: the annotation
+    // look must not drift because a token changed by accident.
+    EXPECT_FLOAT_EQ(ui::board::arrowHeadLen, 0.35f);
+    EXPECT_FLOAT_EQ(ui::board::arrowShaftW, 0.09f);
+    EXPECT_FLOAT_EQ(ui::board::arrowHeadW, 0.22f);
+    EXPECT_FLOAT_EQ(ui::board::circleRadius, 0.32f);
+    EXPECT_FLOAT_EQ(ui::board::circleStroke, 0.06f);
+}
+
+TEST(ThemeBoard, AnnotationAndHoverTokensStayFaint)
+{
+    // The annotation wash is translucent orange; the hover wash is a
+    // barely-there white so it never competes with real highlights.
+    EXPECT_EQ(ui::board::annotation, sf::Color(220, 130, 40, 170));
+    EXPECT_EQ(ui::board::hoverSquare, sf::Color(255, 255, 255, 28));
+}
+
+TEST(ThemeBoard, DragShadowTokensKeepTheSquashedBlob)
+{
+    // Ellipse: ry clearly smaller than rx; alpha matches the pre-15.5
+    // circle's 70; the lift grows the piece only ~6%.
+    EXPECT_FLOAT_EQ(ui::board::dragShadowRadiusX, 0.55f);
+    EXPECT_FLOAT_EQ(ui::board::dragShadowRadiusY, 0.22f);
+    EXPECT_EQ(ui::board::dragShadowAlpha, 70);
+    EXPECT_FLOAT_EQ(ui::board::dragShadowDrop, 0.12f);
+    EXPECT_GT(ui::board::dragLiftScale, 1.f);
+    EXPECT_LT(ui::board::dragLiftScale, 1.1f);
+}
+
 } // namespace
 } // namespace chess::client
