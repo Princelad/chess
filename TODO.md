@@ -808,9 +808,10 @@ input parity tests green; zero protocol/server changes
   - [x] ECO opening (11.5) stays the header; draw-offer/takeback prompt rows restyled as banners
   - Tests: `tests/client/move_navigator_test.cpp` (+4) — zebra parity (`shadedLine`), row-height `visibleLines` rules, tail auto-follow (append at end scrolls, append while browsing moves neither ply nor scroll); suite 808
 
-- [ ] **15.4 Quick-message strip + chat restyle**
-  - [ ] Three canned chips ("Good luck", "Good game", "Thanx for the game") above the chat panel, online GameScreen only; zero protocol change (she sends ordinary `ChatMsg`)
-  - [ ] Chat panel restyle on 11.8's three-part line renderer (tokens for width/truncation math)
+- [x] **15.4 Quick-message strip + chat restyle**
+  - [x] Three canned chips ("Good luck", "Good game", "Thanx for the game") above the chat panel, online GameScreen only; zero protocol change (she sends ordinary `ChatMsg`)
+  - [x] Chat panel restyle on 11.8's three-part line renderer (tokens for width/truncation math)
+  - Tests: `tests/client/board_layout_test.cpp` chip-row/shrunken-log pins, `tests/client/chat_test.cpp` +1 (`chatMaxChars` estimator); suite 809
 
 - [ ] **15.5 Input & motion polish**
   - [ ] Square-hover highlight under cursor, drag shadow fidelity, annotation arrow width/opacity from tokens, animated "waiting" spinner for engine/server think states
