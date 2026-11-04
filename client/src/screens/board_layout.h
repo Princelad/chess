@@ -58,6 +58,10 @@ struct BoardLayout {
     sf::FloatRect opponentCard{};
     sf::FloatRect localCard{};
 
+    // Quick-message chips (15.4, opts.chat): one row of canned greetings
+    // pinned between the log and the input; the log yields room for it.
+    sf::FloatRect chipRow{};
+
     // Action slot in the card stack's action row: a left-to-right run of
     // equal-pitch buttons starting at the panel edge (the writer of the
     // 96/6 and 140/8 shapes the screens quoted before the composer).

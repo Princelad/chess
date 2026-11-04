@@ -85,6 +85,16 @@ GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName,
     chatLabel_.setFontSize(14);
     chatLabel_.setColor(ui::pal::textMuted);
 
+    // 15.4 quick-message chips: canned greetings above the input. Zero
+    // protocol surface — each is an ordinary ChatMsg ride (sendQuickChat).
+    const char* chips[] = { "Good luck", "Good game", "Thanx for the game" };
+    for (int i = 0; i < 3; ++i) {
+        chatChips_[i].setLabel(chips[i]);
+        chatChips_[i].setStyle(ui::buttonChip());
+        const std::string phrase = chips[i];
+        chatChips_[i].setOnClick([this, phrase] { sendQuickChat(phrase); });
+    }
+
     promptLabel_.setFontSize(14);
     promptLabel_.setColor(ui::pal::warn);
 
@@ -131,8 +141,7 @@ GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName,
     });
 
     takebackBtn_.setLabel("Takeback");
-    takebackBtn_.setStyle(ui::buttonPlum());
-    takebackBtn_.setOnClick([this] {
+    takebackBtn_.setStyle(ui::buttonPlum());    takebackBtn_.setOnClick([this] {
         if (gameOver_) return;
         app_.connection().send(chess::net::TakebackRequestMsg{});
         addSystemChat("Takeback requested");
@@ -249,6 +258,19 @@ void GameScreen::layoutPanel()
     chatLogBg_.setRect(panelLayout_.chatPanel);
     chatLogBg_.setFill(ui::pal::bgDeep);
     chatLogBg_.setOutline(ui::pal::bgElevated);
+
+    // 15.4 chips: fixed-width split of the composed chip row — the wide
+    // phrase ("Thanx for the game") takes the third slot.
+    constexpr std::array<float, 3> chipW = { 84.f, 88.f, 132.f };
+    constexpr float chipGap = 4.f;
+    float chipX = panelLayout_.chipRow.position.x;
+    for (int i = 0; i < 3; ++i) {
+        chatChips_[i].setRect(sf::FloatRect(
+            sf::Vector2f(chipX, panelLayout_.chipRow.position.y),
+            sf::Vector2f(chipW[i], panelLayout_.chipRow.size.y)));
+        chipX += chipW[i] + chipGap;
+        chatChips_[i].setEnabled(!spectator_);
+    }
 
     chatInput_.setRect(panelLayout_.chatInput);
 }
@@ -526,6 +548,16 @@ void GameScreen::sendChat()
     addChatLine(YouName(), text);
 }
 
+// 15.4: a chip is a canned line of the same kind the input sends — an
+// ordinary ChatMsg plus the server-echo append. Watchers can't talk and
+// the input's own guard is mirrored here.
+void GameScreen::sendQuickChat(const std::string& phrase)
+{
+    if (spectator_ || phrase.empty()) return;
+    app_.connection().send(chess::net::ChatMsg{phrase});
+    addChatLine(YouName(), phrase);
+}
+
 void GameScreen::handleEvent(const sf::Event& event)
 {
     if (const auto* kp = event.getIf<sf::Event::KeyPressed>()) {
@@ -687,6 +719,11 @@ void GameScreen::handleEvent(const sf::Event& event)
             if (takebackBtn_.handleEvent(event, local)) return;
         }
     }
+
+    // 15.4: the chip row sits below the action buttons; disabled chips
+    // (spectators) answer hover only and fall through.
+    for (auto& chip : chatChips_)
+        if (chip.handleEvent(event, local)) return;
 
     if (spectator_) return; // the board is read-only from here on
     if (const auto* mb = event.getIf<sf::Event::MouseButtonPressed>()) {
@@ -1203,6 +1240,9 @@ void GameScreen::drawChat(sf::RenderWindow& window)
 
     chatLabel_.draw(window, font);
 
+    // 15.4 quick-message chips ride between the log and the input.
+    for (auto& chip : chatChips_) chip.draw(window, font);
+
     const float logTop = panelLayout_.chatPanel.position.y;
     const float logBottom = panelLayout_.chatPanel.position.y
         + panelLayout_.chatPanel.size.y;
@@ -1221,27 +1261,26 @@ void GameScreen::drawChat(sf::RenderWindow& window)
         if (y + lineH > logBottom) break;
         const ChatEntry& entry = chatLog_[i];
 
-        // Three-part line (11.8): dim [HH:MM] tag, colored sender, gray
-        // text; system lines skip the sender and render gray. Each part
-        // truncates into the remaining panel width (~6 px per glyph, the
-        // same estimator the pre-11.8 renderer used).
+        // Three-part line (11.8, tokens per 15.4): dim [HH:MM] tag,
+        // colored sender, gray text; system lines skip the sender and
+        // render soft gray. Each part truncates into the remaining panel
+        // width via the chat module's ~6 px/glyph estimator
+        // (chatMaxChars — the same math the pre-11.8 renderer used).
         const float left = px + 4.f;
         const float right = px + panelW - 4.f;
         const auto fits = [&](float x, const std::string& text) {
-            constexpr float CharWidth = 6.f;
-            return safeTruncate(text,
-                static_cast<std::size_t>(std::max(0.f, right - x) / CharWidth));
+            return safeTruncate(text, chatMaxChars(right - x));
         };
 
         sf::Text timeTag(font, "[" + chatTimestamp(entry.epochSec) + "] ", 13);
-        timeTag.setFillColor(sf::Color(110, 110, 110)); // chat stub gray
+        timeTag.setFillColor(ui::pal::textGhost);
         timeTag.setPosition({left, y});
         window.draw(timeTag);
 
         float x = left + timeTag.getLocalBounds().size.x;
         if (entry.name.empty()) {
             sf::Text line(font, fits(x, entry.text), 13);
-            line.setFillColor(sf::Color(170, 170, 170)); // chat muted line
+            line.setFillColor(ui::pal::textSoft);
             line.setPosition({x, y});
             window.draw(line);
         } else {

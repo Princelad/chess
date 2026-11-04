@@ -116,14 +116,18 @@ TEST(BoardLayout, ChatBundlePinsInputToTheWindowBottom)
     EXPECT_FLOAT_EQ(l.chatSeparatorY, 470.f); // 432 + 30 + 8
     EXPECT_FLOAT_EQ(l.chatLabelY, 476.f);
 
-    // Log area: label + 18, down to 8 px above the input.
+    // 15.4: the chip row eats into the former log band — log ends 4 px
+    // above the 22-px chip row; the chips end 4 px above the input.
     EXPECT_FLOAT_EQ(l.chatPanel.position.y, 494.f);
     EXPECT_FLOAT_EQ(l.chatPanel.size.x, 312.f);
+    EXPECT_FLOAT_EQ(l.chatPanel.position.y + l.chatPanel.size.y, 562.f);
+    EXPECT_FLOAT_EQ(l.chipRow.position.y, 566.f);
+    EXPECT_FLOAT_EQ(l.chipRow.size.y, 22.f);
+    EXPECT_FLOAT_EQ(l.chipRow.position.y + l.chipRow.size.y,
+                    l.chatInput.position.y - 4.f);
     EXPECT_FLOAT_EQ(l.chatInput.position.y, WinH - 20.f - 28.f); // 592
     EXPECT_FLOAT_EQ(l.chatInput.size.x, 312.f);
     EXPECT_FLOAT_EQ(l.chatInput.size.y, 28.f);
-    EXPECT_FLOAT_EQ(l.chatPanel.position.y + l.chatPanel.size.y,
-                    l.chatInput.position.y - 8.f);
 }
 
 TEST(BoardLayout, NonChatCardStackLeavesBundleZeroed)

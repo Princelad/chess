@@ -290,6 +290,16 @@ constexpr ButtonStyle buttonSuccess()
              sf::Color{ 160, 160, 160 }, type::Heading };
 }
 
+// 15.4 quick-message chips — quiet card chips at the small type size
+constexpr ButtonStyle buttonChip()
+{
+    return { sf::Color{ 38, 38, 40 },  sf::Color{ 58, 58, 62 },
+             sf::Color{ 30, 30, 30 },  sf::Color{ 40, 38, 36 },
+             sf::Color{ 90, 90, 90 },  sf::Color{ 200, 200, 200 },
+             sf::Color{ 68, 66, 64 },  sf::Color{ 140, 140, 140 },
+             sf::Color{ 180, 180, 180 }, type::Small };
+}
+
 // "Accept" (draw/takeback offer, game screen)
 constexpr ButtonStyle buttonSuccessBright()
 {

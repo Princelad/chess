@@ -5,6 +5,7 @@
 #include <SFML/Graphics/Color.hpp>
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <ctime>
 #include <string>
@@ -22,6 +23,18 @@ struct ChatEntry {
 };
 
 inline const char* YouName() { return "You"; }
+
+// 15.4: the chat renderer's width estimation, hoisted into the pure chat
+// module. Chat text renders at exactly one size (type::Small, 13 px), so
+// the truncation math is a fixed ~6 px per glyph; chatMaxChars turns a
+// remaining pixel width into the glyph budget the line renderer truncates
+// each part into.
+constexpr float chatGlyphWidth = 6.f;
+
+inline std::size_t chatMaxChars(float widthPx)
+{
+    return static_cast<std::size_t>(std::max(0.f, widthPx) / chatGlyphWidth);
+}
 
 // Local-time "HH:MM" from an epoch second (the wall clock at arrival).
 inline std::string chatTimestamp(std::int64_t epochSec)

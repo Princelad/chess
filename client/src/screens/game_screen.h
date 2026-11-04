@@ -19,6 +19,7 @@
 #include <chess/net/messages.h>
 #include <chess/types.h>
 
+#include <array>
 #include <optional>
 #include <string>
 #include <utility>
@@ -73,6 +74,9 @@ private:
     void drawButtons(sf::RenderWindow& window);
     void drawPromptBanner(sf::RenderWindow& window, const char* text);
     void drawChat(sf::RenderWindow& window);
+    // 15.4: a canned chip sends its phrase as an ordinary ChatMsg — the
+    // server echo appends it, exactly like typed chat.
+    void sendQuickChat(const std::string& phrase);
     void drawHelpOverlay(sf::RenderWindow& window);
     void finishGameOver();
 
@@ -143,6 +147,9 @@ private:
     Button resignBtn_;
     Button offerDrawBtn_;
     Button takebackBtn_;
+    // 15.4 quick-message chips above the chat input (online only; chips
+    // disable for spectators — they can't chat, 12.4).
+    std::array<Button, 3> chatChips_;
     // Spectator-mode replacement row (12.4): a single leave button.
     Button leaveBtn_;
     // 11.3: `takebackOfferPending_` is the opponent's incoming request

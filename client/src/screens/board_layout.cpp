@@ -60,11 +60,16 @@ BoardLayout composeBoardLayout(float windowWidth, float windowHeight,
 
         const float logTop = l.chatSeparatorY + 24.f;
         const float inputY = windowHeight - 20.f - 28.f;
-        const float logBottom = inputY - 8.f;
+
+        // 15.4 quick-message chips: 22 px high, 4 px off the input; the
+        // log band ends 4 px above the chip row.
+        l.chipRow = sf::FloatRect(
+            sf::Vector2f(l.panelX, inputY - 26.f),
+            sf::Vector2f(l.panelWidth, 22.f));
 
         l.chatPanel = sf::FloatRect(
             sf::Vector2f(l.panelX, logTop),
-            sf::Vector2f(l.panelWidth, logBottom - logTop));
+            sf::Vector2f(l.panelWidth, (inputY - 30.f) - logTop));
         l.chatInput = sf::FloatRect(
             sf::Vector2f(l.panelX, inputY),
             sf::Vector2f(l.panelWidth, 28.f));
