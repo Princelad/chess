@@ -782,7 +782,7 @@ change; 763-test suite stays green (CI discipline from 13.x continues)
 
 ---
 
-## Phase 15 — Game experience rebuild (`client/`)
+## Phase 15 — Game experience rebuild (`client/`) — DONE (`v1.8.0`)
 
 **Goal:** the game experience rebuilt board-first — the in-game right panel
 becomes a full stack (player card / clock / move list / actions) shared by
@@ -818,8 +818,10 @@ input parity tests green; zero protocol/server changes
   - [x] Board entrance animation optional (config `animation.entrance`, default off)
   - Tests: `tests/client/theme_test.cpp` +3 (annotation geometry/color pins, drag-shadow tokens), `tests/client/motion_test.cpp` +7 (spinner alpha math, entrance opacity ramp); suite 819
 
-- [ ] **15.6 Consistency pass**
-  - [ ] GameOverScreen / TournamentLobbyScreen / LeaderboardScreen / HistoryScreen restyled via the composer + tokens; promotion picker restyled (bigger cells, token stroke)
+- [x] **15.6 Consistency pass**
+  - [x] GameOverScreen / TournamentLobbyScreen / LeaderboardScreen / HistoryScreen restyled via the composer + tokens; promotion picker restyled (bigger cells, token stroke)
+  - [x] Auto-queen gate fix found by the probe: `trySendMove`/LocalGameScreen commit called `autoQueenMove()` unconditionally — the picker could never open with auto-queen off; both now defer to `app_.autoQueen()` (puzzle exempt by design)
+  - Tests: `tests/client/theme_test.cpp` +1 (promo token pin), `tests/client/widget_test.cpp` +3 (shared `promoStackCell` geometry: destination anchor, flipped mirror, stack bounds); suite 823
 
 ---
 
