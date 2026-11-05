@@ -430,15 +430,9 @@ PromoCell PuzzleScreen::promoCell(int index) const
 {
     if (!promo_)
         return {{0.f, 0.f}, 0.f};
-    float sq = boardView_.squareSize();
-    sf::Vector2f origin = boardView_.boardOrigin();
-    bool flipped = boardView_.isFlipped();
-    int col = flipped ? (7 - promo_->toFile) : promo_->toFile;
-    int rowStart = flipped ? promo_->toRank : (7 - promo_->toRank);
-    return {
-        {origin.x + static_cast<float>(col) * sq,
-         origin.y + static_cast<float>(rowStart + index) * sq},
-        sq};
+    return promoStackCell(boardView_.squareSize(), boardView_.boardOrigin(),
+                          boardView_.isFlipped(), promo_->toFile,
+                          promo_->toRank, index);
 }
 
 std::optional<chess::PieceType>
@@ -674,7 +668,7 @@ void PuzzleScreen::draw(sf::RenderWindow& window)
             cell.setPosition(c.pos);
             cell.setFillColor(ui::overlay::cellFill);
             cell.setOutlineColor(ui::overlay::cellStroke);
-            cell.setOutlineThickness(1.f);
+            cell.setOutlineThickness(ui::overlay::promoStrokeW);
             window.draw(cell);
 
             if (i == promoHover_) {

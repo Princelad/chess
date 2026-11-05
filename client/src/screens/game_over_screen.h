@@ -3,6 +3,7 @@
 #include "app.h"
 #include "widgets/button.h"
 #include "widgets/label.h"
+#include "widgets/panel.h"
 #include <chess/board.h>
 #include <chess/move.h>
 #include <chess/net/messages.h>
@@ -72,6 +73,9 @@ private:
     Label reasonLabel_;
     Label statusLabel_;
     Label hint_;
+    // 15.6: a rounded card backs the whole result stack, matching the
+    // list screens' Panel chrome (bgPanel + panel stroke).
+    Panel backdrop_;
     int focus_ = 0;
 };
 

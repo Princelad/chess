@@ -3,6 +3,7 @@
 #include "app.h"
 #include "widgets/button.h"
 #include "widgets/label.h"
+#include "widgets/panel.h"
 #include <chess/net/messages.h>
 
 #include <string>
@@ -58,6 +59,9 @@ private:
     Label headerName_;
     Label headerPoints_;
     Label headerRecord_;
+    // 15.6: the standings table got the list screens' Panel chrome and
+    // zebra rows (pal::rowStripe, same recipe as the 15.3 navigator).
+    Panel tablePanel_;
     Label statusLabel_;
     Label resultLabel_;
     Button leaveBtn_;

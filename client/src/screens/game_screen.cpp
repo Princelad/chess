@@ -329,9 +329,12 @@ void GameScreen::trySendMove(int targetFile, int targetRank)
     }
 
     if (found->isPromotion()) {
-        if (auto qm = autoQueenMove(promos)) {
-            commitMove(*qm);
-            return;
+        // Auto-queen ON commits the queen directly; OFF opens the picker.
+        if (app_.autoQueen()) {
+            if (auto qm = autoQueenMove(promos)) {
+                commitMove(*qm);
+                return;
+            }
         }
         buildPromotion(hl_.selectedSquare->first, hl_.selectedSquare->second,
                        targetFile, targetRank);
@@ -493,16 +496,9 @@ std::optional<chess::PieceType> GameScreen::promoTypeForKey(sf::Keyboard::Key ke
 
 PromoCell GameScreen::promoCell(int index) const
 {
-    float sq = boardView_.squareSize();
-    sf::Vector2f origin = boardView_.boardOrigin();
-    bool flipped = boardView_.isFlipped();
-    int col = flipped ? (7 - promo_->toFile) : promo_->toFile;
-    int rowStart = flipped ? promo_->toRank : (7 - promo_->toRank);
-    return {
-        {origin.x + static_cast<float>(col) * sq,
-         origin.y + static_cast<float>(rowStart + index) * sq},
-        sq
-    };
+    return promoStackCell(boardView_.squareSize(), boardView_.boardOrigin(),
+                          boardView_.isFlipped(), promo_->toFile,
+                          promo_->toRank, index);
 }
 
 void GameScreen::addChatLine(const std::string& name, const std::string& text)
@@ -1360,7 +1356,7 @@ void GameScreen::draw(sf::RenderWindow& window)
             cell.setPosition(c.pos);
             cell.setFillColor(ui::overlay::cellFill);
             cell.setOutlineColor(ui::overlay::cellStroke);
-            cell.setOutlineThickness(1.f);
+            cell.setOutlineThickness(ui::overlay::promoStrokeW);
             window.draw(cell);
 
             if (i == promoHover_) {

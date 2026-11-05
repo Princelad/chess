@@ -5,6 +5,8 @@
 #include "widgets/player_card.h"
 #include "widgets/text_field.h"
 
+#include "screens/promo_state.h"
+
 #include <gtest/gtest.h>
 
 #include "ui/theme.h"
@@ -380,6 +382,56 @@ TEST(WidgetPlayerCard, StateDefaultsAreQuiet)
     EXPECT_FALSE(state.remainingMs.has_value()); // unlimited game
     EXPECT_EQ(state.captured, nullptr);
     EXPECT_EQ(state.materialDiff, 0);
+}
+
+// --- 15.6 shared promotion-picker geometry -----------------------------------
+
+TEST(WidgetPromoStack, CellsCenterOnTheDestinationColumnAndStackContiguously)
+{
+    const float sq = 75.f;
+    const sf::Vector2f origin{20.f, 20.f};
+
+    // White promoting on the h-file (toFile 7, toRank 7): visual column 7,
+    // visual row 0 — the first cell centers on the destination square.
+    const PromoCell first = promoStackCell(sq, origin, false, 7, 7, 0);
+    EXPECT_FLOAT_EQ(first.size, sq * ui::overlay::promoCellScale);
+    EXPECT_FLOAT_EQ(first.pos.x, origin.x + 7.f * sq
+        + (sq - first.size) * 0.5f);
+    EXPECT_FLOAT_EQ(first.pos.y, origin.y - (first.size - sq) * 0.5f);
+
+    // Contiguous stack: cell k+1 starts exactly where cell k ends.
+    const PromoCell second = promoStackCell(sq, origin, false, 7, 7, 1);
+    EXPECT_FLOAT_EQ(second.pos.y, first.pos.y + first.size);
+    EXPECT_FLOAT_EQ(second.pos.x, first.pos.x);
+}
+
+TEST(WidgetPromoStack, FlippedMirrorsFileAndRankTowardTheCenter)
+{
+    const float sq = 60.f;
+    const sf::Vector2f origin{0.f, 0.f};
+
+    // Black flipped, promoting on file a/toRank 0: mirrored column 7,
+    // mirrored row 0 (promotion rank sits visually at the top when
+    // flipped) — the stack grows downward into the board, same as white's.
+    const PromoCell first = promoStackCell(sq, origin, true, 0, 0, 0);
+    EXPECT_FLOAT_EQ(first.pos.x, origin.x + 7.f * sq
+        + (sq - first.size) * 0.5f);
+    EXPECT_FLOAT_EQ(first.pos.y, origin.y - (first.size - sq) * 0.5f);
+}
+
+TEST(WidgetPromoStack, StackFitsInsideTheBoardColumn)
+{
+    // Four cells from a top-anchored promotion square stay inside the
+    // board (the checkbox row hangs off the last cell beneath, so the
+    // stack must never overflow the playing field).
+    const float sq = 75.f;
+    const sf::Vector2f origin{20.f, 20.f};
+    const float boardBottom = origin.y + 8.f * sq;
+    for (int i = 0; i < 4; ++i) {
+        const PromoCell c = promoStackCell(sq, origin, false, 0, 7, i);
+        EXPECT_GE(c.pos.y, origin.y - sq); // one-square headroom for the inset
+        EXPECT_LT(c.pos.y + c.size, boardBottom + sq);
+    }
 }
 
 } // namespace

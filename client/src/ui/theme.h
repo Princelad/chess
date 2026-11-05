@@ -141,6 +141,10 @@ namespace overlay {
     inline constexpr sf::Color cellStroke{ 180, 180, 180, 180 };
     inline constexpr sf::Color cellHover{ 255, 255, 255, 30 };
     inline constexpr sf::Color cellGlyph{ 240, 240, 240 };
+    // 15.6 promotion picker: cells read bigger than the board square they
+    // ride on, and the stroke width rides a token (was a hardcoded 1 px).
+    inline constexpr float promoCellScale = 1.15f;
+    inline constexpr float promoStrokeW = 2.f;
 } // namespace overlay
 
 // ---------------------------------------------------------------------------

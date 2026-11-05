@@ -178,5 +178,13 @@ TEST(ThemeBoard, DragShadowTokensKeepTheSquashedBlob)
     EXPECT_LT(ui::board::dragLiftScale, 1.1f);
 }
 
+TEST(ThemeBoard, PromoPickerTokensPinTheRestyle)
+{
+    // 15.6: cells read 15% over the board square, the stroke thickens
+    // from the hardcoded 1 px to the token value.
+    EXPECT_FLOAT_EQ(ui::overlay::promoCellScale, 1.15f);
+    EXPECT_FLOAT_EQ(ui::overlay::promoStrokeW, 2.f);
+}
+
 } // namespace
 } // namespace chess::client

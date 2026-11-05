@@ -22,6 +22,10 @@ constexpr float RematchY = 335.f;
 constexpr float ArchiveBtnY = 385.f;
 constexpr float AnalyzeBtnY = 435.f;
 constexpr float MenuBtnY = 485.f;
+// 15.6 card backdrop: spans the result header down past the hint line.
+constexpr float CardW = 560.f;
+constexpr float CardTop = ResultY - 35.f;
+constexpr float CardBottom = MenuBtnY + BtnH + 42.f;
 }
 
 GameOverScreen::GameOverScreen(App& app,
@@ -87,7 +91,7 @@ GameOverScreen::GameOverScreen(App& app,
     reasonLabel_.setFontSize(ui::type::Heading);
     reasonLabel_.setColor(ui::pal::textMuted);
 
-    statusLabel_.setFontSize(16); // offer banner row size
+    statusLabel_.setFontSize(ui::type::Body);
     statusLabel_.setColor(ui::pal::warnSoft);
 
     hint_.setText("Tab to switch, Enter to select");
@@ -132,6 +136,10 @@ GameOverScreen::GameOverScreen(App& app,
     menuBtn_.setOnClick([this] { activateMenu(); });
 
     layoutWidgets();
+
+    backdrop_.setRect(sf::FloatRect(
+        sf::Vector2f((App::WindowWidth - CardW) / 2.f, CardTop),
+        sf::Vector2f(CardW, CardBottom - CardTop)));
 
     rematchBtn_.setFocused(true);
 }
@@ -403,6 +411,9 @@ void GameOverScreen::update(float /*dtSec*/)
 void GameOverScreen::draw(sf::RenderWindow& window)
 {
     auto& font = app_.font();
+
+    // 15.6: card chrome first; the stack reads on it.
+    backdrop_.draw(window);
 
     resultLabel_.draw(window, font);
     if (!reasonText_.empty())
