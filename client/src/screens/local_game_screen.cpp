@@ -1,5 +1,6 @@
 #include "local_game_screen.h"
 
+#include "entrance.h"
 #include "ui/theme.h"
 #include "game_over_screen.h"
 #include "keyboard.h"
@@ -15,7 +16,6 @@
 namespace chess::client {
 
 namespace {
-constexpr float BtnH = 30.f;
 
 net::GameOverReason detectDrawReason(const Board& board)
 {
@@ -64,26 +64,29 @@ LocalGameScreen::LocalGameScreen(App& app, Color myColor,
                  app.boardTheme(),
                  app.showCoordinates(),
                  app.coordinateStyle())
-    , hud_(app_, boardView_.panelX(),
-           static_cast<float>(App::WindowWidth) - boardView_.panelX() - 8.f)
+    , panelLayout_(layout::composeBoardLayout(
+          static_cast<float>(App::WindowWidth),
+          static_cast<float>(App::WindowHeight), boardView_,
+          layout::BoardLayoutOptions{true, false, false}))
+    , hud_(app_, panelLayout_)
     , myTurn_(myColor == Color::White)
     , engineDepth_(depth)
 {
+    // 15.5 board entrance: opt-in config key (default off), ctor-armed.
+    if (app_.config().getBool("animation.entrance", false))
+        entranceSec_ = 0.f;
+
     hud_.setGame(Board::fromStartPos(), {}, {});
     hud_.setInfo("Computer", myColor_, myTurn_, gameOver_);
 
     backBtn_.setLabel("Menu");
     backBtn_.setIcon(ui::icons::IconKind::ArrowBack);
     backBtn_.setStyle(ui::buttonDanger());
-    backBtn_.setRect(sf::FloatRect(
-        sf::Vector2f(boardView_.panelX(), hud_.contentBottom()),
-        sf::Vector2f(140.f, BtnH)));
+    backBtn_.setRect(panelLayout_.actionRect(0, 140.f, 8.f));
     backBtn_.setOnClick([this] { returnToMenu(); });
 
     takebackBtn_.setLabel("Takeback");
-    takebackBtn_.setRect(sf::FloatRect(
-        sf::Vector2f(boardView_.panelX() + 148.f, hud_.contentBottom()),
-        sf::Vector2f(140.f, BtnH)));
+    takebackBtn_.setRect(panelLayout_.actionRect(1, 140.f, 8.f));
     takebackBtn_.setOnClick([this] { takeback(); });
 
     autoQueenCheck_.setOnToggle([this](bool checked) {
@@ -155,9 +158,12 @@ void LocalGameScreen::tryMove(int targetFile, int targetRank)
     }
 
     if (found->isPromotion()) {
-        if (auto qm = autoQueenMove(promos)) {
-            applyMove(*qm);
-            return;
+        // Auto-queen ON commits the queen directly; OFF opens the picker.
+        if (app_.autoQueen()) {
+            if (auto qm = autoQueenMove(promos)) {
+                applyMove(*qm);
+                return;
+            }
         }
         buildPromotion(hl_.selectedSquare->first, hl_.selectedSquare->second,
                        targetFile, targetRank);
@@ -233,6 +239,7 @@ void LocalGameScreen::deselect()
 void LocalGameScreen::syncViewHighlights()
 {
     const Board& shown = hud_.navigator().board();
+    hl_.hoverSquare = boardView_.pixelToSquare(cursor_);
     hl_.lastMoveFrom = hud_.navigator().lastMoveFrom();
     hl_.lastMoveTo = hud_.navigator().lastMoveTo();
     hl_.cursorSquare = keyCursor_;
@@ -385,16 +392,9 @@ void LocalGameScreen::takeback()
 
 PromoCell LocalGameScreen::promoCell(int index) const
 {
-    float sq = boardView_.squareSize();
-    sf::Vector2f origin = boardView_.boardOrigin();
-    bool flipped = boardView_.isFlipped();
-    int col = flipped ? (7 - promo_->toFile) : promo_->toFile;
-    int rowStart = flipped ? promo_->toRank : (7 - promo_->toRank);
-    return {
-        {origin.x + static_cast<float>(col) * sq,
-         origin.y + static_cast<float>(rowStart + index) * sq},
-        sq
-    };
+    return promoStackCell(boardView_.squareSize(), boardView_.boardOrigin(),
+                          boardView_.isFlipped(), promo_->toFile,
+                          promo_->toRank, index);
 }
 
 void LocalGameScreen::handleEvent(const sf::Event& event)
@@ -501,8 +501,7 @@ void LocalGameScreen::handleEvent(const sf::Event& event)
     }
 
     if (const auto* we = event.getIf<sf::Event::MouseWheelScrolled>()) {
-        float px = boardView_.panelX();
-        if (app_.toLocal(we->position).x >= px) {
+        if (app_.toLocal(we->position).x >= panelLayout_.panelX) {
             hud_.handleScroll(we->delta);
             return;
         }
@@ -606,7 +605,13 @@ void LocalGameScreen::handleEvent(const sf::Event& event)
 
 void LocalGameScreen::update(float dtSec)
 {
-    hud_.update(0.f);
+    hud_.update(dtSec);
+    // 15.5 board entrance: advance the fade while the timer runs.
+    if (entranceSec_ && *entranceSec_ < kEntranceSec)
+        *entranceSec_ += dtSec;
+    // 15.2: the engine card's thinking dot mirrors the search state
+    // (setInfo already carries myTurn for the own card's dot).
+    hud_.setOpponentThinking(engineThinking_ && !gameOver_);
     anim_.update(dtSec);
 
     takebackBtn_.setEnabled(!gameOver_ && !engineFailed_ && myTurn_
@@ -640,7 +645,9 @@ void LocalGameScreen::draw(sf::RenderWindow& window)
     syncViewHighlights();
     boardView_.drawHighlights(window, hl_, shown);
     boardView_.drawLabels(window, font);
-    boardView_.drawPieces(window, font, shown, app_, &anim_);
+    // 15.5: the entrance fade rides the piece layer (squares stay put).
+    boardView_.drawPieces(window, font, shown, app_, &anim_,
+        entranceSec_ ? entranceOpacity(*entranceSec_) : 1.f);
     boardView_.drawAnnotations(window, annotations_.arrows(), annotations_.circles());
 
     if (drag_.isDragging() && dragFrom_) {
@@ -657,7 +664,7 @@ void LocalGameScreen::draw(sf::RenderWindow& window)
             cell.setPosition(c.pos);
             cell.setFillColor(ui::overlay::cellFill);
             cell.setOutlineColor(ui::overlay::cellStroke);
-            cell.setOutlineThickness(1.f);
+            cell.setOutlineThickness(ui::overlay::promoStrokeW);
             window.draw(cell);
 
             if (i == promoHover_) {

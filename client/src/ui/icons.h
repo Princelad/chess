@@ -31,19 +31,20 @@ namespace chess::client::ui::icons {
 
 enum class IconKind
 {
-    Clock,     // chess clock figure (HUD player cards)
+    Clock,     // chess clock figure (player cards)
     Flag,      // resignation
     HandDraw,  // draw offer
     Flip,      // board orientation (affordance lands with 15.x cards)
     Bulb,      // puzzle hint
     Medal,     // tournament/leaderboard achievement
     Eye,       // spectator watcher count (12.4)
+    Link,      // opponent connection state (15.2 player cards)
     ArrowBack, // leave / back to menu
     ArrowLeft, // settings cycler prev (visible stepper)
     ArrowRight, // settings cycler next
 };
 
-constexpr int iconKindCount() { return 10; }
+constexpr int iconKindCount() { return 11; }
 
 // Icon square for text of `textSizePx` (e.g. ui::type::Heading -> ~23px).
 inline float iconBox(unsigned textSizePx)
@@ -162,6 +163,12 @@ inline void drawIcon(sf::RenderTarget& target, IconKind kind,
         lens.setOutlineThickness(0.07f * u);
         target.draw(lens);
         circle(0.50f * u, 0.50f * u, 0.11f * u); // pupil
+        break;
+    }
+    case IconKind::Link: {
+        // Two interlocked chain rings, slightly offset horizontally.
+        ring(0.33f * u, 0.50f * u, 0.21f * u, 0.09f * u);
+        ring(0.67f * u, 0.50f * u, 0.21f * u, 0.09f * u);
         break;
     }
     case IconKind::ArrowLeft: // same glyph as leave/back, distinct meaning

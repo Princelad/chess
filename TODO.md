@@ -782,7 +782,7 @@ change; 763-test suite stays green (CI discipline from 13.x continues)
 
 ---
 
-## Phase 15 — Game experience rebuild (`client/`)
+## Phase 15 — Game experience rebuild (`client/`) — DONE (`v1.8.0`)
 
 **Goal:** the game experience rebuilt board-first — the in-game right panel
 becomes a full stack (player card / clock / move list / actions) shared by
@@ -792,29 +792,36 @@ every board-bearing screen instead of each screen hand-drawing a panel.
 SpectateScreen (12.4) and PuzzleScreen render through the shared composer;
 input parity tests green; zero protocol/server changes
 
-- [ ] **15.1 Shared board composer (`client/src/screens/board_layout.{h,cpp}`)**
-  - [ ] One layout module: top player card band, board rect, bottom player card band, right action stack — parameterized per screen (PuzzleScreen has no cards; Analysis has eval bar slot; Spectate is read-only)
-  - [ ] Migrate the five board-bearing screens onto it; screens keep their event handling, composer owns geometry only (single writer rule for rect math)
+- [x] **15.1 Shared board composer (`client/src/screens/board_layout.{h,cpp}`)**
+  - [x] One layout module: top player card band, board rect, bottom player card band, right action stack — parameterized per screen (PuzzleScreen has no cards; Analysis has eval bar slot; Spectate is read-only)
+  - [x] Migrate the five board-bearing screens onto it; screens keep their event handling, composer owns geometry only (single writer rule for rect math)
+  - Tests: `tests/client/board_layout_test.cpp` (+8) — panel-width single definition, card-stack table, action pitches (96/6, 90/8, 140/8), chat bundle pinning, analysis/puzzle stacks, window-shape re-derivation; suite 799
 
-- [ ] **15.2 Player card widget (`client/src/widgets/player_card.{h,cpp}`, 9.3's residual closure)**
-  - [ ] Avatar (14.3) + name + rating suffix + captured-material row + material diff in one card; "thinking…" dot, connection icon, premove ghost badge states
-  - [ ] Clock pill styling for 11.1's figures (m:ss / tenths / amber-red thresholds preserved; no display for unlimited)
-  - [ ] Widget-level unit test: extend the client/widget test file — the 9.3 residual "player-card composition untested" closes here (headless composition via `sf::RenderTarget`-free logic slice)
+- [x] **15.2 Player card widget (`client/src/widgets/player_card.{h,cpp}`, 9.3's residual closure)**
+  - [x] Avatar (14.3) + name + rating suffix + captured-material row + material diff in one card; "thinking…" dot, connection icon, premove ghost badge states
+  - [x] Clock pill styling for 11.1's figures (m:ss / tenths / amber-red thresholds preserved; no display for unlimited)
+  - [x] Widget-level unit test: extend the client/widget test file — the 9.3 residual "player-card composition untested" closes here (headless composition via `sf::RenderTarget`-free logic slice)
+  - Tests: `tests/client/widget_test.cpp` (+5) — clock boundaries (incl. the 59.95 → "1:00" half-up tenth), heat thresholds (red <10 s / amber <30 s), rating-suffix rounding, band slot math, quiet-state defaults; `board_layout_test.cpp` +card-band pins; icons registry 11; suite 804
 
-- [ ] **15.3 Move-list panel restyle**
-  - [ ] Alternating row shading + current-ply highlight + move-number gutter in the 9.3 navigator; scroll auto-follows the live ply (only when the user is at the tail — never yank during browsing)
-  - [ ] ECO opening (11.5) stays the header; draw-offer/takeback prompt rows restyled as banners
+- [x] **15.3 Move-list panel restyle**
+  - [x] Alternating row shading + current-ply highlight + move-number gutter in the 9.3 navigator; scroll auto-follows the live ply (only when the user is at the tail — never yank during browsing)
+  - [x] ECO opening (11.5) stays the header; draw-offer/takeback prompt rows restyled as banners
+  - Tests: `tests/client/move_navigator_test.cpp` (+4) — zebra parity (`shadedLine`), row-height `visibleLines` rules, tail auto-follow (append at end scrolls, append while browsing moves neither ply nor scroll); suite 808
 
-- [ ] **15.4 Quick-message strip + chat restyle**
-  - [ ] Three canned chips ("Good luck", "Good game", "Thanx for the game") above the chat panel, online GameScreen only; zero protocol change (she sends ordinary `ChatMsg`)
-  - [ ] Chat panel restyle on 11.8's three-part line renderer (tokens for width/truncation math)
+- [x] **15.4 Quick-message strip + chat restyle**
+  - [x] Three canned chips ("Good luck", "Good game", "Thanx for the game") above the chat panel, online GameScreen only; zero protocol change (she sends ordinary `ChatMsg`)
+  - [x] Chat panel restyle on 11.8's three-part line renderer (tokens for width/truncation math)
+  - Tests: `tests/client/board_layout_test.cpp` chip-row/shrunken-log pins, `tests/client/chat_test.cpp` +1 (`chatMaxChars` estimator); suite 809
 
-- [ ] **15.5 Input & motion polish**
-  - [ ] Square-hover highlight under cursor, drag shadow fidelity, annotation arrow width/opacity from tokens, animated "waiting" spinner for engine/server think states
-  - [ ] Board entrance animation optional (config `animation.entrance`, default off)
+- [x] **15.5 Input & motion polish**
+  - [x] Square-hover highlight under cursor, drag shadow fidelity, annotation arrow width/opacity from tokens, animated "waiting" spinner for engine/server think states
+  - [x] Board entrance animation optional (config `animation.entrance`, default off)
+  - Tests: `tests/client/theme_test.cpp` +3 (annotation geometry/color pins, drag-shadow tokens), `tests/client/motion_test.cpp` +7 (spinner alpha math, entrance opacity ramp); suite 819
 
-- [ ] **15.6 Consistency pass**
-  - [ ] GameOverScreen / TournamentLobbyScreen / LeaderboardScreen / HistoryScreen restyled via the composer + tokens; promotion picker restyled (bigger cells, token stroke)
+- [x] **15.6 Consistency pass**
+  - [x] GameOverScreen / TournamentLobbyScreen / LeaderboardScreen / HistoryScreen restyled via the composer + tokens; promotion picker restyled (bigger cells, token stroke)
+  - [x] Auto-queen gate fix found by the probe: `trySendMove`/LocalGameScreen commit called `autoQueenMove()` unconditionally — the picker could never open with auto-queen off; both now defer to `app_.autoQueen()` (puzzle exempt by design)
+  - Tests: `tests/client/theme_test.cpp` +1 (promo token pin), `tests/client/widget_test.cpp` +3 (shared `promoStackCell` geometry: destination anchor, flipped mirror, stack bounds); suite 823
 
 ---
 

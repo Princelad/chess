@@ -15,12 +15,6 @@
 namespace chess::client {
 
 namespace {
-constexpr float MoveListTop = 130.f;
-constexpr float MoveListBottom = 400.f;
-constexpr float NavBtnY = 410.f;
-constexpr float NavBtnH = 30.f;
-constexpr float EvalTextY = 450.f;
-
 float evalToBarFraction(int cp)
 {
     float score = static_cast<float>(cp) / 100.f;
@@ -55,6 +49,10 @@ AnalysisScreen::AnalysisScreen(App& app,
                  app.boardTheme(),
                  app.showCoordinates(),
                  app.coordinateStyle())
+    , panelLayout_(layout::composeBoardLayout(
+          static_cast<float>(App::WindowWidth),
+          static_cast<float>(App::WindowHeight), boardView_,
+          layout::BoardLayoutOptions{false, true}))
 {
     navigator_.setGame(std::move(initialBoard), std::move(moves), std::move(sanMoves));
     evals_.resize(navigator_.totalPlies() + 1);
@@ -112,24 +110,15 @@ AnalysisScreen::~AnalysisScreen()
 
 void AnalysisScreen::layoutPanel()
 {
-    auto& font = app_.font();
+    resultLabel_.setPosition({panelLayout_.panelX, panelLayout_.analysisTitleY});
+    analysisLabel_.setPosition({panelLayout_.panelX, panelLayout_.analysisInfoY});
+    plyLabel_.setPosition({panelLayout_.panelX, panelLayout_.analysisPlyY});
+    hint_.setPosition({panelLayout_.panelX, panelLayout_.hintY});
 
-    float px = boardView_.panelX();
-    float panelW = static_cast<float>(App::WindowWidth) - px - 8.f;
+    navigator_.setLayout(panelLayout_.moveList, panelLayout_.navRowA);
 
-    resultLabel_.setPosition({px, 30.f});
-    analysisLabel_.setPosition({px, 55.f});
-    plyLabel_.setPosition({px, 80.f});
-    hint_.setPosition({px, 600.f});
-
-    navigator_.setLayout(
-        sf::FloatRect(sf::Vector2f(px, MoveListTop),
-                      sf::Vector2f(panelW, MoveListBottom - MoveListTop)),
-        sf::FloatRect(sf::Vector2f(px, NavBtnY),
-                      sf::Vector2f(panelW, NavBtnH)));
-
-    evalTextLabel_.setPosition({px, EvalTextY});
-    turnLabel_.setPosition({px, EvalTextY + 22.f});
+    evalTextLabel_.setPosition({panelLayout_.panelX, panelLayout_.evalTextY});
+    turnLabel_.setPosition({panelLayout_.panelX, panelLayout_.evalTurnY});
 }
 
 void AnalysisScreen::startEngineAnalysis()
@@ -173,8 +162,7 @@ void AnalysisScreen::handleEvent(const sf::Event& event)
         local = app_.toLocal(rb->position);
 
     if (const auto* we = event.getIf<sf::Event::MouseWheelScrolled>()) {
-        float px = boardView_.panelX();
-        if (app_.toLocal(we->position).x >= px) {
+        if (app_.toLocal(we->position).x >= panelLayout_.panelX) {
             navigator_.handleScroll(we->delta);
             return;
         }

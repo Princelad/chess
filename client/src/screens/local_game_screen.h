@@ -54,12 +54,17 @@ private:
     App& app_;
     Color myColor_;
     BoardView boardView_;
+    // 15.1: composed panel geometry (shared board composer consumer).
+    layout::BoardLayout panelLayout_;
     HighlightState hl_;
     BoardAnnotations annotations_;
     DragTracker drag_;
     std::optional<std::pair<int, int>> dragFrom_;
     std::optional<std::pair<int, int>> rightPress_;
     sf::Vector2f cursor_{0.f, 0.f};
+    // 15.5 board entrance (see GameScreen): elapsed fade seconds, armed in
+    // the ctor only; nullopt = disabled.
+    std::optional<float> entranceSec_;
     std::pair<int, int> keyCursor_{4, 4};
     bool showingHelp_ = false;
     MoveAnimator anim_;

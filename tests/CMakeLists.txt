@@ -55,6 +55,7 @@ if(BUILD_TESTING)
         client/sfx_test.cpp
         client/widget_test.cpp
         client/theme_test.cpp
+        client/motion_test.cpp
         client/icons_test.cpp
         client/avatars_test.cpp
         client/archive_pgn_test.cpp
@@ -68,7 +69,8 @@ if(BUILD_TESTING)
         e2e/chess960_test.cpp
         e2e/arena_test.cpp
         e2e/spectator_test.cpp
-        client/puzzle_test.cpp)
+        client/puzzle_test.cpp
+        client/board_layout_test.cpp)
 
     target_link_libraries(chess-tests PRIVATE chesscore chessnet chessclient chessserver chessuci chessdb GTest::gtest_main)
     target_compile_definitions(chess-tests PRIVATE

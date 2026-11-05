@@ -1,6 +1,7 @@
 #include "widgets/move_navigator.h"
 
 #include <chess/fen.h>
+#include <chess/movegen.h>
 #include <chess/san.h>
 
 #include <gtest/gtest.h>
@@ -234,6 +235,84 @@ TEST(MoveNavigator, AppendAccountingMatchesSetGameRebuild)
               viaSet.materialAdvantage(Color::White));
     EXPECT_EQ(viaAppend.materialAdvantage(Color::Black),
               viaSet.materialAdvantage(Color::Black));
+}
+
+// --- 15.3 move-list restyle -------------------------------------------------
+
+TEST(MoveNavigator, ZebraShadesOddMoveNumberLinesOnly)
+{
+    EXPECT_TRUE(MoveNavigator::shadedLine(1));
+    EXPECT_FALSE(MoveNavigator::shadedLine(2));
+    EXPECT_TRUE(MoveNavigator::shadedLine(3));
+    EXPECT_FALSE(MoveNavigator::shadedLine(24));
+    EXPECT_TRUE(MoveNavigator::shadedLine(25));
+    // The ply-0 slot and junk inputs never shade.
+    EXPECT_FALSE(MoveNavigator::shadedLine(0));
+    EXPECT_FALSE(MoveNavigator::shadedLine(-3));
+}
+
+TEST(MoveNavigator, VisibleLinesFollowsRowHeightRules)
+{
+    // Same formula that sized the grid since 9.3: (h - 2) / 16 lines.
+    EXPECT_EQ(MoveNavigator::visibleLines(162.f), 10);
+    EXPECT_EQ(MoveNavigator::visibleLines(16.f), 1);   // one row always fits
+    EXPECT_EQ(MoveNavigator::visibleLines(0.f), 1);    // degenerate rect still 1
+}
+
+TEST(MoveNavigator, AppendAtTailScrollsFollowsTheLivePly)
+{
+    MoveNavigator nav;
+    nav.setGame(Board::fromStartPos(), {}, {});
+    nav.setLayout(sf::FloatRect({0.f, 0.f}, {100.f, 162.f}),
+                  sf::FloatRect({0.f, 0.f}, {100.f, 20.f}));
+
+    // Quiet start: the whole opening position fits, no scroll.
+    Board b = Board::fromStartPos();
+    const int vis = MoveNavigator::visibleLines(162.f);
+    for (int i = 0; i < 40; ++i) {
+        const auto legal = generateMoves(b);
+        ASSERT_FALSE(legal.empty());
+        const chess::Move& m = legal[0];
+        const std::string san = chess::san::toSan(b, m);
+        nav.appendMove(m, san);
+        b.makeMove(m);
+    }
+
+    // 40 plies = 20 pairs on a 10-line window; sitting at the tail the
+    // gutter's last line stays visible.
+    ASSERT_EQ(nav.totalPlies(), 40);
+    EXPECT_EQ(nav.scrollLine(), 20 - vis);
+
+    // A tail append keeps the tail visible (same rule).
+    const auto legal = generateMoves(b);
+    ASSERT_FALSE(legal.empty());
+    nav.appendMove(legal[0], chess::san::toSan(b, legal[0]));
+    EXPECT_EQ(nav.scrollLine(), 21 - vis);
+}
+
+TEST(MoveNavigator, AppendWhileBrowsingNeverYanksTheScroll)
+{
+    auto g = playSans(Board::fromStartPos(),
+                      {"e4", "e5", "Nf3", "Nc6", "Bb5", "a6"});
+    MoveNavigator nav;
+    nav.setGame(g.initial, g.moves, g.sans);
+    nav.setLayout(sf::FloatRect({0.f, 0.f}, {100.f, 60.f}),
+                  sf::FloatRect({0.f, 0.f}, {100.f, 20.f}));
+
+    // Park mid-game on an early ply (scrolled toward the top), then
+    // let a fresh move arrive: the panel must not yank to the tail.
+    nav.goToPly(2);
+    const int scrollWhileBrowsing = nav.scrollLine();
+
+    // A real 7th move from the live position (the SAN history replays it).
+    Board live = g.initial;
+    for (const auto& m : g.moves) live.makeMove(m);
+    const auto legal = generateMoves(live);
+    ASSERT_FALSE(legal.empty());
+    nav.appendMove(legal[0], chess::san::toSan(live, legal[0]));
+
+    EXPECT_EQ(nav.currentPly(), 2);                    // still parked on ply 2
+    EXPECT_EQ(nav.scrollLine(), scrollWhileBrowsing);  // scroll untouched
 }
 
 } // namespace

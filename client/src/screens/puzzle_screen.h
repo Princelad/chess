@@ -2,6 +2,7 @@
 
 #include "app.h"
 #include "board_interaction.h"
+#include "board_layout.h"
 #include "boardview.h"
 #include "move_animator.h"
 #include "puzzles.h"
@@ -77,6 +78,8 @@ private:
     int hintLevel_ = 0;
 
     BoardView boardView_;
+    // 15.1: composed panel geometry (shared board composer consumer).
+    layout::BoardLayout panelLayout_;
     HighlightState hl_;
     BoardAnnotations annotations_;
     DragTracker drag_;

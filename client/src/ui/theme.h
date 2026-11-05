@@ -85,6 +85,7 @@ namespace pal {
     inline constexpr sf::Color bgPanel{ 28, 28, 30 };     // list screens panel
     inline constexpr sf::Color bgDetail{ 24, 24, 26 };    // history detail well
     inline constexpr sf::Color bgCard{ 38, 38, 40 };      // row/card fills
+    inline constexpr sf::Color rowStripe{ 255, 255, 255, 18 }; // navigator zebra line (15.3)
     inline constexpr sf::Color bgCardActive{ 52, 52, 56 };
     inline constexpr sf::Color bgCardHover{ 58, 58, 62 };
     inline constexpr sf::Color bgElevated{ 70, 70, 70 };  // disabled-row fills
@@ -140,7 +141,37 @@ namespace overlay {
     inline constexpr sf::Color cellStroke{ 180, 180, 180, 180 };
     inline constexpr sf::Color cellHover{ 255, 255, 255, 30 };
     inline constexpr sf::Color cellGlyph{ 240, 240, 240 };
+    // 15.6 promotion picker: cells read bigger than the board square they
+    // ride on, and the stroke width rides a token (was a hardcoded 1 px).
+    inline constexpr float promoCellScale = 1.15f;
+    inline constexpr float promoStrokeW = 2.f;
 } // namespace overlay
+
+// ---------------------------------------------------------------------------
+// Board semantics (15.5): geometry fractions for the drag shadow and the
+// annotations, plus the hover wash. boardview.cpp consumes these — the 14.1
+// exclusions of boardview.cpp/chat_log.h/themes.h end at 15.5 for boardview.
+// Fractions are of a square's size, matching the pre-15.5 inline constants.
+// ---------------------------------------------------------------------------
+namespace board {
+    // Square hover: a faint white wash under the cursor (drawn first).
+    inline constexpr sf::Color hoverSquare{ 255, 255, 255, 28 };
+
+    // Drag fidelity: elliptical shadow under a lifted piece.
+    inline constexpr float dragShadowRadiusX = 0.55f; // fraction of square
+    inline constexpr float dragShadowRadiusY = 0.22f;
+    inline constexpr float dragShadowAlpha = 70;      // /255, pre-15.5 value
+    inline constexpr float dragShadowDrop = 0.12f;    // vertical drop fraction
+    inline constexpr float dragLiftScale = 1.06f;     // piece grows while held
+
+    // Annotations (arrows / circles): the former local AnnColor + geometry.
+    inline constexpr sf::Color annotation{ 220, 130, 40, 170 };
+    inline constexpr float arrowHeadLen = 0.35f;   // head cut-out length
+    inline constexpr float arrowShaftW = 0.09f;    // half shaft width
+    inline constexpr float arrowHeadW = 0.22f;     // half head width
+    inline constexpr float circleRadius = 0.32f;
+    inline constexpr float circleStroke = 0.06f;
+} // namespace board
 
 // ---------------------------------------------------------------------------
 // Type scale
@@ -287,6 +318,16 @@ constexpr ButtonStyle buttonSuccess()
              sf::Color{ 120, 150, 120 }, sf::Color{ 240, 240, 240 },
              sf::Color{ 100, 100, 100 }, sf::Color{ 200, 200, 200 },
              sf::Color{ 160, 160, 160 }, type::Heading };
+}
+
+// 15.4 quick-message chips — quiet card chips at the small type size
+constexpr ButtonStyle buttonChip()
+{
+    return { sf::Color{ 38, 38, 40 },  sf::Color{ 58, 58, 62 },
+             sf::Color{ 30, 30, 30 },  sf::Color{ 40, 38, 36 },
+             sf::Color{ 90, 90, 90 },  sf::Color{ 200, 200, 200 },
+             sf::Color{ 68, 66, 64 },  sf::Color{ 140, 140, 140 },
+             sf::Color{ 180, 180, 180 }, type::Small };
 }
 
 // "Accept" (draw/takeback offer, game screen)

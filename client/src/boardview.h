@@ -20,6 +20,9 @@ class MoveAnimator;
 struct HighlightState {
     std::optional<std::pair<int, int>> selectedSquare;
     std::vector<std::pair<int, int>> legalMoveTargets;
+    // 15.5: faint hover wash under the cursor square (drawn first, before
+    // every other highlight); reset when the cursor leaves the board.
+    std::optional<std::pair<int, int>> hoverSquare;
     std::optional<std::pair<int, int>> lastMoveFrom;
     std::optional<std::pair<int, int>> lastMoveTo;
     std::optional<std::pair<int, int>> checkSquare;
@@ -42,7 +45,8 @@ public:
     void drawLabels(sf::RenderWindow& window, const sf::Font& font) const;
     void drawPieces(sf::RenderWindow& window, const sf::Font& font,
                     const Board& board, const App& app,
-                    const MoveAnimator* anim = nullptr) const;
+                    const MoveAnimator* anim = nullptr,
+                    float pieceOpacity = 1.f) const;
     void drawAnnotations(sf::RenderWindow& window,
                          const std::vector<AnnotatedArrow>& arrows,
                          const std::vector<std::pair<int, int>>& circles) const;
@@ -76,7 +80,8 @@ private:
                         sf::Color color) const;
     void drawPieceAtCenter(sf::RenderWindow& window, const sf::Font& font,
                            chess::Piece piece, sf::Vector2f center,
-                           const App& app) const;
+                           const App& app, float liftScale = 1.f,
+                           float opacity = 1.f) const;
 
     float margin_;
     float boardSize_;

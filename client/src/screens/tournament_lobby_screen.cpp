@@ -6,6 +6,8 @@
 #include "game_screen.h"
 #include "menu_screen.h"
 
+#include <algorithm>
+
 namespace chess::client {
 
 namespace {
@@ -13,12 +15,12 @@ constexpr float TitleY = 60.f;
 constexpr float SubY = 110.f;
 constexpr float TableY = 170.f;
 constexpr float RowH = 26.f;
+constexpr float HeaderY = TableY - RowH; // 15.6: header ABOVE the first row
 constexpr float NameX = 380.f;
 constexpr float PointsX = 640.f;
 constexpr float RecordX = 720.f;
 constexpr float LeaveY = 556.f;
 }
-
 TournamentLobbyScreen::TournamentLobbyScreen(App& app,
                                              std::string timeControl,
                                              std::string variant,
@@ -29,7 +31,7 @@ TournamentLobbyScreen::TournamentLobbyScreen(App& app,
     , joinName_(std::move(joinName))
 {
     title_.setText("Arena");
-    title_.setFontSize(32);
+    title_.setFontSize(ui::type::Result);
     title_.setColor(ui::pal::white);
 
     std::string sub = timeControl_.empty()
@@ -37,22 +39,22 @@ TournamentLobbyScreen::TournamentLobbyScreen(App& app,
     sub += variant_.empty()
         ? "   ·   standard" : ("   ·   " + variant_);
     subtitle_.setText(sub);
-    subtitle_.setFontSize(16);
-    subtitle_.setColor(sf::Color(150, 150, 155)); // arena slate tone
+    subtitle_.setFontSize(ui::type::Body);
+    subtitle_.setColor(ui::pal::textDimmed);
 
     headerName_.setText("Name");
     headerPoints_.setText("Pts");
     headerRecord_.setText("W   L   D");
     for (auto* h : {&headerName_, &headerPoints_, &headerRecord_}) {
-        h->setFontSize(15);
-        h->setColor(sf::Color(160, 170, 190)); // arena header slate
+        h->setFontSize(ui::type::Body);
+        h->setColor(ui::pal::textMuted);
     }
 
-    statusLabel_.setFontSize(16);
+    statusLabel_.setFontSize(ui::type::Status);
     statusLabel_.setColor(ui::pal::warnBanner);
     statusLabel_.setText("Joining the arena...");
 
-    resultLabel_.setFontSize(30);
+    resultLabel_.setFontSize(ui::type::Result);
     resultLabel_.setColor(ui::pal::ok);
 
     leaveBtn_.setLabel("Leave arena");
@@ -61,9 +63,9 @@ TournamentLobbyScreen::TournamentLobbyScreen(App& app,
 
     title_.setPosition({NameX, TitleY});
     subtitle_.setPosition({NameX, SubY});
-    headerName_.setPosition({NameX, TableY - RowH + 40.f});
-    headerPoints_.setPosition({PointsX, TableY - RowH + 40.f});
-    headerRecord_.setPosition({RecordX, TableY - RowH + 40.f});
+    headerName_.setPosition({NameX, HeaderY});
+    headerPoints_.setPosition({PointsX, HeaderY});
+    headerRecord_.setPosition({RecordX, HeaderY});
     statusLabel_.setPosition({NameX, 520.f});
     leaveBtn_.setRect(sf::FloatRect(sf::Vector2f(NameX, LeaveY),
                                     sf::Vector2f(200.f, 40.f)));
@@ -114,21 +116,21 @@ void TournamentLobbyScreen::rebuildRows()
     for (const auto& row : rows_) {
         RowWidgets widgets;
         widgets.name.setText(row.name);
-        widgets.name.setFontSize(15);
+        widgets.name.setFontSize(ui::type::Body);
         widgets.name.setColor(row.self ? ui::pal::goldSelf
-                                       : sf::Color(225, 225, 235)); // arena pale row
+                                       : ui::pal::textHeader);
 
         widgets.points.setText(std::to_string(row.points));
-        widgets.points.setFontSize(15);
-        widgets.points.setColor(sf::Color(210, 210, 220)); // arena row tint
+        widgets.points.setFontSize(ui::type::Body);
+        widgets.points.setColor(ui::pal::textCell);
 
         std::string rec = std::to_string(row.wins) + "   "
             + std::to_string(row.losses) + "   " + std::to_string(row.draws);
         if (row.playing)
             rec += "  (playing)";
         widgets.record.setText(rec);
-        widgets.record.setFontSize(15);
-        widgets.record.setColor(sf::Color(170, 175, 185)); // arena row tint
+        widgets.record.setFontSize(ui::type::Body);
+        widgets.record.setColor(ui::pal::textSoft);
 
         rowWidgets_.push_back(std::move(widgets));
     }
@@ -144,6 +146,17 @@ void TournamentLobbyScreen::layoutRows()
         widgets.record.setPosition({RecordX, y});
         y += RowH;
     }
+
+    // 15.6: the table panel wraps header + rows with breathing room (the
+    // list screens' bgPanel recipe). Sized on every snapshot so it fits
+    // the current member count.
+    const float rows = static_cast<float>(
+        std::max<std::size_t>(rowWidgets_.size(), 1));
+    tablePanel_.setRect(sf::FloatRect(
+        sf::Vector2f(NameX - 50.f, HeaderY - 18.f),
+        sf::Vector2f(600.f, 18.f + RowH + rows * RowH + 14.f)));
+    tablePanel_.setFill(ui::pal::bgPanel);
+    tablePanel_.setOutline(ui::overlay::panelStroke);
 
     // Status line: round progress of our own row, or the result echo.
     const chess::net::TournamentRowMsg* selfRow = nullptr;
@@ -229,6 +242,19 @@ void TournamentLobbyScreen::draw(sf::RenderWindow& window)
 
     title_.draw(window, font);
     subtitle_.draw(window, font);
+
+    // 15.6: table chrome behind the standings — panel first, then zebra
+    // stripes on the odd rows (index parity, header line never shades).
+    tablePanel_.draw(window);
+    const auto panel = tablePanel_.rect();
+    for (std::size_t i = 1; i < rowWidgets_.size() && i < rows_.size(); i += 2) {
+        sf::RectangleShape stripe({panel.size.x - 8.f, RowH});
+        stripe.setPosition({panel.position.x + 4.f,
+                            TableY + static_cast<float>(i) * RowH});
+        stripe.setFillColor(ui::pal::rowStripe);
+        window.draw(stripe);
+    }
+
     headerName_.draw(window, font);
     headerPoints_.draw(window, font);
     headerRecord_.draw(window, font);

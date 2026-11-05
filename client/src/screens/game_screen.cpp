@@ -1,6 +1,9 @@
 #include "game_screen.h"
 
+#include "entrance.h"
+#include "ui/rounded_rect.h"
 #include "ui/theme.h"
+#include "ui/rounded_rect.h"
 #include "game_over_screen.h"
 #include "connect_screen.h"
 #include "keyboard.h"
@@ -17,7 +20,6 @@
 namespace chess::client {
 
 namespace {
-constexpr float BtnH = 30.f;
 constexpr float InputH = 28.f;
 // Reconnect loop timings (11.2): one retry per second, at most ~30 s of
 // trying — the server side grace is as long, so an unresponsive server
@@ -49,10 +51,18 @@ GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName,
                  app.boardTheme(),
                  app.showCoordinates(),
                  app.coordinateStyle())
-    , hud_(app_, boardView_.panelX(),
-           static_cast<float>(App::WindowWidth) - boardView_.panelX() - 8.f)
+    , panelLayout_(layout::composeBoardLayout(
+          static_cast<float>(App::WindowWidth),
+          static_cast<float>(App::WindowHeight), boardView_,
+          layout::BoardLayoutOptions{true, false, true}))
+    , hud_(app_, panelLayout_)
     , myTurn_(myColor == Color::White)
 {
+    // 15.5 board entrance: opt-in config key (default off). Armed only
+    // here — resume/takeback rebuilds never replay the fade.
+    if (app_.config().getBool("animation.entrance", false))
+        entranceSec_ = 0.f;
+
     // 12.1: a Chess960 welcome carries the Start Position the server rolled
     // at pairing; empty = standard start, junk = fall back (never crash).
     hud_.setGame(startBoard(), {}, {});
@@ -82,9 +92,18 @@ GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName,
     chatLabel_.setFontSize(14);
     chatLabel_.setColor(ui::pal::textMuted);
 
-    drawOfferLabel_.setText("Draw offered:");
-    drawOfferLabel_.setFontSize(14);
-    drawOfferLabel_.setColor(ui::pal::warn);
+    // 15.4 quick-message chips: canned greetings above the input. Zero
+    // protocol surface — each is an ordinary ChatMsg ride (sendQuickChat).
+    const char* chips[] = { "Good luck", "Good game", "Thanx for the game" };
+    for (int i = 0; i < 3; ++i) {
+        chatChips_[i].setLabel(chips[i]);
+        chatChips_[i].setStyle(ui::buttonChip());
+        const std::string phrase = chips[i];
+        chatChips_[i].setOnClick([this, phrase] { sendQuickChat(phrase); });
+    }
+
+    promptLabel_.setFontSize(14);
+    promptLabel_.setColor(ui::pal::warn);
 
     resignBtn_.setLabel("Resign");
     resignBtn_.setIcon(ui::icons::IconKind::Flag);
@@ -128,13 +147,8 @@ GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName,
         }
     });
 
-    takebackLabel_.setText("Takeback asked:");
-    takebackLabel_.setFontSize(14);
-    takebackLabel_.setColor(ui::pal::warn);
-
     takebackBtn_.setLabel("Takeback");
-    takebackBtn_.setStyle(ui::buttonPlum());
-    takebackBtn_.setOnClick([this] {
+    takebackBtn_.setStyle(ui::buttonPlum());    takebackBtn_.setOnClick([this] {
         if (gameOver_) return;
         app_.connection().send(chess::net::TakebackRequestMsg{});
         addSystemChat("Takeback requested");
@@ -232,42 +246,40 @@ void GameScreen::leaveWatch()
 
 void GameScreen::layoutPanel()
 {
-    float px = boardView_.panelX();
+    // 15.1: the composer owns the geometry — the screen only places its
+    // widgets into the shared rows. The three action buttons keep the
+    // roomier 96/6 pitch; the accept/decline prompt pair keeps 90/8.
+    resignBtn_.setRect(panelLayout_.actionRect(0, 96.f));
 
-    // Three action buttons share the panel row (96px each with gaps); the
-    // accept/decline prompt buttons keep the roomier two-button layout.
-    resignBtn_.setRect(sf::FloatRect(sf::Vector2f(px, hud_.contentBottom()),
-                                     sf::Vector2f(96.f, BtnH)));
-    offerDrawBtn_.setRect(sf::FloatRect(sf::Vector2f(px + 102.f, hud_.contentBottom()),
-                                        sf::Vector2f(96.f, BtnH)));
-    takebackBtn_.setRect(sf::FloatRect(sf::Vector2f(px + 204.f, hud_.contentBottom()),
-                                       sf::Vector2f(96.f, BtnH)));
+    offerDrawBtn_.setRect(panelLayout_.actionRect(1, 96.f));
+
+    takebackBtn_.setRect(panelLayout_.actionRect(2, 96.f));
 
     // The spectator leave button takes the first slot (12.4).
-    leaveBtn_.setRect(sf::FloatRect(sf::Vector2f(px, hud_.contentBottom()),
-                                    sf::Vector2f(96.f, BtnH)));
+    leaveBtn_.setRect(panelLayout_.actionRect(0, 96.f));
 
-    declineBtn_.setRect(sf::FloatRect(sf::Vector2f(px, hud_.contentBottom()),
-                                      sf::Vector2f(90.f, BtnH)));
-    acceptBtn_.setRect(sf::FloatRect(sf::Vector2f(px + 98.f, hud_.contentBottom()),
-                                     sf::Vector2f(90.f, BtnH)));
+    declineBtn_.setRect(panelLayout_.actionRect(0, 90.f, 8.f));
+    acceptBtn_.setRect(panelLayout_.actionRect(1, 90.f, 8.f));
 
-    float btnY = hud_.contentBottom();
-    float chatSepY = btnY + BtnH + 8.f;
-    chatLabel_.setPosition({px, chatSepY + 6.f});
-
-    float logTop = chatSepY + 24.f;
-    float inputY = static_cast<float>(App::WindowHeight) - 20.f - InputH;
-    float logBottom = inputY - 8.f;
-    chatLogBg_.setRect(sf::FloatRect(
-        sf::Vector2f(px, logTop),
-        sf::Vector2f(static_cast<float>(App::WindowWidth) - px - 8.f, logBottom - logTop)));
+    chatLabel_.setPosition({panelLayout_.panelX, panelLayout_.chatLabelY});
+    chatLogBg_.setRect(panelLayout_.chatPanel);
     chatLogBg_.setFill(ui::pal::bgDeep);
     chatLogBg_.setOutline(ui::pal::bgElevated);
 
-    chatInput_.setRect(sf::FloatRect(
-        sf::Vector2f(px, inputY),
-        sf::Vector2f(static_cast<float>(App::WindowWidth) - px - 8.f, InputH)));
+    // 15.4 chips: fixed-width split of the composed chip row — the wide
+    // phrase ("Thanx for the game") takes the third slot.
+    constexpr std::array<float, 3> chipW = { 84.f, 88.f, 132.f };
+    constexpr float chipGap = 4.f;
+    float chipX = panelLayout_.chipRow.position.x;
+    for (int i = 0; i < 3; ++i) {
+        chatChips_[i].setRect(sf::FloatRect(
+            sf::Vector2f(chipX, panelLayout_.chipRow.position.y),
+            sf::Vector2f(chipW[i], panelLayout_.chipRow.size.y)));
+        chipX += chipW[i] + chipGap;
+        chatChips_[i].setEnabled(!spectator_);
+    }
+
+    chatInput_.setRect(panelLayout_.chatInput);
 }
 
 void GameScreen::selectPiece(int file, int rank)
@@ -317,9 +329,12 @@ void GameScreen::trySendMove(int targetFile, int targetRank)
     }
 
     if (found->isPromotion()) {
-        if (auto qm = autoQueenMove(promos)) {
-            commitMove(*qm);
-            return;
+        // Auto-queen ON commits the queen directly; OFF opens the picker.
+        if (app_.autoQueen()) {
+            if (auto qm = autoQueenMove(promos)) {
+                commitMove(*qm);
+                return;
+            }
         }
         buildPromotion(hl_.selectedSquare->first, hl_.selectedSquare->second,
                        targetFile, targetRank);
@@ -393,6 +408,7 @@ void GameScreen::flushPremove()
 void GameScreen::syncViewHighlights()
 {
     const Board& shown = hud_.navigator().board();
+    hl_.hoverSquare = boardView_.pixelToSquare(cursor_);
     hl_.lastMoveFrom = hud_.navigator().lastMoveFrom();
     hl_.lastMoveTo = hud_.navigator().lastMoveTo();
     hl_.cursorSquare = keyCursor_;
@@ -480,16 +496,9 @@ std::optional<chess::PieceType> GameScreen::promoTypeForKey(sf::Keyboard::Key ke
 
 PromoCell GameScreen::promoCell(int index) const
 {
-    float sq = boardView_.squareSize();
-    sf::Vector2f origin = boardView_.boardOrigin();
-    bool flipped = boardView_.isFlipped();
-    int col = flipped ? (7 - promo_->toFile) : promo_->toFile;
-    int rowStart = flipped ? promo_->toRank : (7 - promo_->toRank);
-    return {
-        {origin.x + static_cast<float>(col) * sq,
-         origin.y + static_cast<float>(rowStart + index) * sq},
-        sq
-    };
+    return promoStackCell(boardView_.squareSize(), boardView_.boardOrigin(),
+                          boardView_.isFlipped(), promo_->toFile,
+                          promo_->toRank, index);
 }
 
 void GameScreen::addChatLine(const std::string& name, const std::string& text)
@@ -541,6 +550,16 @@ void GameScreen::sendChat()
 
     app_.connection().send(chess::net::ChatMsg{text});
     addChatLine(YouName(), text);
+}
+
+// 15.4: a chip is a canned line of the same kind the input sends — an
+// ordinary ChatMsg plus the server-echo append. Watchers can't talk and
+// the input's own guard is mirrored here.
+void GameScreen::sendQuickChat(const std::string& phrase)
+{
+    if (spectator_ || phrase.empty()) return;
+    app_.connection().send(chess::net::ChatMsg{phrase});
+    addChatLine(YouName(), phrase);
 }
 
 void GameScreen::handleEvent(const sf::Event& event)
@@ -681,8 +700,7 @@ void GameScreen::handleEvent(const sf::Event& event)
     }
 
     if (const auto* we = event.getIf<sf::Event::MouseWheelScrolled>()) {
-        float px = boardView_.panelX();
-        if (app_.toLocal(we->position).x >= px) {
+        if (app_.toLocal(we->position).x >= panelLayout_.panelX) {
             hud_.handleScroll(we->delta);
             return;
         }
@@ -705,6 +723,11 @@ void GameScreen::handleEvent(const sf::Event& event)
             if (takebackBtn_.handleEvent(event, local)) return;
         }
     }
+
+    // 15.4: the chip row sits below the action buttons; disabled chips
+    // (spectators) answer hover only and fall through.
+    for (auto& chip : chatChips_)
+        if (chip.handleEvent(event, local)) return;
 
     if (spectator_) return; // the board is read-only from here on
     if (const auto* mb = event.getIf<sf::Event::MouseButtonPressed>()) {
@@ -799,6 +822,15 @@ void GameScreen::handleEvent(const sf::Event& event)
 void GameScreen::update(float dtSec)
 {
     hud_.update(dtSec);
+    // 15.5 board entrance: advance the fade while the timer runs; the
+    // optional holds the elapsed seconds (nullopt = feature disabled).
+    if (entranceSec_ && *entranceSec_ < kEntranceSec)
+        *entranceSec_ += dtSec;
+    // 15.2 card affordances, recomputed per frame: the thinking dot marks
+    // the seat that holds the move being searched/considered, the link
+    // icon dips to "away" only while the 11.2 grace window runs.
+    hud_.setOpponentThinking(!spectator_ && !myTurn_ && !gameOver_);
+    hud_.setOpponentConnection(spectator_ ? 0 : opponentConnection_);
     chatInput_.update(dtSec);
     anim_.update(dtSec);
 
@@ -908,11 +940,13 @@ void GameScreen::update(float dtSec)
             applySpectateState(*spectateState);
         }
         else if (auto* reconn = std::get_if<chess::net::OpponentReconnectingMsg>(&msg)) {
+            hud_.setOpponentConnection(2);
             hud_.setStatus("Opponent lost connection",
                            static_cast<float>(reconn->graceSeconds));
             addSystemChat("Opponent lost connection");
         }
         else if (std::holds_alternative<chess::net::OpponentResumedMsg>(msg)) {
+            hud_.setOpponentConnection(1);
             hud_.setStatus("Opponent reconnected", 3.f);
             addSystemChat("Opponent reconnected");
         }
@@ -1160,13 +1194,11 @@ void GameScreen::drawButtons(sf::RenderWindow& window)
     auto& font = app_.font();
 
     if (drawOfferPending_) {
-        drawOfferLabel_.setPosition({boardView_.panelX(), hud_.contentBottom() - 20.f});
-        drawOfferLabel_.draw(window, font);
+        drawPromptBanner(window, "Draw offered:");
         declineBtn_.draw(window, font);
         acceptBtn_.draw(window, font);
     } else if (takebackOfferPending_) {
-        takebackLabel_.setPosition({boardView_.panelX(), hud_.contentBottom() - 20.f});
-        takebackLabel_.draw(window, font);
+        drawPromptBanner(window, "Takeback asked:");
         declineBtn_.draw(window, font);
         acceptBtn_.draw(window, font);
     } else if (!gameOver_) {
@@ -1176,24 +1208,52 @@ void GameScreen::drawButtons(sf::RenderWindow& window)
     }
 }
 
+// 15.3: the draw/takeback prompts render as one framed banner (card fill,
+// warn stroke) behind the question text and the accept/decline pair,
+// instead of a bare floating label row.
+void GameScreen::drawPromptBanner(sf::RenderWindow& window, const char* text)
+{
+    auto& font = app_.font();
+
+    constexpr float LabelRow = 20.f;   // the old label band above the row
+    constexpr float BannerRadius = 8.f;
+    const sf::FloatRect banRect(
+        sf::Vector2f(panelLayout_.panelX, panelLayout_.actionRowY - LabelRow - 4.f),
+        sf::Vector2f(panelLayout_.panelWidth, LabelRow + 4.f
+            + panelLayout_.actionRowH + 4.f));
+
+    ui::RoundedRectShape ban(banRect.size, BannerRadius);
+    ban.setPosition(banRect.position);
+    ban.setFillColor(ui::pal::bgCard);
+    ban.setOutlineColor(ui::pal::warnSoft);
+    ban.setOutlineThickness(1.f);
+    window.draw(ban);
+
+    promptLabel_.setText(text);
+    promptLabel_.setPosition({banRect.position.x + 12.f,
+                              panelLayout_.actionRowY - LabelRow});
+    promptLabel_.draw(window, font);
+}
+
 void GameScreen::drawChat(sf::RenderWindow& window)
 {
-    float px = boardView_.panelX();
+    const float px = panelLayout_.panelX;
+    const float panelW = panelLayout_.panelWidth;
     auto& font = app_.font();
-    float panelW = static_cast<float>(App::WindowWidth) - px - 8.f;
-    float btnY = hud_.contentBottom();
-    float chatSepY = btnY + BtnH + 8.f;
 
     sf::RectangleShape sep({panelW, 1.f});
-    sep.setPosition({px, chatSepY});
+    sep.setPosition({px, panelLayout_.chatSeparatorY});
     sep.setFillColor(ui::pal::stroke);
     window.draw(sep);
 
     chatLabel_.draw(window, font);
 
-    float logTop = chatSepY + 24.f;
-    float inputY = static_cast<float>(App::WindowHeight) - 20.f - InputH;
-    float logBottom = inputY - 8.f;
+    // 15.4 quick-message chips ride between the log and the input.
+    for (auto& chip : chatChips_) chip.draw(window, font);
+
+    const float logTop = panelLayout_.chatPanel.position.y;
+    const float logBottom = panelLayout_.chatPanel.position.y
+        + panelLayout_.chatPanel.size.y;
 
     chatLogBg_.draw(window);
 
@@ -1209,27 +1269,26 @@ void GameScreen::drawChat(sf::RenderWindow& window)
         if (y + lineH > logBottom) break;
         const ChatEntry& entry = chatLog_[i];
 
-        // Three-part line (11.8): dim [HH:MM] tag, colored sender, gray
-        // text; system lines skip the sender and render gray. Each part
-        // truncates into the remaining panel width (~6 px per glyph, the
-        // same estimator the pre-11.8 renderer used).
+        // Three-part line (11.8, tokens per 15.4): dim [HH:MM] tag,
+        // colored sender, gray text; system lines skip the sender and
+        // render soft gray. Each part truncates into the remaining panel
+        // width via the chat module's ~6 px/glyph estimator
+        // (chatMaxChars — the same math the pre-11.8 renderer used).
         const float left = px + 4.f;
         const float right = px + panelW - 4.f;
         const auto fits = [&](float x, const std::string& text) {
-            constexpr float CharWidth = 6.f;
-            return safeTruncate(text,
-                static_cast<std::size_t>(std::max(0.f, right - x) / CharWidth));
+            return safeTruncate(text, chatMaxChars(right - x));
         };
 
         sf::Text timeTag(font, "[" + chatTimestamp(entry.epochSec) + "] ", 13);
-        timeTag.setFillColor(sf::Color(110, 110, 110)); // chat stub gray
+        timeTag.setFillColor(ui::pal::textGhost);
         timeTag.setPosition({left, y});
         window.draw(timeTag);
 
         float x = left + timeTag.getLocalBounds().size.x;
         if (entry.name.empty()) {
             sf::Text line(font, fits(x, entry.text), 13);
-            line.setFillColor(sf::Color(170, 170, 170)); // chat muted line
+            line.setFillColor(ui::pal::textSoft);
             line.setPosition({x, y});
             window.draw(line);
         } else {
@@ -1256,6 +1315,9 @@ void GameScreen::draw(sf::RenderWindow& window)
     auto& font = app_.font();
     const Board& shown = hud_.navigator().board();
 
+    // 15.2: the own card shows the queued-premove badge while one is set.
+    hud_.setPremoveVisible(premove_.has_value() && !gameOver_);
+
     if (!hud_.navigator().atEnd() && !annotations_.empty())
         annotations_.clear();
 
@@ -1263,7 +1325,9 @@ void GameScreen::draw(sf::RenderWindow& window)
     syncViewHighlights();
     boardView_.drawHighlights(window, hl_, shown);
     boardView_.drawLabels(window, font);
-    boardView_.drawPieces(window, font, shown, app_, &anim_);
+    // 15.5: the entrance fade rides the piece layer (squares stay put).
+    boardView_.drawPieces(window, font, shown, app_, &anim_,
+        entranceSec_ ? entranceOpacity(*entranceSec_) : 1.f);
 
     // Premove ghost (11.4): the queued piece translucent on its putative
     // landing square. Live position only — a stepper is reading history.
@@ -1292,7 +1356,7 @@ void GameScreen::draw(sf::RenderWindow& window)
             cell.setPosition(c.pos);
             cell.setFillColor(ui::overlay::cellFill);
             cell.setOutlineColor(ui::overlay::cellStroke);
-            cell.setOutlineThickness(1.f);
+            cell.setOutlineThickness(ui::overlay::promoStrokeW);
             window.draw(cell);
 
             if (i == promoHover_) {

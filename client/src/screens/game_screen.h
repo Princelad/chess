@@ -19,6 +19,7 @@
 #include <chess/net/messages.h>
 #include <chess/types.h>
 
+#include <array>
 #include <optional>
 #include <string>
 #include <utility>
@@ -71,7 +72,11 @@ private:
     void sendChat();
     void refreshRatingsHud();
     void drawButtons(sf::RenderWindow& window);
+    void drawPromptBanner(sf::RenderWindow& window, const char* text);
     void drawChat(sf::RenderWindow& window);
+    // 15.4: a canned chip sends its phrase as an ordinary ChatMsg — the
+    // server echo appends it, exactly like typed chat.
+    void sendQuickChat(const std::string& phrase);
     void drawHelpOverlay(sf::RenderWindow& window);
     void finishGameOver();
 
@@ -95,6 +100,9 @@ private:
     App& app_;
     Color myColor_;
     BoardView boardView_;
+    // 15.1: the composed panel geometry, initialized with the board view
+    // and consumed by the Hud and every panel rect decision below.
+    layout::BoardLayout panelLayout_;
     HighlightState hl_;
     BoardAnnotations annotations_;
     DragTracker drag_;
@@ -113,6 +121,10 @@ private:
     bool drawOfferPending_ = false;
     // Premove (11.4): at most one queued move while the opponent thinks.
     std::optional<Premove> premove_;
+    // 15.5 board entrance: elapsed seconds of the piece fade-in; nullopt
+    // = `animation.entrance` disabled (default). Armed only in the ctor —
+    // resume/takeback rebuilds never replay the fade.
+    std::optional<float> entranceSec_;
     GameOverTransition gameOverTransition_;
 
     std::string opponentName_;
@@ -124,6 +136,9 @@ private:
     bool spectator_ = false;
     std::string whiteName_;
     int spectatorCount_ = 0;
+    // 15.2 connection affordance for the opponent card's link icon:
+    // 1 connected, 2 away (mid-grace, 11.2).
+    int opponentConnection_ = 1;
 
     std::vector<ChatEntry> chatLog_;
     TextField chatInput_;
@@ -132,11 +147,13 @@ private:
 
     void addChatLine(const std::string& name, const std::string& text);
     void addSystemChat(const std::string& text);
-    Label drawOfferLabel_;
-    Label takebackLabel_;
+    Label promptLabel_;
     Button resignBtn_;
     Button offerDrawBtn_;
     Button takebackBtn_;
+    // 15.4 quick-message chips above the chat input (online only; chips
+    // disable for spectators — they can't chat, 12.4).
+    std::array<Button, 3> chatChips_;
     // Spectator-mode replacement row (12.4): a single leave button.
     Button leaveBtn_;
     // 11.3: `takebackOfferPending_` is the opponent's incoming request

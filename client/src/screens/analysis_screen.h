@@ -1,6 +1,7 @@
 #pragma once
 
 #include "app.h"
+#include "board_layout.h"
 #include "boardview.h"
 #include "widgets/label.h"
 #include "widgets/move_navigator.h"
@@ -52,6 +53,8 @@ private:
     MoveNavigator navigator_;
 
     BoardView boardView_;
+    // 15.1: composed panel geometry (shared board composer consumer).
+    layout::BoardLayout panelLayout_;
     HighlightState hl_;
 
     std::unique_ptr<uci::UciEngine> engine_;

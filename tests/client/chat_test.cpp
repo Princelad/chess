@@ -130,5 +130,17 @@ TEST(ChatMute, PersistableNameGate)
     EXPECT_FALSE(chatMuteNamePersistable("Bo "));    // edge blank, trimmed
 }
 
+// 15.4: the line renderer's glyph budget — ~6 px per glyph at the chat
+// size, clamped to 0 for degenerate widths.
+TEST(ChatWidth, MaxCharsIsTheSixPxGlyphEstimate)
+{
+    EXPECT_EQ(chatMaxChars(0.f), 0u);
+    EXPECT_EQ(chatMaxChars(-50.f), 0u);   // negative width floors at 0
+    EXPECT_EQ(chatMaxChars(60.f), 10u);   // exactly ten glyphs
+    EXPECT_EQ(chatMaxChars(61.f), 10u);   // remainder truncates
+    EXPECT_EQ(chatMaxChars(312.f), 52u);  // the node's own panel width
+    EXPECT_FLOAT_EQ(chatGlyphWidth, 6.f);
+}
+
 } // namespace
 } // namespace chess::client

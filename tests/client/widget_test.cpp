@@ -2,9 +2,14 @@
 #include "widgets/checkbox.h"
 #include "widgets/label.h"
 #include "widgets/layout.h"
+#include "widgets/player_card.h"
 #include "widgets/text_field.h"
 
+#include "screens/promo_state.h"
+
 #include <gtest/gtest.h>
+
+#include "ui/theme.h"
 
 namespace chess::client {
 namespace {
@@ -294,6 +299,139 @@ TEST(WidgetTextField, DisabledIgnoresFocusClickTypeAndEnter)
     field.setFocused(true);
     EXPECT_FALSE(field.handleEvent(keyPress(sf::Keyboard::Key::Enter), {12.f, 12.f}));
     EXPECT_EQ(commits, 0);
+}
+
+// --- 15.2 player card -------------------------------------------------------
+// The 9.3 residual "player-card composition untested" closes here: the
+// card's pre-render decisions (clock text, heat thresholds, rating
+// suffix, slot geometry) are pure math, exercised headlessly — only the
+// glyph/sprite drawing needs a window.
+
+namespace {
+
+std::string clockAt(double ms) { return formatClockText(ms); }
+
+} // namespace
+
+TEST(WidgetPlayerCard, ClockFormatsMssAndUnderMinuteTenths)
+{
+    // Zero floors at 0.0, never negative text.
+    EXPECT_EQ(clockAt(0.0), "0.0");
+    EXPECT_EQ(clockAt(-5000.0), "0.0");
+    // Under a minute: whole tenths, no fractional noise.
+    EXPECT_EQ(clockAt(1234.0), "1.2");
+    EXPECT_EQ(clockAt(42000.0), "42.0");
+    EXPECT_EQ(clockAt(59900.0), "59.9");
+    EXPECT_EQ(clockAt(59949.9), "59.9");
+    // Rounding: past 59.95 s the half-up tenth hits 600 -> "1:00".
+    EXPECT_EQ(clockAt(59991.9), "1:00");
+    // A minute and beyond: m:ss with zero padding.
+    EXPECT_EQ(clockAt(60000.0), "1:00");
+    EXPECT_EQ(clockAt(61000.0), "1:01");
+    EXPECT_EQ(clockAt(60200.0), "1:00");
+    EXPECT_EQ(clockAt(3600000.0), "60:00");
+}
+
+TEST(WidgetPlayerCard, ClockHeatFollowsTheElevenOneThresholds)
+{
+    EXPECT_EQ(clockHeatColor(9999.0), ui::pal::dangerRed);
+    EXPECT_EQ(clockHeatColor(10000.0), ui::pal::dangerAmber);
+    EXPECT_EQ(clockHeatColor(29999.0), ui::pal::dangerAmber);
+    EXPECT_EQ(clockHeatColor(30000.0), ui::pal::textCell);
+}
+
+TEST(WidgetPlayerCard, RatingSuffixRoundsAndOmitsWhenUnknown)
+{
+    EXPECT_EQ(cardRatingSuffix(std::nullopt), "");
+    EXPECT_EQ(cardRatingSuffix(
+                  std::optional<std::pair<double, double>>({1650.0, 132.0})),
+              "  (1650 \xc2\xb1 132)");
+    // Half-up rounding of the Glicko numbers.
+    EXPECT_EQ(cardRatingSuffix(
+                  std::optional<std::pair<double, double>>({1649.6, 131.4})),
+              "  (1650 \xc2\xb1 131)");
+}
+
+TEST(WidgetPlayerCard, SlotsTrackTheComposerBand)
+{
+    PlayerCard card;
+    card.setRect(sf::FloatRect({640.f, 14.f}, {312.f, 44.f}));
+    EXPECT_FLOAT_EQ(card.rect().position.y, 14.f);
+
+    // Name row sits 6 px into the band at its pre-15.1 height;
+    // captured glyphs sit 28 px in, inset by the card's side padding.
+    const auto name = card.nameSlot();
+    EXPECT_FLOAT_EQ(name.position.x, 640.f);
+    EXPECT_FLOAT_EQ(name.position.y, 20.f);
+    EXPECT_FLOAT_EQ(name.size.y, 15.f);
+    const auto caps = card.capturedSlot();
+    EXPECT_FLOAT_EQ(caps.position.x, 647.f);
+    EXPECT_FLOAT_EQ(caps.position.y, 42.f);
+    EXPECT_FLOAT_EQ(caps.size.x, 312.f - 14.f);
+    EXPECT_FLOAT_EQ(caps.size.y, 15.f);
+}
+
+TEST(WidgetPlayerCard, StateDefaultsAreQuiet)
+{
+    PlayerCardState state;
+    EXPECT_FALSE(state.thinking);
+    EXPECT_FALSE(state.myTurn);
+    EXPECT_EQ(state.connection, 0);
+    EXPECT_FALSE(state.premovePending);
+    EXPECT_EQ(state.watcherCount, 0);
+    EXPECT_FALSE(state.remainingMs.has_value()); // unlimited game
+    EXPECT_EQ(state.captured, nullptr);
+    EXPECT_EQ(state.materialDiff, 0);
+}
+
+// --- 15.6 shared promotion-picker geometry -----------------------------------
+
+TEST(WidgetPromoStack, CellsCenterOnTheDestinationColumnAndStackContiguously)
+{
+    const float sq = 75.f;
+    const sf::Vector2f origin{20.f, 20.f};
+
+    // White promoting on the h-file (toFile 7, toRank 7): visual column 7,
+    // visual row 0 — the first cell centers on the destination square.
+    const PromoCell first = promoStackCell(sq, origin, false, 7, 7, 0);
+    EXPECT_FLOAT_EQ(first.size, sq * ui::overlay::promoCellScale);
+    EXPECT_FLOAT_EQ(first.pos.x, origin.x + 7.f * sq
+        + (sq - first.size) * 0.5f);
+    EXPECT_FLOAT_EQ(first.pos.y, origin.y - (first.size - sq) * 0.5f);
+
+    // Contiguous stack: cell k+1 starts exactly where cell k ends.
+    const PromoCell second = promoStackCell(sq, origin, false, 7, 7, 1);
+    EXPECT_FLOAT_EQ(second.pos.y, first.pos.y + first.size);
+    EXPECT_FLOAT_EQ(second.pos.x, first.pos.x);
+}
+
+TEST(WidgetPromoStack, FlippedMirrorsFileAndRankTowardTheCenter)
+{
+    const float sq = 60.f;
+    const sf::Vector2f origin{0.f, 0.f};
+
+    // Black flipped, promoting on file a/toRank 0: mirrored column 7,
+    // mirrored row 0 (promotion rank sits visually at the top when
+    // flipped) — the stack grows downward into the board, same as white's.
+    const PromoCell first = promoStackCell(sq, origin, true, 0, 0, 0);
+    EXPECT_FLOAT_EQ(first.pos.x, origin.x + 7.f * sq
+        + (sq - first.size) * 0.5f);
+    EXPECT_FLOAT_EQ(first.pos.y, origin.y - (first.size - sq) * 0.5f);
+}
+
+TEST(WidgetPromoStack, StackFitsInsideTheBoardColumn)
+{
+    // Four cells from a top-anchored promotion square stay inside the
+    // board (the checkbox row hangs off the last cell beneath, so the
+    // stack must never overflow the playing field).
+    const float sq = 75.f;
+    const sf::Vector2f origin{20.f, 20.f};
+    const float boardBottom = origin.y + 8.f * sq;
+    for (int i = 0; i < 4; ++i) {
+        const PromoCell c = promoStackCell(sq, origin, false, 0, 7, i);
+        EXPECT_GE(c.pos.y, origin.y - sq); // one-square headroom for the inset
+        EXPECT_LT(c.pos.y + c.size, boardBottom + sq);
+    }
 }
 
 } // namespace

@@ -13,12 +13,6 @@
 
 namespace chess::client {
 
-namespace {
-constexpr float BtnH = 30.f;
-constexpr float BtnW = 150.f;
-constexpr float BtnGap = 8.f;
-} // namespace
-
 PuzzleScreen::PuzzleScreen(App& app)
     : app_(app)
     , boardView_(static_cast<float>(App::WindowWidth),
@@ -27,6 +21,10 @@ PuzzleScreen::PuzzleScreen(App& app)
                  app.boardTheme(),
                  app.showCoordinates(),
                  app.coordinateStyle())
+    , panelLayout_(layout::composeBoardLayout(
+          static_cast<float>(App::WindowWidth),
+          static_cast<float>(App::WindowHeight), boardView_,
+          layout::BoardLayoutOptions{false, false, false, true}))
 {
     puzzles_ = loadPuzzlesFromDirs(assetRoots());
     streak_.best = app_.config().getInt("puzzle.best_streak", 0);
@@ -36,34 +34,33 @@ PuzzleScreen::PuzzleScreen(App& app)
     else
         setStatus("No puzzles found (missing puzzles.pgn)", 999.f);
 
-    const float px = boardView_.panelX();
-    const float width = static_cast<float>(App::WindowWidth);
-    const float height = static_cast<float>(App::WindowHeight);
-    float y = height - 56.f;
-    auto place = [&](Button& b, float rowY) {
-        b.setRect(sf::FloatRect({px + 14.f, rowY}, {BtnW, BtnH}));
+    auto place = [&](Button& b, int fromBottom) {
+        b.setRect(sf::FloatRect(
+            {panelLayout_.panelX + panelLayout_.buttonInsetX,
+             panelLayout_.buttonY(fromBottom)},
+            {panelLayout_.buttonWidth, panelLayout_.buttonHeight}));
     };
 
     hintBtn_.setLabel("Hint");
     hintBtn_.setIcon(ui::icons::IconKind::Bulb);
     hintBtn_.setStyle(ui::buttonHint());
-    place(hintBtn_, y - 3.f * (BtnH + BtnGap));
+    place(hintBtn_, 3);
     hintBtn_.setOnClick([this] { hint(); });
 
     solutionBtn_.setLabel("Show solution");
     solutionBtn_.setStyle(ui::buttonAmber());
-    place(solutionBtn_, y - 2.f * (BtnH + BtnGap));
+    place(solutionBtn_, 2);
     solutionBtn_.setOnClick([this] { revealSolution(); });
 
     nextBtn_.setLabel("Next puzzle");
     nextBtn_.setStyle(ui::buttonGreen());
-    place(nextBtn_, y - (BtnH + BtnGap));
+    place(nextBtn_, 1);
     nextBtn_.setOnClick([this] { nextPuzzle(); });
 
     backBtn_.setLabel("Menu");
     backBtn_.setIcon(ui::icons::IconKind::ArrowBack);
     backBtn_.setStyle(ui::buttonDanger());
-    place(backBtn_, y);
+    place(backBtn_, 0);
     backBtn_.setOnClick([this] { backToMenu(); });
 }
 
@@ -395,6 +392,7 @@ void PuzzleScreen::clearBoardInput()
 
 void PuzzleScreen::syncViewHighlights()
 {
+    hl_.hoverSquare = boardView_.pixelToSquare(cursor_);
     hl_.lastMoveFrom = lastFrom_;
     hl_.lastMoveTo = lastTo_;
     hl_.cursorSquare = keyCursor_;
@@ -432,15 +430,9 @@ PromoCell PuzzleScreen::promoCell(int index) const
 {
     if (!promo_)
         return {{0.f, 0.f}, 0.f};
-    float sq = boardView_.squareSize();
-    sf::Vector2f origin = boardView_.boardOrigin();
-    bool flipped = boardView_.isFlipped();
-    int col = flipped ? (7 - promo_->toFile) : promo_->toFile;
-    int rowStart = flipped ? promo_->toRank : (7 - promo_->toRank);
-    return {
-        {origin.x + static_cast<float>(col) * sq,
-         origin.y + static_cast<float>(rowStart + index) * sq},
-        sq};
+    return promoStackCell(boardView_.squareSize(), boardView_.boardOrigin(),
+                          boardView_.isFlipped(), promo_->toFile,
+                          promo_->toRank, index);
 }
 
 std::optional<chess::PieceType>
@@ -676,7 +668,7 @@ void PuzzleScreen::draw(sf::RenderWindow& window)
             cell.setPosition(c.pos);
             cell.setFillColor(ui::overlay::cellFill);
             cell.setOutlineColor(ui::overlay::cellStroke);
-            cell.setOutlineThickness(1.f);
+            cell.setOutlineThickness(ui::overlay::promoStrokeW);
             window.draw(cell);
 
             if (i == promoHover_) {
@@ -715,10 +707,10 @@ void PuzzleScreen::draw(sf::RenderWindow& window)
     }
 
     // Panel
+    const float px = panelLayout_.panelX;
     const float width = static_cast<float>(App::WindowWidth);
     const float height = static_cast<float>(App::WindowHeight);
-    const float px = boardView_.panelX();
-    sf::RectangleShape panel({width - px, height});
+    sf::RectangleShape panel({panelLayout_.panelEdgeWidth, height});
     panel.setPosition({px, 0.f});
     panel.setFillColor(sf::Color(24, 26, 30)); // puzzle header slate
     window.draw(panel);
@@ -734,7 +726,8 @@ void PuzzleScreen::draw(sf::RenderWindow& window)
     }
     sf::Text titleText(font, title, 15);
     titleText.setFillColor(ui::pal::textPrimary);
-    titleText.setPosition({px + 14.f, 18.f});
+    titleText.setPosition({px + panelLayout_.buttonInsetX,
+                           panelLayout_.puzzleTitleY});
     window.draw(titleText);
 
     sf::Text streakText(font,
@@ -742,13 +735,15 @@ void PuzzleScreen::draw(sf::RenderWindow& window)
                             "   best " + std::to_string(streak_.best),
                         14);
     streakText.setFillColor(sf::Color(160, 190, 130)); // streak sage
-    streakText.setPosition({px + 14.f, 44.f});
+    streakText.setPosition({px + panelLayout_.buttonInsetX,
+                            panelLayout_.puzzleStreakY});
     window.draw(streakText);
 
     sf::Text statusText(font, status_, 14);
     statusText.setFillColor(solved_ ? ui::pal::ok
                                     : ui::pal::warnBanner);
-    statusText.setPosition({px + 14.f, 68.f});
+    statusText.setPosition({px + panelLayout_.buttonInsetX,
+                            panelLayout_.puzzleStatusY});
     window.draw(statusText);
 
     if (!playedSans_.empty()) {
@@ -759,7 +754,8 @@ void PuzzleScreen::draw(sf::RenderWindow& window)
         }
         sf::Text lineText(font, safeTruncate(line, 32), 14);
         lineText.setFillColor(sf::Color(150, 150, 165)); // solution line slate
-        lineText.setPosition({px + 14.f, 96.f});
+        lineText.setPosition({px + panelLayout_.buttonInsetX,
+                              panelLayout_.puzzleSolutionY});
         window.draw(lineText);
     }
 
