@@ -11,6 +11,7 @@
 #include <chess/types.h>
 #include "config.h"
 #include "connection.h"
+#include "eval_harness.h"
 #include "piece_sets.h"
 #include "sfx.h"
 #include "themes.h"
@@ -73,6 +74,11 @@ public:
         config_.setBool("general.auto_queen", on);
         config_.save();
     }
+
+    // 16.1 eval harness: report cache + background engine worker. The engine
+    // spawns only via ensureEngine() (lazily, on report use) — hasEngine()
+    // never spawns, so tests and engine-less machines keep all 16.* UI hidden.
+    EvalHarness& evalHarness() { return evalHarness_; }
 
     BoardTheme boardTheme() const
     {
@@ -149,6 +155,10 @@ private:
     Connection connection_;
     Config config_;
     SoundManager sounds_;
+    // 16.1: lazily spawns its engine; declared BEFORE the screens so the
+    // screens (destroyed in reverse order) outlive the report cache and its
+    // worker — no screen dtor can touch a dead harness.
+    EvalHarness evalHarness_;
     std::unique_ptr<Screen> screen_;
     std::vector<std::unique_ptr<Screen>> stack_;
     std::optional<sf::Font> font_;
