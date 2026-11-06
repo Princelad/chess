@@ -837,10 +837,11 @@ engine" discipline.
 classify; Report screen reachable from GameOverScreen; classification unit
 tests abstain from engines (canned eval streams only)
 
-- [ ] **16.1 Eval harness (`client/src/eval_harness.{h,cpp}`, engine required only at runtime here)**
-  - [ ] Background-thread batch evaluation of every position of a finished game via `uci::UciEngine` (budgeted movetime per node, cancelable, no UI freeze — `tryGetBestMove`-style polling discipline from 8.2 never blocks the render loop)
-  - [ ] Results cached in-process per `App` run; game identity = archive id or SAN-chain hash; re-opening the same game skips completed nodes
-  - [ ] Engine-absent contract: `hasEngine()` false → callers hide all 16.* UI; harness never spuriously spawns engines from CI tests
+- [x] **16.1 Eval harness (`client/src/eval_harness.{h,cpp}`, engine required only at runtime here)**
+  - [x] Background-thread batch evaluation of every position of a finished game via `uci::UciEngine` (budgeted movetime per node, cancelable, no UI freeze — `tryGetBestMove`-style polling discipline from 8.2 never blocks the render loop)
+  - [x] Results cached in-process per `App` run; game identity = archive id or SAN-chain hash; re-opening the same game skips completed nodes
+  - [x] Engine-absent contract: `hasEngine()` false → callers hide all 16.* UI; harness never spuriously spawns engines from CI tests
+  - Tests: `tests/client/eval_harness_test.cpp` +10 (identity hash incl. the empty-vs-absent separator, `evalNodes` chains/refusals, injected-driver harness: full run, partial-cache resume, mid-flight abort, failure→Failed retry, one-job-at-a-time, no-driver inertness); suite 832
 
 - [ ] **16.2 Classification + accuracy (pure `client/src/move_quality.{h,cpp}`, the carefully-tested core)**
   - [ ] Win% conversion from cp/mate scores (sigmoid-equivalent mapping), per-move delta = win% given up from the mover's seat; thresholds → Brilliant/Best/Good/Inaccuracy/Mistake/Blunder/Book (book = 11.5's ECO prefix hit)
