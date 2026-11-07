@@ -6,6 +6,8 @@ src/connection.cpp
     src/config.cpp
     src/sfx.cpp
     src/avatars.cpp
+    src/eval_harness.cpp
+    src/move_quality.cpp
     src/widgets/label.cpp
     src/widgets/panel.cpp
     src/widgets/button.cpp
@@ -26,8 +28,7 @@ src/connection.cpp
     src/puzzles.cpp
     src/screens/analysis_screen.cpp
     src/screens/hud.cpp
-    src/screens/board_layout.cpp
-    src/eval_harness.cpp)
+    src/screens/board_layout.cpp)
 target_include_directories(chessclient PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 target_link_libraries(chessclient PUBLIC chessnet chesscore chessuci
     ${CHESS_SFML_GRAPHICS_TARGET}

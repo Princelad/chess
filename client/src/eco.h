@@ -39,19 +39,21 @@ inline std::string ecoToken(const std::string& san)
     return clean;
 }
 
-inline std::optional<Opening> ecoLookup(const std::vector<std::string>& sans)
+// Longest listed-prefix match for a SAN list; len == 0 marks "unlisted".
+struct EcoMatch
 {
-    if (sans.empty())
-        return std::nullopt;
+    std::size_t len = 0; // matched token count
+    Opening opening;
+};
 
-    std::optional<Opening> best;
-    std::size_t bestLen = 0; // matched token count
+inline EcoMatch ecoLongestMatch(const std::vector<std::string>& sans);
 
-    // Compiled-in table (11.5): common first-book openings and mainlines.
-    // ECO codes follow the standard letter ranges; depth is deliberately
-    // conservative — entries only where the code is unambiguous.
-    static const EcoEntry table[] = {
-        // 1.a3/b3/b4/c3/e3/f3/f4/g3/g4/Nc3 — unnamed irregular first moves
+// Compiled-in table (11.5): common first-book openings and mainlines.
+// ECO codes follow the standard letter ranges; depth is deliberately
+// conservative — entries only where the code is unambiguous. (File scope so
+// 16.2's per-ply book flags reuse the same walk.)
+inline const EcoEntry ecoTable[] = {
+    // 1.a3/b3/b4/c3/e3/f3/f4/g3/g4/Nc3 — unnamed irregular first moves
         {"a3", "A00", "Anderssen's Opening"},
         {"b3", "A01", "Nimzo-Larsen Attack"},
         {"b4", "A00", "Polish Opening"},
@@ -210,7 +212,10 @@ inline std::optional<Opening> ecoLookup(const std::vector<std::string>& sans)
         {"d4 d5 e3", "D00", "Queen's Pawn Game"},
     };
 
-    for (const EcoEntry& entry : table) {
+inline EcoMatch ecoLongestMatch(const std::vector<std::string>& sans)
+{
+    EcoMatch best;
+    for (const EcoEntry& entry : ecoTable) {
         const std::string entrySans(entry.sans);
         // Walk the entry's tokens; a miss disqualifies it immediately.
         std::size_t len = 0;
@@ -233,12 +238,22 @@ inline std::optional<Opening> ecoLookup(const std::vector<std::string>& sans)
                 break;
             pos = sp + 1;
         }
-        if (matched && len > bestLen) {
-            bestLen = len;
-            best = Opening{entry.code, entry.name};
+        if (matched && len > best.len) {
+            best.len = len;
+            best.opening = Opening{entry.code, entry.name};
         }
     }
     return best;
+}
+
+inline std::optional<Opening> ecoLookup(const std::vector<std::string>& sans)
+{
+    if (sans.empty())
+        return std::nullopt;
+    EcoMatch match = ecoLongestMatch(sans);
+    if (match.len == 0)
+        return std::nullopt;
+    return match.opening;
 }
 
 } // namespace chess::client

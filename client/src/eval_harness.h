@@ -73,13 +73,14 @@ std::optional<std::vector<EvalNode>> evalNodes(
 
 // Score for one node, from the MOVER's seat (the side to move in node.fen —
 // 16.2's win%-loss deltas read exactly that). bestSan is the engine's own
-// choice SAN when known (empty otherwise). (Named NodeEval, not PlyEval —
-// analysis_screen.h owns PlyEval already.)
+// choice SAN when known (empty otherwise). mateIn is SIGNED: positive the
+// mover mates in N, negative the mover is getting mated in N. (Named
+// NodeEval, not PlyEval — analysis_screen.h owns PlyEval already.)
 struct NodeEval
 {
     int scoreCp = 0;
     bool isMate = false;
-    int mateIn = 0;    // plies to mate for the mover when isMate
+    int mateIn = 0;    // signed: >0 mover mates in N, <0 mover is mated in N
     std::string bestSan;
 
     bool operator==(const NodeEval& other) const
