@@ -843,10 +843,11 @@ tests abstain from engines (canned eval streams only)
   - [x] Engine-absent contract: `hasEngine()` false → callers hide all 16.* UI; harness never spuriously spawns engines from CI tests
   - Tests: `tests/client/eval_harness_test.cpp` +10 (identity hash incl. the empty-vs-absent separator, `evalNodes` chains/refusals, injected-driver harness: full run, partial-cache resume, mid-flight abort, failure→Failed retry, one-job-at-a-time, no-driver inertness); suite 832
 
-- [ ] **16.2 Classification + accuracy (pure `client/src/move_quality.{h,cpp}`, the carefully-tested core)**
-  - [ ] Win% conversion from cp/mate scores (sigmoid-equivalent mapping), per-move delta = win% given up from the mover's seat; thresholds → Brilliant/Best/Good/Inaccuracy/Mistake/Blunder/Book (book = 11.5's ECO prefix hit)
-  - [ ] Accuracy% per side = a normalized win%-loss curve over `N` plies (the existing Glicko-2/norm discipline: clamp to 0-100)
-  - [ ] Unit tests: a canned `MoveEvalStream` fixture vector drives the entire classifier; thresholds asserted stable (tuning changes REQUIRE test updates — same discipline as the 2.x perft constants); no engine binary in test envs
+- [x] **16.2 Classification + accuracy (pure `client/src/move_quality.{h,cpp}`, the carefully-tested core)**
+  - [x] Win% conversion from cp/mate scores (sigmoid-equivalent mapping), per-move delta = win% given up from the mover's seat; thresholds → Brilliant/Best/Good/Inaccuracy/Mistake/Blunder/Book (book = 11.5's ECO prefix hit)
+  - [x] Accuracy% per side = a normalized win%-loss curve over `N` plies (the existing Glicko-2/norm discipline: clamp to 0-100)
+  - [x] Unit tests: a canned `MoveEvalStream` fixture vector drives the entire classifier; thresholds asserted stable (tuning changes REQUIRE test updates — same discipline as the 2.x perft constants); no engine binary in test envs
+  - Tests: `tests/client/move_quality_test.cpp` +10 — curve/accuracy pins (incl. the rail snaps and the authentic 99.9999-at-zero accuracy), nudge-probed threshold boundaries, band order, Book shadowing, sacrifice-vs-blunder separation, a real Italian-mainline stream fixture, side-accuracy isolation, `bookPlies` lifecycle; suite 842
 
 - [ ] **16.3 Game Report screen (`client/src/screens/report_screen.{h,cpp}`)**
   - [ ] Post-game panel: accuracy bars per side, class counts per piece legend, opening name (11.5 lookup), "worst moves" list jumping the navigator; reuses 9.3 navigator for board replay
