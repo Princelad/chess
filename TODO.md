@@ -849,10 +849,11 @@ tests abstain from engines (canned eval streams only)
   - [x] Unit tests: a canned `MoveEvalStream` fixture vector drives the entire classifier; thresholds asserted stable (tuning changes REQUIRE test updates — same discipline as the 2.x perft constants); no engine binary in test envs
   - Tests: `tests/client/move_quality_test.cpp` +10 — curve/accuracy pins (incl. the rail snaps and the authentic 99.9999-at-zero accuracy), nudge-probed threshold boundaries, band order, Book shadowing, sacrifice-vs-blunder separation, a real Italian-mainline stream fixture, side-accuracy isolation, `bookPlies` lifecycle; suite 842
 
-- [ ] **16.3 Game Report screen (`client/src/screens/report_screen.{h,cpp}`)**
-  - [ ] Post-game panel: accuracy bars per side, class counts per piece legend, opening name (11.5 lookup), "worst moves" list jumping the navigator; reuses 9.3 navigator for board replay
-  - [ ] Stored vs computed: reports are only computed on demand (button "View report" when engine present + game finished), never silently in the background during play
-  - [ ] GameOverScreen integration: report button appears next to Rematch where 16.1 contract is satisfied
+- [x] **16.3 Game Report screen (`client/src/screens/report_screen.{h,cpp}`)**
+  - [x] Post-game panel: accuracy bars per side, class counts per piece legend, opening name (11.5 lookup), "worst moves" list jumping the navigator; reuses 9.3 navigator for board replay
+  - [x] Stored vs computed: reports are only computed on demand (button "Report" when engine present + game finished), never silently in the background during play
+  - [x] GameOverScreen integration: report button beside Analyze (half-width siblings on the analyze row) where the 16.1 contract is satisfied
+  - Tests: board_layout_test +2 (report-row pins, worst rows re-derive on a second window shape), move_quality_test +5 (materialIn, sacrificePlies pairs vs plain trades, moverViewOf mate negation, streamFromReport pairing/finish/refusal); suite 849
 
 - [ ] **16.4 Move-list coloring + analysis upgrades**
   - [ ] Classified move list: class abbreviation chips/tints on each SAN cell (16.2's labels), rendered via 15.3's restyled rows; archive-replay and spectate views honor the same chip layer when a report was computed
