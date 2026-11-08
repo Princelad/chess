@@ -26,6 +26,8 @@ struct BoardLayoutOptions {
     bool analysis = false; // analysis label stack + eval text slot
     bool chat = false;     // chat bundle pinned under the action row
     bool puzzle = false;   // puzzle header rows + stacked action column
+    bool report = false;   // 16.3 game report: label pile, accuracy bars,
+                           // legend, worst-move rows
 };
 
 struct BoardLayout {
@@ -105,6 +107,23 @@ struct BoardLayout {
     {
         return buttonBottomY - static_cast<float>(fromBottom) * buttonStep;
     }
+
+    // Report rows (opts.report): the label pile over an analysis-sized move
+    // list, then the report body under the nav row — accuracy bars (label
+    // column + 12 px track), a one-line class legend, and the worst-move
+    // rows (worstTop + worstStep pitch, bounded by the bottom-edge hint).
+    float reportTitleY = 0.f;
+    float reportResultY = 0.f;
+    float reportOpeningY = 0.f;
+    float reportPlyY = 0.f;
+    float accuracyWhiteY = 0.f;
+    float accuracyBlackY = 0.f;
+    float accuracyLabelW = 0.f; // left label column before the bar track
+    float accuracyBarH = 0.f;
+    float legendY = 0.f;
+    float worstHeaderY = 0.f;
+    float worstTop = 0.f;
+    float worstStep = 0.f;
 
     // Board rect passthrough read from the BoardView — consumers get the
     // full picture from one struct.

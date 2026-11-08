@@ -5,6 +5,7 @@
 #include "game_screen.h"
 #include "history_screen.h"
 #include "menu_screen.h"
+#include "report_screen.h"
 #include "tournament_lobby_screen.h"
 #include "widgets/layout.h"
 
@@ -123,6 +124,16 @@ GameOverScreen::GameOverScreen(App& app,
     analyzeBtn_.setStyle(ui::buttonInfo());
     analyzeBtn_.setOnClick([this] { activateAnalyze(); });
 
+    // 16.3: the report needs an engine (spawned on demand, post-game —
+    // user-visible demand, the 16.1 contract) and a move chain to analyze.
+    // A finished game with no moves has nothing to report.
+    reportBtn_.setLabel("Report");
+    reportBtn_.setStyle(ui::buttonInfo());
+    reportBtn_.setOnClick([this] { activateReport(); });
+    reportBtn_.setEnabled(!sanMoves_.empty()
+        && app_.evalHarness().ensureEngine()
+        && app_.evalHarness().hasEngine());
+
     archiveBtn_.setLabel("Match archive");
     archiveBtn_.setStyle(ui::buttonBlue());
     archiveBtn_.setOnClick([this] { activateArchive(); });
@@ -187,11 +198,20 @@ void GameOverScreen::layoutWidgets()
                       sf::Vector2f(App::WindowWidth, BtnH)), btnSize));
 
     if (!moves_.empty()) {
+        // Analyze | Report sit side by side on the analyze row (each on
+        // its own half, like the offer row's two buttons).
         analyzeBtn_.setRect(layout::centerIn(
             sf::FloatRect(sf::Vector2f(0.f, AnalyzeBtnY),
-                          sf::Vector2f(App::WindowWidth, BtnH)), btnSize));
+                          sf::Vector2f(App::WindowWidth / 2.f, BtnH)),
+            btnSize));
+        reportBtn_.setRect(layout::centerIn(
+            sf::FloatRect(
+                sf::Vector2f(App::WindowWidth / 2.f, AnalyzeBtnY),
+                sf::Vector2f(App::WindowWidth / 2.f, BtnH)),
+            btnSize));
     } else {
         analyzeBtn_.setEnabled(false);
+        reportBtn_.setEnabled(false);
     }
 
     menuBtn_.setRect(layout::centerIn(
@@ -290,6 +310,14 @@ void GameOverScreen::activateAnalyze()
         app_, initialBoard_, moves_, sanMoves_, resultText_));
 }
 
+void GameOverScreen::activateReport()
+{
+    if (sanMoves_.empty()) return;
+    app_.connection().disconnect();
+    app_.pushScreen(std::make_unique<ReportScreen>(
+        app_, initialBoard_, moves_, sanMoves_, resultText_));
+}
+
 void GameOverScreen::activateArchive()
 {
     if (app_.connection().state() != ConnectionState::Connected) return;
@@ -302,14 +330,15 @@ void GameOverScreen::activateArchive()
 void GameOverScreen::cycleFocus()
 {
     Button* order[] = {&rematchBtn_, &offerAcceptBtn_, &offerDeclineBtn_,
-                       &archiveBtn_, &analyzeBtn_, &menuBtn_};
-    for (int step = 1; step <= 6; ++step) {
-        const int next = (focus_ + step) % 6;
+                       &archiveBtn_, &analyzeBtn_, &reportBtn_, &menuBtn_};
+    constexpr int kFocusCount = 7;
+    for (int step = 1; step <= kFocusCount; ++step) {
+        const int next = (focus_ + step) % kFocusCount;
         const bool visible = order[next] != &offerAcceptBtn_
             && order[next] != &offerDeclineBtn_;
         if (visible && order[next]->isEnabled()) {
             focus_ = next;
-            for (int i = 0; i < 6; ++i)
+            for (int i = 0; i < kFocusCount; ++i)
                 order[i]->setFocused(false);
             order[focus_]->setFocused(true);
             return;
@@ -346,6 +375,7 @@ void GameOverScreen::handleEvent(const sf::Event& event)
     if (archiveBtn_.handleEvent(event, local)) return;
     if (moves_.empty()) return;
     if (analyzeBtn_.handleEvent(event, local)) return;
+    if (reportBtn_.handleEvent(event, local)) return;
     menuBtn_.handleEvent(event, local);
 }
 
@@ -428,8 +458,10 @@ void GameOverScreen::draw(sf::RenderWindow& window)
         rematchBtn_.draw(window, font);
     }
     archiveBtn_.draw(window, font);
-    if (!moves_.empty())
+    if (!moves_.empty()) {
         analyzeBtn_.draw(window, font);
+        reportBtn_.draw(window, font);
+    }
     menuBtn_.draw(window, font);
 
     hint_.draw(window, font);

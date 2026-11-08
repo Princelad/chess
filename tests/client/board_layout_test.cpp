@@ -182,6 +182,57 @@ TEST(BoardLayout, PuzzleStackBottomAnchorsTheActionColumn)
     EXPECT_FLOAT_EQ(l.buttonY(3), 470.f);
 }
 
+TEST(BoardLayout, ReportStackPinsTheAccuracyBodyRows)
+{
+    BoardFixture f;
+    BoardLayout l = composeBoardLayout(WinW, WinH, f.board,
+                                       {false, false, false, false, true});
+
+    // Header pile over an analysis-sized move list.
+    EXPECT_FLOAT_EQ(l.reportTitleY, 30.f);
+    EXPECT_FLOAT_EQ(l.reportResultY, 55.f);
+    EXPECT_FLOAT_EQ(l.reportOpeningY, 78.f);
+    EXPECT_FLOAT_EQ(l.reportPlyY, 100.f);
+
+    EXPECT_FLOAT_EQ(l.moveList.position.y, 124.f);
+    EXPECT_FLOAT_EQ(l.moveList.size.y, 272.f); // 396 - 124
+    EXPECT_FLOAT_EQ(l.navRowA.position.y, 404.f);
+    EXPECT_FLOAT_EQ(l.navRowA.size.y, 30.f);
+
+    // Accuracy bars: a 56 px label column, a 12 px track per seat.
+    EXPECT_FLOAT_EQ(l.accuracyWhiteY, 446.f);
+    EXPECT_FLOAT_EQ(l.accuracyBlackY, 464.f);
+    EXPECT_FLOAT_EQ(l.accuracyLabelW, 56.f);
+    EXPECT_FLOAT_EQ(l.accuracyBarH, 12.f);
+
+    // Legend, worst-move header, and worst rows running to the hint.
+    EXPECT_FLOAT_EQ(l.legendY, 488.f);
+    EXPECT_FLOAT_EQ(l.worstHeaderY, 508.f);
+    EXPECT_FLOAT_EQ(l.worstTop, 526.f);
+    EXPECT_FLOAT_EQ(l.worstStep, 18.f);
+    EXPECT_FLOAT_EQ(l.hintY, WinH - 40.f); // 600
+
+    // Non-report rows stay zeroed (defaults; legacy pin).
+    BoardLayout plain = composeBoardLayout(WinW, WinH, f.board, {});
+    EXPECT_FLOAT_EQ(plain.legendY, 0.f);
+    EXPECT_FLOAT_EQ(plain.worstTop, 0.f);
+}
+
+TEST(BoardLayout, ReportStackReDerivesOnOtherWindowShapes)
+{
+    // The worst-row pile anchors its end to the bottom-edge hint — the one
+    // window-derived row; the fixed table above stays put.
+    BoardView board(1280.f, 800.f, Color::White);
+    BoardLayout l = composeBoardLayout(1280.f, 800.f, board,
+                                       {false, false, false, false, true});
+
+    EXPECT_FLOAT_EQ(l.legendY, 488.f);
+    EXPECT_FLOAT_EQ(l.worstHeaderY, 508.f);
+    EXPECT_FLOAT_EQ(l.worstTop, 526.f);
+    EXPECT_FLOAT_EQ(l.worstStep, 18.f);
+    EXPECT_FLOAT_EQ(l.hintY, 800.f - 40.f);
+}
+
 TEST(BoardLayout, ComposeFormulaHoldsForOtherWindowShapes)
 {
     // The existing clock/perft discipline: formulas, not magic screen

@@ -39,6 +39,8 @@ private:
     void activateMenu();
     void activateArchive();
     void activateAnalyze();
+    // 16.3: opens the engine-evaluated game report on this finished game.
+    void activateReport();
     // Arena games (12.3) run their own post-game flow: the rematch button
     // becomes the return-to-the-lobby switch (the lobby re-affirms the
     // membership and shows the standings; the next pairing arrives there.
@@ -68,6 +70,7 @@ private:
     Button offerDeclineBtn_;
     Button archiveBtn_;
     Button analyzeBtn_;
+    Button reportBtn_;
     Button menuBtn_;
     Label resultLabel_;
     Label reasonLabel_;

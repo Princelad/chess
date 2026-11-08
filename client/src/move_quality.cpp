@@ -109,4 +109,110 @@ std::vector<bool> bookPlies(const std::vector<std::string>& sans)
     return book;
 }
 
+// --- report stream (16.3) ----------------------------------------------------
+
+// Piece values (P1/N3/B3/R5/Q9); kSacrificeNet = a full exchange cushion.
+inline constexpr int kSacrificeNet = 2;
+
+int materialIn(const Board& board, Color color)
+{
+    int total = 0;
+    for (int file = 0; file < 8; ++file) {
+        for (int rank = 0; rank < 8; ++rank) {
+            const Piece piece =
+                board.pieceAt(chess::squareOf(file, rank));
+            if (piece != Piece::None() && piece.color == color) {
+                switch (piece.type) {
+                    case PieceType::Pawn: total += 1; break;
+                    case PieceType::Knight: total += 3; break;
+                    case PieceType::Bishop: total += 3; break;
+                    case PieceType::Rook: total += 5; break;
+                    case PieceType::Queen: total += 9; break;
+                    default: break; // king is priceless
+                }
+            }
+        }
+    }
+    return total;
+}
+
+std::vector<bool> sacrificePlies(const Board& initialBoard,
+                                 const std::vector<chess::Move>& moves)
+{
+    std::vector<bool> sacrifices(moves.size(), false);
+    Board board = initialBoard;
+    for (std::size_t i = 0; i < moves.size(); ++i) {
+        const Color mover = board.sideToMove();
+        const Color opponent = mover == Color::White ? Color::Black
+                                                     : Color::White;
+        const int moverBefore = materialIn(board, mover);
+        const int oppBefore = materialIn(board, opponent);
+        board.makeMove(moves[i]);
+
+        // Sacrifice needs the REPLY settled: the mover's piece is given
+        // away when the opponent's net gain over the move PAIR clears the
+        // cushion (a plain 1:1 trade nets zero; an exchange-for-piece bolt
+        // nets the piece value). The reply lands on a scratch copy so the
+        // main board advances exactly once per ply.
+        if (i + 1 >= moves.size()) break;
+        Board after = board;
+        after.makeMove(moves[i + 1]);
+        const int moverNetLoss =
+            (moverBefore - materialIn(after, mover))
+            - (oppBefore - materialIn(after, opponent));
+        sacrifices[i] = moverNetLoss >= kSacrificeNet;
+    }
+    return sacrifices;
+}
+
+int moverViewOf(const NodeResult& opponentSeatNode)
+{
+    if (!opponentSeatNode.valid) return 0;
+    const NodeEval& eval = opponentSeatNode.eval;
+    const int collapsed = eval.isMate
+        ? (eval.mateIn >= 0 ? kMateCp : -kMateCp)
+        : eval.scoreCp;
+    return -collapsed; // the mover sees the opponent's seat negated
+}
+
+MoveEvalStream streamFromReport(const EvalReport& report,
+                                const std::vector<std::string>& sans,
+                                const std::vector<bool>& sacrifices)
+{
+    if (report.nodes.size() != sans.size()
+        || report.evals.size() != report.nodes.size() || sans.empty())
+        return {};
+    for (const auto& result : report.evals)
+        if (!result.valid) return {};
+
+    MoveEvalStream stream;
+    stream.reserve(report.evals.size());
+    for (std::size_t i = 0; i < report.evals.size(); ++i) {
+        // node i's seat is the mover of the SAN i made.
+        auto board = Board::fromFen(report.nodes[i].fen);
+        if (!board) return {};
+        MoveEval move;
+        move.mover = board->sideToMove();
+        const NodeResult& ownSeat = report.evals[i];
+        move.cpBefore = ownSeat.eval.isMate
+            ? (ownSeat.eval.mateIn >= 0 ? kMateCp : -kMateCp)
+            : ownSeat.eval.scoreCp;
+
+        if (i + 1 < report.evals.size()) {
+            move.cpAfter = moverViewOf(report.evals[i + 1]);
+        } else {
+            // The final ply has no after-node. Mate SAN = the mover
+            // delivered: the after-view pegs at full mate; any other
+            // finish (resignation / timeout / draw) carries no new info.
+            const std::string san = sans.back();
+            move.cpAfter = (!san.empty() && san.back() == '#')
+                ? kMateCp
+                : move.cpBefore;
+        }
+        if (i < sacrifices.size()) move.isSacrifice = sacrifices[i];
+        stream.push_back(move);
+    }
+    return stream;
+}
+
 } // namespace chess::client::quality

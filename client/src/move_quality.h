@@ -4,7 +4,11 @@
 #include <string>
 #include <vector>
 
+#include <chess/board.h>
+#include <chess/move.h>
 #include <chess/types.h> // Color
+
+#include "eval_harness.h"
 
 namespace chess::client::quality {
 
@@ -122,5 +126,35 @@ GameQuality evaluateGame(const MoveEvalStream& moves);
 // every later move of the game. Wrapper-free for canned-stream tests: the
 // classifier itself takes isBook as input.
 std::vector<bool> bookPlies(const std::vector<std::string>& sans);
+
+// --- report stream (16.3): harness output → classifier input ------------------
+
+// Piece values (P1/N3/B3/R5/Q9) summed for one color on a board.
+int materialIn(const Board& board, Color color);
+
+// Per-ply sacrifice flags from the board chain: the move costs the mover at
+// least kSacrificeValue (3: a knight/bishop) of material versus the firm
+// capture value of what it lands on — a receiver-side approximation, exact
+// enough for the Brilliant label (the mate-in-two sacrificing bolt that the
+// opponent captures on spot is the classic shape it detects).
+std::vector<bool> sacrificePlies(const Board& initialBoard,
+                                 const std::vector<chess::Move>& moves);
+
+// Mover-seat view of a scored position. report.evals[i] is always judged in
+// the seat that moves at node i; ply i's AFTER position is node i+1 where
+// the OPPONENT sits, so the mover's view is the negation. Mate keeps the
+// collapse: an opponent mating = the mover is mated (−kMateCp), the
+// opponent already losing = the mover mating (+kMateCp).
+int moverViewOf(const NodeResult& opponentSeatNode);
+
+// Builds the classifier stream from a COMPLETE report (every ply valid;
+// empty otherwise — evalNodes count must equal the SAN list length).
+// The final move carries no after-node: a mate SAN pins its after at
+// +kMateCp (the mover delivered), any other finish keeps before (the
+// game result adds no information).
+MoveEvalStream streamFromReport(const EvalReport& report,
+                                const std::vector<std::string>& sans,
+                                const std::vector<bool>& sacrifices);
+
 
 } // namespace chess::client::quality

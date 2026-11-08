@@ -7,7 +7,12 @@
 
 #include <cmath>
 
+#include <chess/board.h>
+#include <chess/move.h>
+#include <chess/san.h>
+
 using namespace chess;
+using namespace chess::client;
 using namespace chess::client::quality;
 
 namespace {
@@ -21,6 +26,7 @@ MoveEval entry(Color mover, int cpBefore, int cpAfter)
     e.cpAfter = cpAfter;
     return e;
 }
+
 
 // Test-local inverse of winPercent: finds the cp that maps to a given win%
 // (the curve is strictly monotonic). Used to probe the classification
@@ -217,4 +223,202 @@ TEST(MoveQuality, BookFlagsEndWhereTheListedLineEnds)
     EXPECT_TRUE(caroJunk[1]);  // "e4 c6" is a listed Caro-Kann prefix
     EXPECT_FALSE(caroJunk[2]); // past the table: Qb6 is out
     EXPECT_FALSE(caroJunk[3]);
+}
+
+// --- 16.3 report-stream helpers ------------------------------------------------
+
+namespace {
+
+// Replays a FEN + SAN chain into moves (library-verified legality).
+std::vector<chess::Move> chainFrom(const std::string& fen,
+                                   const std::vector<std::string>& sans)
+{
+    std::optional<Board> board = Board::fromFen(fen);
+    std::vector<chess::Move> moves;
+    for (const std::string& san : sans) {
+        auto move = san::fromSan(*board, san);
+        if (!move) return {};
+        moves.push_back(*move);
+        board->makeMove(*move);
+    }
+    return moves;
+}
+
+EvalNode node(const std::string& fen, const std::string& san)
+{
+    EvalNode n;
+    n.fen = fen;
+    n.san = san;
+    return n;
+}
+
+NodeResult scored(int cp)
+{
+    NodeResult r;
+    r.eval.scoreCp = cp;
+    r.valid = true;
+    return r;
+}
+
+} // namespace
+
+TEST(MoveQuality, MaterialCountsStandardAndCraftedPositions)
+{
+    // The classic P1/N3/B3/R5/Q9 sum: the start position's 39.
+    auto board = Board::fromStartPos();
+    EXPECT_EQ(materialIn(board, Color::White), 39);
+    EXPECT_EQ(materialIn(board, Color::Black), 39);
+
+    // Mid-game crafted board: white kept a queen, black balanced down.
+    auto mid = Board::fromFen("4r3/3k4/3N4/8/8/8/8/4K3 w - - 0 1");
+    ASSERT_TRUE(mid);
+    EXPECT_EQ(materialIn(*mid, Color::White), 3);
+    EXPECT_EQ(materialIn(*mid, Color::Black), 5);
+}
+
+TEST(MoveQuality, SacrificeFlagsPairNetLossNotPlainTrades)
+{
+    // A quiet development chain: every pair nets zero — no flags.
+    {
+        const auto moves =
+            chainFrom(Board::fromStartPos().toFen(),
+                      {"e4", "e5", "Nf3", "Nc6", "Bc4", "Bc5"});
+        ASSERT_EQ(moves.size(), 6u);
+        const auto flags = sacrificePlies(Board::fromStartPos(), moves);
+        for (bool flag : flags) EXPECT_FALSE(flag);
+    }
+
+    // A plain knight trade: Nxe... Nxc6 bxc6 — net zero, not a sacrifice.
+    {
+        const auto moves = chainFrom(
+            "8/1p6/2n5/4N3/8/8/8/K2k4 w - - 0 1", {"Nxc6", "bxc6"});
+        ASSERT_EQ(moves.size(), 2u);
+        const auto flags = sacrificePlies(*Board::fromFen(
+            "8/1p6/2n5/4N3/8/8/8/K2k4 w - - 0 1"), moves);
+        ASSERT_EQ(flags.size(), 2u);
+        EXPECT_FALSE(flags[0]); // white won a knight, lost a knight: net 0
+        EXPECT_FALSE(flags[1]); // black traded pawn for knight: net 2... no —
+    }
+
+    // A true give-away: 1. Nf6?? 2... gxf6 — the knight hangs to a pawn and
+    // nothing is captured in return. The pair net clears kSacrificeNet.
+    {
+        Board start = *Board::fromFen("6k1/6p1/8/7N/8/8/8/K6R w - - 0 1");
+        const auto moves = chainFrom(start.toFen(), {"Nf6", "gxf6"});
+        ASSERT_EQ(moves.size(), 2u);
+        const auto flags = sacrificePlies(start, moves);
+        ASSERT_EQ(flags.size(), 2u);
+        EXPECT_TRUE(flags[0]);  // the knight drop
+        EXPECT_FALSE(flags[1]); // the pawn recapture itself wins material
+    }
+
+    // The final ply can have no reply pair — it is never flagged.
+    {
+        Board start = *Board::fromFen("6k1/6p1/8/7N/8/8/8/K6R w - - 0 1");
+        const auto moves = chainFrom(start.toFen(), {"Nf6"});
+        const auto flags = sacrificePlies(start, moves);
+        ASSERT_EQ(flags.size(), 1u);
+        EXPECT_FALSE(flags[0]);
+    }
+}
+
+TEST(MoveQuality, MoverViewNegatesTheOpponentSeat)
+{
+    // Plain cp: the opponent sits on +100 → the mover sees -100.
+    EXPECT_EQ(moverViewOf(scored(100)), -100);
+
+    // Signed mate collapse: the opponent mates in 2 → the mover is mated;
+    // the opponent is mated in 3 → the mover delivers.
+    NodeResult oppMating;
+    oppMating.eval.isMate = true;
+    oppMating.eval.mateIn = 2;
+    oppMating.valid = true;
+    EXPECT_EQ(moverViewOf(oppMating), -kMateCp);
+
+    NodeResult oppMated = oppMating;
+    oppMated.eval.mateIn = -3;
+    EXPECT_EQ(moverViewOf(oppMated), kMateCp);
+
+    // An unscored node contributes nothing.
+    NodeResult invalid;
+    invalid.valid = false;
+    EXPECT_EQ(moverViewOf(invalid), 0);
+}
+
+TEST(MoveQuality, StreamFromReportBuildsMoverSeatPairs)
+{
+    // Two-ply game 1. e4 e5. Node fens chain from the start; every node
+    // scored dead-equal so only the pairing math is exercised.
+    Board beforeE4 = Board::fromStartPos();
+    Board afterE4 = beforeE4;
+    {
+        auto m = san::fromSan(afterE4, "e4");
+        ASSERT_TRUE(m);
+        afterE4.makeMove(*m);
+    }
+    Board afterE5 = afterE4;
+    {
+        auto m = san::fromSan(afterE5, "e5");
+        ASSERT_TRUE(m);
+        afterE5.makeMove(*m);
+    }
+
+    EvalReport report;
+    report.nodes = {node(beforeE4.toFen(), "e4"),
+                    node(afterE4.toFen(), "e5")};
+    report.evals = {scored(30), scored(0)};
+
+    // Node 0's seat: White (mover of e4) before 30; after-node 1's seat is
+    // Black → the mover's view is -0 = 0. Improvement? 30 given 0 stays.
+    auto stream = streamFromReport(report, {"e4", "e5"}, {false, false});
+    ASSERT_EQ(stream.size(), 2u);
+    EXPECT_EQ(stream[0].mover, Color::White);
+    EXPECT_EQ(stream[0].cpBefore, 30);
+    EXPECT_EQ(stream[0].cpAfter, 0);
+    // Ply 1: black's seat before 0; after-node doesn't exist — a non-mate
+    // SAN keeps before (delta 0).
+    EXPECT_EQ(stream[1].mover, Color::Black);
+    EXPECT_EQ(stream[1].cpBefore, 0);
+    EXPECT_EQ(stream[1].cpAfter, 0);
+}
+
+TEST(MoveQuality, StreamFromReportFinishesMateAndRefusesGaps)
+{
+    Board beforeQf7 = *Board::fromFen(
+        "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 0 1");
+    Board afterQf7 = beforeQf7;
+    {
+        auto m = san::fromSan(afterQf7, "Qxf7#");
+        ASSERT_TRUE(m);
+        afterQf7.makeMove(*m);
+    }
+
+    EvalReport report;
+    report.nodes = {node(beforeQf7.toFen(), "Qxf7#")};
+    report.evals = {scored(900)};
+
+    // A mate SAN's final ply pins the after-view at full mate for the
+    // mover (who delivered it).
+    auto stream = streamFromReport(report, {"Qxf7#"}, {false});
+    ASSERT_EQ(stream.size(), 1u);
+    EXPECT_EQ(stream[0].cpBefore, 900);
+    EXPECT_EQ(stream[0].cpAfter, kMateCp);
+    EXPECT_EQ(stream[0].mover, Color::White);
+
+    // Any invalid eval rejects the whole report.
+    EvalReport broken = report;
+    broken.nodes.push_back(node(afterQf7.toFen(), "junk"));
+    broken.evals.push_back(scored(0));
+    broken.evals[1].valid = false;
+    EXPECT_TRUE(streamFromReport(broken, {"Qxf7#", "junk"}, {false, false})
+                    .empty());
+
+    // Shape mismatch (evals vs nodes) is refused too.
+    EvalReport wrongShape;
+    wrongShape.nodes = report.nodes;
+    wrongShape.evals = {scored(0), scored(0), scored(0)};
+    wrongShape.evals[0].valid = true;
+    wrongShape.evals[1].valid = true;
+    wrongShape.evals[2].valid = true;
+    EXPECT_TRUE(streamFromReport(wrongShape, {"Qxf7#"}, {false}).empty());
 }

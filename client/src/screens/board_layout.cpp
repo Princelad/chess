@@ -111,6 +111,35 @@ BoardLayout composeBoardLayout(float windowWidth, float windowHeight,
         l.buttonBottomY = windowHeight - 56.f;
     }
 
+    // Report stack (16.3): the same move-list span the analysis stack uses,
+    // an accuracy-bar body under the nav row, and the worst-move pile that
+    // runs to the bottom-edge hint.
+    if (options.report) {
+        l.reportTitleY = 30.f;
+        l.reportResultY = 55.f;
+        l.reportOpeningY = 78.f;
+        l.reportPlyY = 100.f;
+
+        l.moveListTop = 124.f;
+        l.moveListBottom = 396.f;
+        l.moveList = sf::FloatRect(
+            sf::Vector2f(l.panelX, l.moveListTop),
+            sf::Vector2f(l.panelWidth, l.moveListBottom - l.moveListTop));
+        l.navRowA = sf::FloatRect(
+            sf::Vector2f(l.panelX, 404.f),
+            sf::Vector2f(l.panelWidth, 30.f));
+
+        l.accuracyWhiteY = 446.f;
+        l.accuracyBlackY = 464.f;
+        l.accuracyLabelW = 56.f;
+        l.accuracyBarH = 12.f;
+        l.legendY = 488.f;
+        l.worstHeaderY = 508.f;
+        l.worstTop = 526.f;
+        l.worstStep = 18.f;
+        l.hintY = windowHeight - 40.f;
+    }
+
     return l;
 }
 
