@@ -23,11 +23,14 @@ namespace chess::client {
 // assets/puzzles.pgn. The solver plays; every correct move triggers the
 // stored defender reply, a wrong move restarts the puzzle and zeroes the
 // streak, and the best streak persists via config (puzzle.best_streak).
-// Pure puzzle data/rules live in puzzles.{h,cpp}; this screen has no logic
-// of its own worth testing.
+// 17.2 adds the daily mode: one date-seeded puzzle per day whose solve
+// marks puzzle.daily_last / puzzle.daily_streak (a skipped day resets the
+// streak); the header carries the daily streak + all-time solve stats.
+// Pure puzzle data/rules live in puzzles.{h,cpp} and daily.{h,cpp}; this
+// screen has no logic of its own worth testing.
 class PuzzleScreen : public Screen {
 public:
-    explicit PuzzleScreen(App& app);
+    explicit PuzzleScreen(App& app, bool daily = false);
 
     void handleEvent(const sf::Event& event) override;
     void update(float dtSec) override;
@@ -50,6 +53,10 @@ protected:
     const Puzzle* current() const;
     void loadPuzzle(int index);
     void resetPosition();
+    void refreshDailyStats();
+    void enterDailyMode();
+    void leaveDailyMode();
+    void revealLine();
 
     void selectPiece(int file, int rank);
     void tryMove(int targetFile, int targetRank);
@@ -108,6 +115,12 @@ protected:
     Button solutionBtn_;
     Button nextBtn_;
     Button backBtn_;
+    Button dailyBtn_; // 17.2: normal-mode entry into the daily puzzle
+
+    // 17.2 daily mode state (daily_ = the date-seeded one-a-day puzzle).
+    bool daily_ = false;
+    int today_ = 0;       // day number of the screen's session day
+    int dailyStreak_ = 0; // display streak (chain-alive adjusted)
 
     // Panel text widgets rebuilt per puzzle / per status change.
     std::string title_;

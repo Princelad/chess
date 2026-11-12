@@ -100,6 +100,7 @@ struct BoardLayout {
     float puzzleStreakY = 0.f;
     float puzzleStatusY = 0.f;
     float puzzleSolutionY = 0.f;
+    float puzzleDailyY = 0.f; // 17.2: daily-streak + all-time stats line
     float buttonInsetX = 0.f;
     float buttonWidth = 0.f;
     float buttonHeight = 0.f;

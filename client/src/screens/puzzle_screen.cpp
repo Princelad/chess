@@ -1,5 +1,6 @@
 #include "puzzle_screen.h"
 
+#include "daily.h"
 #include "ui/theme.h"
 #include "asset_paths.h"
 #include "keyboard.h"
@@ -10,10 +11,12 @@
 #include <chess/san.h>
 
 #include <algorithm>
+#include <chrono>
+#include <ctime>
 
 namespace chess::client {
 
-PuzzleScreen::PuzzleScreen(App& app)
+PuzzleScreen::PuzzleScreen(App& app, bool daily)
     : app_(app)
     , boardView_(static_cast<float>(App::WindowWidth),
                  static_cast<float>(App::WindowHeight),
@@ -33,6 +36,21 @@ PuzzleScreen::PuzzleScreen(App& app)
         loadPuzzle(0);
     else
         setStatus("No puzzles found (missing puzzles.pgn)", 999.f);
+
+    // 17.2: session day + the Daily button (normal mode only).
+    {
+        const auto hours = std::chrono::duration_cast<std::chrono::hours>(
+            std::chrono::system_clock::now().time_since_epoch());
+        today_ = static_cast<int>(hours.count() / 24);
+    }
+    dailyBtn_.setLabel("Daily puzzle");
+    dailyBtn_.setIcon(std::nullopt);
+    dailyBtn_.setStyle(ui::buttonInfo());
+    dailyBtn_.setRect(sf::FloatRect(
+        {panelLayout_.panelX + panelLayout_.buttonInsetX,
+         panelLayout_.buttonY(4)},
+        {panelLayout_.buttonWidth, panelLayout_.buttonHeight}));
+    dailyBtn_.setOnClick([this] { enterDailyMode(); });
 
     auto place = [&](Button& b, int fromBottom) {
         b.setRect(sf::FloatRect(
@@ -62,6 +80,9 @@ PuzzleScreen::PuzzleScreen(App& app)
     backBtn_.setStyle(ui::buttonDanger());
     place(backBtn_, 0);
     backBtn_.setOnClick([this] { backToMenu(); });
+
+    if (daily)
+        enterDailyMode();
 }
 
 const Puzzle* PuzzleScreen::current() const
@@ -297,6 +318,22 @@ void PuzzleScreen::onSolved()
     app_.config().setInt("puzzle.best_streak", streak_.best);
     app_.config().save();
     setStatus("Solved! Streak " + std::to_string(streak_.current), 5.f);
+
+    // 17.2: every solve counts toward all-time; the daily also marks its
+    // day + streak (a skipped day resets via daily::solveStreak).
+    const int solvedTotal = app_.config().getInt("puzzle.solved_total", 0) + 1;
+    app_.config().setInt("puzzle.solved_total", solvedTotal);
+    if (daily_) {
+        const int last = app_.config().getInt("puzzle.daily_last", -1);
+        const int streak = daily::solveStreak(
+            last, app_.config().getInt("puzzle.daily_streak", 0), today_);
+        app_.config().setInt("puzzle.daily_last", today_);
+        app_.config().setInt("puzzle.daily_streak", streak);
+        dailyStreak_ = streak;
+        setStatus("Daily solved! Streak " + std::to_string(streak)
+                      + " - come back tomorrow.", 999.f);
+    }
+    app_.config().save();
 }
 
 void PuzzleScreen::onWrongMove()
@@ -339,15 +376,13 @@ void PuzzleScreen::hint()
     }
 }
 
-void PuzzleScreen::revealSolution()
+void PuzzleScreen::revealLine()
 {
+    // Shared by the manual reveal and the daily's already-solved replay:
+    // applies the whole stored line, no status or streak side effects.
     const auto* puzzle = current();
-    if (!puzzle || solved_ || revealed_)
+    if (!puzzle)
         return;
-
-    streak_.onFail();
-    revealed_ = true;
-    hintLevel_ = 2;
     deselect();
     clearBoardInput();
 
@@ -362,14 +397,71 @@ void PuzzleScreen::revealSolution()
         ++solutionPly_;
     }
     app_.sounds().play(chess::client::Sfx::Checkmate);
-    setStatus("Solution shown - streak reset. Press Next.", 6.f);
+}
+
+void PuzzleScreen::revealSolution()
+{
+    const auto* puzzle = current();
+    if (!puzzle || solved_ || revealed_)
+        return;
+
+    streak_.onFail();
+    revealed_ = true;
+    hintLevel_ = 2;
+    revealLine();
+
+    if (daily_)
+        setStatus("Solution shown - come back tomorrow for a new daily.", 6.f);
+    else
+        setStatus("Solution shown - streak reset. Press Next.", 6.f);
 }
 
 void PuzzleScreen::nextPuzzle()
 {
+    if (daily_) {
+        leaveDailyMode();
+        return;
+    }
     if (puzzles_.empty())
         return;
     loadPuzzle((index_ + 1) % static_cast<int>(puzzles_.size()));
+}
+
+void PuzzleScreen::enterDailyMode()
+{
+    if (puzzles_.empty())
+        return;
+    daily_ = true;
+    refreshDailyStats();
+    loadPuzzle(daily::dailyIndex(today_, static_cast<int>(puzzles_.size())));
+    nextBtn_.setLabel("Back to puzzles");
+
+    if (daily::solvedToday(app_.config().getInt("puzzle.daily_last", -1),
+                           today_)) {
+        // Already done today: replay the line for viewing, no new marks.
+        revealed_ = true;
+        hintLevel_ = 2;
+        revealLine();
+        setStatus("Daily solved - streak "
+                      + std::to_string(dailyStreak_)
+                      + ". Come back tomorrow!", 999.f);
+    } else {
+        refreshStatus();
+    }
+}
+
+void PuzzleScreen::leaveDailyMode()
+{
+    daily_ = false;
+    nextBtn_.setLabel("Next puzzle");
+    loadPuzzle(0);
+}
+
+void PuzzleScreen::refreshDailyStats()
+{
+    const int last = app_.config().getInt("puzzle.daily_last", -1);
+    dailyStreak_ = daily::displayStreak(
+        last, app_.config().getInt("puzzle.daily_streak", 0), today_);
 }
 
 void PuzzleScreen::backToMenu()
@@ -413,6 +505,21 @@ void PuzzleScreen::refreshStatus()
     const auto* puzzle = current();
     if (!puzzle) {
         setStatus("No puzzles found (missing puzzles.pgn)", 999.f);
+        return;
+    }
+    if (daily_) {
+        refreshDailyStats();
+        if (daily::solvedToday(app_.config().getInt("puzzle.daily_last", -1),
+                               today_))
+            setStatus("Daily solved - streak "
+                          + std::to_string(dailyStreak_)
+                          + ". Come back tomorrow!", 999.f);
+        else {
+            const char* side =
+                puzzle->solverColor == chess::Color::White ? "White" : "Black";
+            setStatus(std::string(side) + " to move - mate in " +
+                          std::to_string(puzzle->mateIn()), 999.f);
+        }
         return;
     }
     if (solved_) {
@@ -541,6 +648,7 @@ void PuzzleScreen::handleEvent(const sf::Event& event)
     if (hintBtn_.handleEvent(event, local)) return;
     if (solutionBtn_.handleEvent(event, local)) return;
     if (nextBtn_.handleEvent(event, local)) return;
+    if (dailyBtn_.handleEvent(event, local)) return;
 
     if (const auto* mb = event.getIf<sf::Event::MouseButtonPressed>()) {
         if (mb->button == sf::Mouse::Button::Left) {
@@ -722,7 +830,16 @@ void PuzzleScreen::draw(sf::RenderWindow& window)
     auto& font = app_.font();
     const auto* puzzle = current();
     std::string title = "Puzzles";
-    if (puzzle) {
+    if (daily_) {
+        title = "Daily puzzle";
+        std::time_t t = std::chrono::system_clock::to_time_t(
+            std::chrono::system_clock::now());
+        std::tm tm{};
+        localtime_r(&t, &tm);
+        char buf[32];
+        if (std::strftime(buf, sizeof(buf), "%b %d", &tm) > 0)
+            title += std::string("  -  ") + buf;
+    } else if (puzzle) {
         const char* side =
             puzzle->solverColor == chess::Color::White ? "White" : "Black";
         title = "Puzzle " + std::to_string(index_ + 1) + " of " +
@@ -764,12 +881,27 @@ void PuzzleScreen::draw(sf::RenderWindow& window)
         window.draw(lineText);
     }
 
+    // 17.2 daily stats line: chain-alive streak + all-time solve count.
+    {
+        const int allTime = app_.config().getInt("puzzle.solved_total", 0);
+        sf::Text dailyText(font,
+                           "Daily streak " + std::to_string(dailyStreak_)
+                               + "  -  all-time " + std::to_string(allTime),
+                           13);
+        dailyText.setFillColor(ui::pal::textGhost);
+        dailyText.setPosition({px + panelLayout_.buttonInsetX,
+                               panelLayout_.puzzleDailyY});
+        window.draw(dailyText);
+    }
+
     hintBtn_.setEnabled(puzzle && !solved_);
     solutionBtn_.setEnabled(puzzle && !solved_ && !revealed_);
     nextBtn_.setEnabled(puzzle);
+    dailyBtn_.setEnabled(puzzle && !daily_);
     hintBtn_.draw(window, font);
     solutionBtn_.draw(window, font);
     nextBtn_.draw(window, font);
+    if (!daily_) dailyBtn_.draw(window, font);
     backBtn_.draw(window, font);
 
     if (showingHelp_) drawHelpOverlay(window);

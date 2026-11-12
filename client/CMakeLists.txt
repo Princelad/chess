@@ -10,6 +10,7 @@ src/connection.cpp
     src/move_quality.cpp
     src/analysis_notes.cpp
     src/rush.cpp
+    src/daily.cpp
     src/widgets/label.cpp
     src/widgets/panel.cpp
     src/widgets/button.cpp
