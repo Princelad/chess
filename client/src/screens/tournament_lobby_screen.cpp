@@ -166,20 +166,20 @@ void TournamentLobbyScreen::layoutRows()
     if (selfRow != nullptr && roundsTarget_ > 0
         && selfRow->wins + selfRow->losses + selfRow->draws >= roundsTarget_)
         statusLabel_.setText("You played all " + std::to_string(roundsTarget_)
-            + " rounds — waiting for the standings");
+            + " rounds - waiting for the standings");
     else if (selfRow != nullptr && roundsTarget_ > 0)
         statusLabel_.setText(
             "Round "
             + std::to_string(selfRow->wins + selfRow->losses
                              + selfRow->draws + 1)
             + " of " + std::to_string(roundsTarget_)
-            + (selfRow->playing ? " — your game is running"
-                                : " — waiting for a pairing"));
+            + (selfRow->playing ? " - your game is running"
+                                : " - waiting for a pairing"));
     else
         statusLabel_.setText("Waiting for the first standings...");
 
     resultLabel_.setText(phase_ == 1
-        ? std::string("Arena finished — final standings above")
+        ? std::string("Arena finished - final standings above")
         : std::string());
     if (!resultLabel_.text().empty()) {
         auto rb = resultLabel_.bounds(app_.font());

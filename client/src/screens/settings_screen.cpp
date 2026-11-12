@@ -322,7 +322,7 @@ void SettingsScreen::cyclePieceSet(int dir)
         setStatus(std::string(pieceSetDirName(app_.pieceSet()))
             + " piece set loaded");
     } else {
-        setStatus("Piece set unavailable — kept previous pieces");
+        setStatus("Piece set unavailable - kept previous pieces");
     }
     updatePieceSetLabel();
     layoutRows();
@@ -348,7 +348,7 @@ void SettingsScreen::applyPiecesPath()
                                : "Loaded piece set: " + path);
     else
         setStatus(path.empty() ? "Bundled set unavailable"
-                               : "Path not found — kept previous pieces");
+                               : "Path not found - kept previous pieces");
 }
 
 void SettingsScreen::resetDefaults()

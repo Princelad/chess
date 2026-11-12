@@ -387,7 +387,7 @@ void LocalGameScreen::takeback()
     hl_.lastMoveFrom = nav.lastMoveFrom();
     hl_.lastMoveTo = nav.lastMoveTo();
     syncViewHighlights();
-    hud_.setStatus("Takeback — your move", 2.f);
+    hud_.setStatus("Takeback - your move", 2.f);
 }
 
 PromoCell LocalGameScreen::promoCell(int index) const
@@ -726,16 +726,16 @@ void LocalGameScreen::drawHelpOverlay(sf::RenderWindow& window)
 
     const char* lines[] = {
         "Shortcuts",
-        "Arrows — move cursor",
-        "Enter — select / move",
-        "Space — cancel / deselect",
-        "Esc — close help / deselect",
-        "F — flip board",
-        "[ / ] — previous / next move",
-        "Home / End — go to start / end",
-        "Q R B N or 1-4 — pick promotion",
-        "Takeback button — undo your move + the engine's reply",
-        "? — toggle this help",
+        "Arrows - move cursor",
+        "Enter - select / move",
+        "Space - cancel / deselect",
+        "Esc - close help / deselect",
+        "F - flip board",
+        "[ / ] - previous / next move",
+        "Home / End - go to start / end",
+        "Q R B N or 1-4 - pick promotion",
+        "Takeback button - undo your move + the engine's reply",
+        "? - toggle this help",
     };
     constexpr int Count = static_cast<int>(sizeof(lines) / sizeof(lines[0]));
 

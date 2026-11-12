@@ -995,7 +995,7 @@ void GameScreen::updateReconnect(float dtSec)
             reconnectElapsed_ = 0.f;
             reconnectWait_ = 0.f;
             reconnectPhase_ = ReconnectPhase::Backoff;
-            hud_.setStatus("Connection lost — reconnecting...",
+            hud_.setStatus("Connection lost - reconnecting...",
                            ReconnectGiveUpSeconds);
             break;
 
@@ -1416,16 +1416,16 @@ void GameScreen::drawHelpOverlay(sf::RenderWindow& window)
 
     const char* lines[] = {
         "Shortcuts",
-        "Arrows — move cursor",
-        "Enter — select / move",
-        "Space — cancel / deselect",
-        "Esc — close help / deselect",
-        "F — flip board",
-        "[ / ] — previous / next move",
-        "Home / End — go to start / end",
-        "Q R B N or 1-4 — pick promotion",
-        "Right-click — cancel premove / annotate",
-        "? — toggle this help",
+        "Arrows - move cursor",
+        "Enter - select / move",
+        "Space - cancel / deselect",
+        "Esc - close help / deselect",
+        "F - flip board",
+        "[ / ] - previous / next move",
+        "Home / End - go to start / end",
+        "Q R B N or 1-4 - pick promotion",
+        "Right-click - cancel premove / annotate",
+        "? - toggle this help",
     };
     constexpr int Count = static_cast<int>(sizeof(lines) / sizeof(lines[0]));
 

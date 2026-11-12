@@ -302,7 +302,7 @@ void PuzzleScreen::onSolved()
 void PuzzleScreen::onWrongMove()
 {
     streak_.onFail();
-    setStatus("Not the move — puzzle restarted. Streak reset to 0.", 4.f);
+    setStatus("Not the move - puzzle restarted. Streak reset to 0.", 4.f);
     deselect();
     clearBoardInput();
     const std::string text = status_;
@@ -335,7 +335,7 @@ void PuzzleScreen::hint()
                               static_cast<int>(chess::rankOf(m.to)));
         setStatus("Arrow shows the full move", 4.f);
     } else {
-        setStatus("The move is marked — play it!", 2.f);
+        setStatus("The move is marked - play it!", 2.f);
     }
 }
 
@@ -362,7 +362,7 @@ void PuzzleScreen::revealSolution()
         ++solutionPly_;
     }
     app_.sounds().play(chess::client::Sfx::Checkmate);
-    setStatus("Solution shown — streak reset. Press Next.", 6.f);
+    setStatus("Solution shown - streak reset. Press Next.", 6.f);
 }
 
 void PuzzleScreen::nextPuzzle()
@@ -417,12 +417,12 @@ void PuzzleScreen::refreshStatus()
     }
     if (solved_) {
         setStatus("Solved! Streak " + std::to_string(streak_.current) +
-                      "  —  next puzzle?", 999.f);
+                      "  -  next puzzle?", 999.f);
         return;
     }
     const char* side =
         puzzle->solverColor == chess::Color::White ? "White" : "Black";
-    setStatus(std::string(side) + " to move — mate in " +
+    setStatus(std::string(side) + " to move - mate in " +
                   std::to_string(puzzle->mateIn()), 999.f);
 }
 
@@ -721,7 +721,7 @@ void PuzzleScreen::draw(sf::RenderWindow& window)
         const char* side =
             puzzle->solverColor == chess::Color::White ? "White" : "Black";
         title = "Puzzle " + std::to_string(index_ + 1) + " of " +
-                std::to_string(puzzles_.size()) + "  —  " + side +
+                std::to_string(puzzles_.size()) + "  -  " + side +
                 " mates in " + std::to_string(puzzle->mateIn());
     }
     sf::Text titleText(font, title, 15);
@@ -782,14 +782,14 @@ void PuzzleScreen::drawHelpOverlay(sf::RenderWindow& window)
 
     const char* lines[] = {
         "Puzzle shortcuts",
-        "Drag or click — play the winning move",
-        "Arrows — move cursor, Enter — play",
-        "Space — deselect",
-        "F — flip board",
-        "Q R B N or 1-4 — choose promotion",
-        "Right drag — draw arrows",
-        "Hint (twice) / Show solution — assist",
-        "? — toggle this help",
+        "Drag or click - play the winning move",
+        "Arrows - move cursor, Enter - play",
+        "Space - deselect",
+        "F - flip board",
+        "Q R B N or 1-4 - choose promotion",
+        "Right drag - draw arrows",
+        "Hint (twice) / Show solution - assist",
+        "? - toggle this help",
     };
     constexpr int Count = static_cast<int>(sizeof(lines) / sizeof(lines[0]));
 
