@@ -872,11 +872,11 @@ retires the old ConnectScreen-first flow.
 fields survive as a collapsible drawer; suite green; protocol untouched
 (bot personas on the server are config-only, Guests still pair like humans)
 
-- [ ] **17.1 Puzzle Rush & Survival (`client/src/screens/rush_screen.{h,cpp}`, extends 12.2)**
-  - [ ] 3-minute and 5-minute rush + endless Survival mode: fail-or-skip advances, streak-and-score counter, time pill (11.1's clock styling)
-  - [ ] Scores persisted per mode as `puzzle.rush_{3m,5m,survival}_best` config keys; "beat your best" status banner; solution-reveal still zeroes the streak (12.2 discipline carries over verbatim)
-  - [ ] Feed shuffling deterministic per session (seed stored in config; shuffle source = the 12.2 loader order)
-  - [ ] Input discipline: the 12.2 `solverTurn()` guard extends to rush timer expiry (a stall mid-animation can never double-apply)
+- [x] **17.1 Puzzle Rush & Survival (`client/src/screens/rush_screen.{h,cpp}`, extends 12.2)**
+  - [x] 3-minute and 5-minute rush + endless Survival mode: fail-or-skip advances, streak-and-score counter, time pill (11.1's clock styling)
+  - [x] Scores persisted per mode as `puzzle.rush_{3m,5m,survival}_best` config keys; "beat your best" status banner; solution-reveal still zeroes the streak (12.2 discipline carries over verbatim)
+  - [x] Feed shuffling deterministic per session (seed stored in config; shuffle source = the 12.2 loader order)
+  - [x] Input discipline: the 12.2 `solverTurn()` guard extends to rush timer expiry (a stall mid-animation can never double-apply)
 
 - [ ] **17.2 Daily puzzle + streaks**
   - [ ] Date-seeded deterministic selection from the bundled set (year+day hash → shard into the 12.2 list); "Daily" card entry opens PuzzleScreen in daily mode; solving marks `puzzle.daily_last`/`daily_streak` (config) and days skipped reset the streak
