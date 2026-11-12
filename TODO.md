@@ -855,9 +855,10 @@ tests abstain from engines (canned eval streams only)
   - [x] GameOverScreen integration: report button beside Analyze (half-width siblings on the analyze row) where the 16.1 contract is satisfied
   - Tests: board_layout_test +2 (report-row pins, worst rows re-derive on a second window shape), move_quality_test +5 (materialIn, sacrificePlies pairs vs plain trades, moverViewOf mate negation, streamFromReport pairing/finish/refusal); suite 849
 
-- [ ] **16.4 Move-list coloring + analysis upgrades**
-  - [ ] Classified move list: class abbreviation chips/tints on each SAN cell (16.2's labels), rendered via 15.3's restyled rows; archive-replay and spectate views honor the same chip layer when a report was computed
-  - [ ] AnalysisScreen: multi-line best PV arrows toggle, node markers on the 8.5 eval graph at classified points, per-position annotation arrows/circles persisted client-local via the 9.5 config file, keyed by game identity
+- [x] **16.4 Move-list coloring + analysis upgrades**
+  - [x] Classified move list: class abbreviation chips/tints on each SAN cell (16.2's labels), rendered via 15.3's restyled rows; archive-replay and spectate views honor the same chip layer when a report was computed
+  - [x] AnalysisScreen: multi-line best PV arrows toggle, node markers on the 8.5 eval graph at classified points, per-position annotation arrows/circles persisted client-local via the 9.5 config file, keyed by game identity
+  - Tests: analysis_notes_test +3, move_quality_test +2 (isBest echo, classLayerFor), board_layout graph-row pin; suite 854
 
 ---
 
