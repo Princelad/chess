@@ -878,9 +878,9 @@ fields survive as a collapsible drawer; suite green; protocol untouched
   - [x] Feed shuffling deterministic per session (seed stored in config; shuffle source = the 12.2 loader order)
   - [x] Input discipline: the 12.2 `solverTurn()` guard extends to rush timer expiry (a stall mid-animation can never double-apply)
 
-- [ ] **17.2 Daily puzzle + streaks**
-  - [ ] Date-seeded deterministic selection from the bundled set (year+day hash → shard into the 12.2 list); "Daily" card entry opens PuzzleScreen in daily mode; solving marks `puzzle.daily_last`/`daily_streak` (config) and days skipped reset the streak
-  - [ ] All-time solves + daily stats panel inside PuzzleScreen header
+- [x] **17.2 Daily puzzle + streaks**
+  - [x] Date-seeded deterministic selection from the bundled set (year+day hash → shard into the 12.2 list); "Daily" card entry opens PuzzleScreen in daily mode; solving marks `puzzle.daily_last`/`daily_streak` (config) and days skipped reset the streak
+  - [x] All-time solves + daily stats panel inside PuzzleScreen header
 
 - [ ] **17.3 Persona bots (`client/src/bot_personas.{h,cpp}` + server config table)**
   - [ ] Named difficulty personas for LOCAL play — fresh, neutral names of our own (NOT chess.com's bot cast): depth presets + style caps (an engine-option set like Skill Level / move-time budgets; zero protocol)
