@@ -80,7 +80,7 @@ GameOverScreen::GameOverScreen(App& app,
             resultText_ = resultStr;
             break;
         default:
-            resultText_ = reasonStr + " — " + resultStr;
+            resultText_ = reasonStr + " - " + resultStr;
             break;
     }
 
@@ -198,17 +198,16 @@ void GameOverScreen::layoutWidgets()
                       sf::Vector2f(App::WindowWidth, BtnH)), btnSize));
 
     if (!moves_.empty()) {
-        // Analyze | Report sit side by side on the analyze row (each on
-        // its own half, like the offer row's two buttons).
-        analyzeBtn_.setRect(layout::centerIn(
-            sf::FloatRect(sf::Vector2f(0.f, AnalyzeBtnY),
-                          sf::Vector2f(App::WindowWidth / 2.f, BtnH)),
-            btnSize));
-        reportBtn_.setRect(layout::centerIn(
-            sf::FloatRect(
-                sf::Vector2f(App::WindowWidth / 2.f, AnalyzeBtnY),
-                sf::Vector2f(App::WindowWidth / 2.f, BtnH)),
-            btnSize));
+        // Analyze | Report sit side by side on the analyze row (the offer
+        // row's width pair: two 180 px buttons, 20 px apart, centered).
+        const float pairTotal = OfferBtnW * 2.f + offerGap;
+        const float pairLeft = (App::WindowWidth - pairTotal) / 2.f;
+        analyzeBtn_.setRect(sf::FloatRect(
+            sf::Vector2f(pairLeft, AnalyzeBtnY),
+            sf::Vector2f(OfferBtnW, BtnH)));
+        reportBtn_.setRect(sf::FloatRect(
+            sf::Vector2f(pairLeft + OfferBtnW + offerGap, AnalyzeBtnY),
+            sf::Vector2f(OfferBtnW, BtnH)));
     } else {
         analyzeBtn_.setEnabled(false);
         reportBtn_.setEnabled(false);
@@ -249,13 +248,13 @@ void GameOverScreen::activateRematch()
 {
     if (rematchPhase_ != RematchPhase::Idle) return;
     if (app_.connection().state() != ConnectionState::Connected) {
-        setStatusText("Not connected — no rematch");
+        setStatusText("Not connected - no rematch");
         return;
     }
     if (app_.connection().send(chess::net::RematchRequestMsg{})) {
         rematchPhase_ = RematchPhase::Sent;
         rematchBtn_.setEnabled(false);
-        setStatusText("Rematch offered — waiting for the opponent...");
+        setStatusText("Rematch offered - waiting for the opponent...");
     }
 }
 

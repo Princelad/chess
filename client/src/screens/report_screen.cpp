@@ -26,7 +26,8 @@ std::string formatPercent(float v)
     return buf;
 }
 
-// Legend: "Blunder ×1 · Mistake ×2", zero counts skipped (decl order).
+// Legend: "Blunder x1, Mistake x2", zero counts skipped (decl order).
+// ASCII-only separators: the bundled Inter renders middle dots as tofu.
 std::string legendLine(const quality::SideQuality& side)
 {
     std::string line;
@@ -34,7 +35,7 @@ std::string legendLine(const quality::SideQuality& side)
         const int count =
             side.counts[static_cast<std::size_t>(klass)];
         if (count == 0) return;
-        if (!line.empty()) line += " · ";
+        if (!line.empty()) line += ", ";
         line += std::string(quality::moveClassName(klass)) + " x"
             + std::to_string(count);
     };
@@ -291,6 +292,7 @@ void ReportScreen::draw(sf::RenderWindow& window)
     const float barX = panelLayout_.panelX + panelLayout_.accuracyLabelW;
     const float barW = panelLayout_.panelWidth
         - panelLayout_.accuracyLabelW;
+    constexpr float kValueGutter = 44.f; // % text right of the track end
 
     auto drawAccuracyRow = [&](float y, const char* name, float accuracy,
                                sf::Color fill) {
@@ -299,20 +301,22 @@ void ReportScreen::draw(sf::RenderWindow& window)
         nameText.setPosition({panelLayout_.panelX, y});
         window.draw(nameText);
 
-        sf::RectangleShape track({barW, panelLayout_.accuracyBarH});
+        sf::RectangleShape track(
+            {barW - kValueGutter, panelLayout_.accuracyBarH});
         track.setPosition({barX, y});
         track.setFillColor(ui::pal::bgCard);
         window.draw(track);
 
-        sf::RectangleShape fillShape({barW * (accuracy / 100.f),
-            panelLayout_.accuracyBarH});
+        sf::RectangleShape fillShape(
+            {(barW - kValueGutter) * (accuracy / 100.f),
+             panelLayout_.accuracyBarH});
         fillShape.setPosition({barX, y});
         fillShape.setFillColor(fill);
         window.draw(fillShape);
 
         sf::Text valueText(font, formatPercent(accuracy), ui::type::Small);
         valueText.setFillColor(ui::pal::textCell);
-        valueText.setPosition({barX + barW, y});
+        valueText.setPosition({barX + barW - kValueGutter, y});
         window.draw(valueText);
     };
 
@@ -322,7 +326,7 @@ void ReportScreen::draw(sf::RenderWindow& window)
         drawAccuracyRow(panelLayout_.accuracyBlackY, "Black",
                         quality_->black.accuracy, kBlackAccuracyBar);
 
-        const std::string legend = legendLine(quality_->white) + "   "
+        const std::string legend = legendLine(quality_->white) + "  |  "
             + legendLine(quality_->black);
         if (!legend.empty()) {
             sf::Text legendText(font, legend, ui::type::Caption);
