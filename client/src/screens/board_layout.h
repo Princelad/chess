@@ -90,6 +90,9 @@ struct BoardLayout {
     sf::FloatRect navRowA{};   // analysis nav row (taller than the Hud's)
     float evalTextY = 0.f;
     float evalTurnY = 0.f;
+    float evalGraphY = 0.f;    // 16.4: win% polyline strip
+    float evalGraphH = 0.f;
+    float pvToggleY = 0.f;     // 16.4: PV-arrows checkbox row
     float hintY = 0.f;
 
     // Puzzle rows (opts.puzzle).

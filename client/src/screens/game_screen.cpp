@@ -1,6 +1,8 @@
 #include "game_screen.h"
 
 #include "entrance.h"
+#include "eval_harness.h"
+#include "move_quality.h"
 #include "ui/rounded_rect.h"
 #include "ui/theme.h"
 #include "ui/rounded_rect.h"
@@ -214,6 +216,19 @@ void GameScreen::applySpectateState(const chess::net::SpectateStateMsg& msg)
     }
     hud_.setGame(startBoard(), moves, msg.sans);
     hud_.navigator().goEnd(); // the live position, not ply zero
+
+    // 16.4 chip layer: cached-only — the spectate view colors its move list
+    // when a report for this game identity was already computed elsewhere
+    // (never spawns an engine from a watch session).
+    const EvalKey key = evalKeyFor(0, startFen_, msg.sans);
+    EvalHarness& harness = app_.evalHarness();
+    if (harness.progress(key).state == EvalState::Done) {
+        if (auto report = harness.report(key)) {
+            hud_.navigator().setClassLayer(quality::classLayerFor(
+                *report, startBoard(), moves, msg.sans,
+                quality::bookPlies(msg.sans)));
+        }
+    }
 
     // Any staged interaction state from construction is stale by definition.
     anim_.cancel();

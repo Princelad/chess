@@ -197,6 +197,10 @@ MoveEvalStream streamFromReport(const EvalReport& report,
         move.cpBefore = ownSeat.eval.isMate
             ? (ownSeat.eval.mateIn >= 0 ? kMateCp : -kMateCp)
             : ownSeat.eval.scoreCp;
+        // The engine's own choice echo: the report carries both the played
+        // SAN (node.san) and the engine's best SAN for the same node.
+        move.isBest = !ownSeat.eval.bestSan.empty()
+            && ownSeat.eval.bestSan == report.nodes[i].san;
 
         if (i + 1 < report.evals.size()) {
             move.cpAfter = moverViewOf(report.evals[i + 1]);
@@ -213,6 +217,28 @@ MoveEvalStream streamFromReport(const EvalReport& report,
         stream.push_back(move);
     }
     return stream;
+}
+
+std::vector<signed char> classLayerFor(const EvalReport& report,
+                                       const Board& initialBoard,
+                                       const std::vector<chess::Move>& moves,
+                                       const std::vector<std::string>& sans,
+                                       const std::vector<bool>& bookFlags)
+{
+    auto stream = streamFromReport(report, sans,
+                                   sacrificePlies(initialBoard, moves));
+    if (stream.empty()) return {};
+    if (stream.size() == bookFlags.size()) {
+        for (std::size_t i = 0; i < stream.size(); ++i)
+            stream[i].isBook = bookFlags[i];
+    }
+    const GameQuality quality = evaluateGame(stream);
+    std::vector<signed char> layer(quality.moves.size(), -1);
+    for (std::size_t i = 0; i < quality.moves.size(); ++i) {
+        if (quality.moves[i].klass != MoveClass::Good)
+            layer[i] = static_cast<signed char>(quality.moves[i].klass);
+    }
+    return layer;
 }
 
 } // namespace chess::client::quality

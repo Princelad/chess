@@ -12,6 +12,17 @@ namespace chess::client {
 struct AnnotatedArrow {
     std::pair<int, int> from;
     std::pair<int, int> to;
+
+    friend constexpr bool operator==(const AnnotatedArrow& a,
+                                     const AnnotatedArrow& b)
+    {
+        return a.from == b.from && a.to == b.to;
+    }
+    friend constexpr bool operator!=(const AnnotatedArrow& a,
+                                     const AnnotatedArrow& b)
+    {
+        return !(a == b);
+    }
 };
 
 class BoardAnnotations {

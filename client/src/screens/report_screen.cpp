@@ -221,6 +221,11 @@ void ReportScreen::buildQuality()
     }
     quality_ = quality::evaluateGame(stream);
     computed_ = true;
+    // 16.4 chip layer: the same classification colors the navigator's SAN
+    // cells (Good stays unmarked).
+    navigator_.setClassLayer(quality::classLayerFor(
+        *report, navigator_.initialBoard(), navigator_.moves(),
+        navigator_.sans(), book));
     refreshWorstList();
 }
 

@@ -1,5 +1,7 @@
 #include "analysis_screen.h"
 
+#include "analysis_notes.h"
+#include "move_quality.h"
 #include "ui/theme.h"
 #include "ui_helpers.h"
 #include "widgets/layout.h"
@@ -7,6 +9,7 @@
 
 #include <chess/movegen.h>
 #include <chess/san.h>
+#include <chess/uci_move.h>
 
 #include <algorithm>
 #include <cmath>
@@ -54,8 +57,15 @@ AnalysisScreen::AnalysisScreen(App& app,
           static_cast<float>(App::WindowHeight), boardView_,
           layout::BoardLayoutOptions{false, true}))
 {
+    // Identity + notes hash BEFORE the board is moved into the navigator.
+    const std::string startFen = initialBoard.toFen();
+    const std::vector<std::string> sans = sanMoves;
+    notesHash_ = notes::gameHash(startFen, sans);
+    key_ = evalKeyFor(0, startFen, sans);
+
     navigator_.setGame(std::move(initialBoard), std::move(moves), std::move(sanMoves));
     evals_.resize(navigator_.totalPlies() + 1);
+    evalDone_.assign(navigator_.totalPlies() + 1, false);
 
     resultLabel_.setText(resultText_);
     resultLabel_.setFontSize(14);
@@ -78,6 +88,16 @@ AnalysisScreen::AnalysisScreen(App& app,
     turnLabel_.setFontSize(14);
     turnLabel_.setColor(ui::pal::textFaded);
 
+    // 16.4 PV-arrows toggle: full principal-variation arrows on, the single
+    // best-move arrow off. Persisted via the 9.5 config file.
+    pvToggle_.setLabel("PV arrows");
+    pvToggle_.setChecked(app.config().getBool("analysis.pv_arrows", false));
+    pvToggle_.setOnToggle([this](bool on) {
+        app_.config().set("analysis.pv_arrows", on ? "true" : "false");
+        app_.config().save();
+    });
+
+    loadNotes();
     layoutPanel();
 
     const char* envPath = std::getenv("CHESS_ENGINE_PATH");
@@ -96,8 +116,11 @@ AnalysisScreen::AnalysisScreen(App& app,
             evals_[analysisPly_].score_cp = si.score_cp;
             evals_[analysisPly_].isMate = si.score_is_mate;
             evals_[analysisPly_].mateIn = si.mate_in;
-            if (!si.pv.empty())
+            if (!si.pv.empty()) {
                 evals_[analysisPly_].bestMove = si.pv[0];
+                evals_[analysisPly_].pv = si.pv; // full line for the toggle
+                evalDone_[analysisPly_] = true;  // eval-graph data point
+            }
         });
         startEngineAnalysis();
     }
@@ -119,6 +142,10 @@ void AnalysisScreen::layoutPanel()
 
     evalTextLabel_.setPosition({panelLayout_.panelX, panelLayout_.evalTextY});
     turnLabel_.setPosition({panelLayout_.panelX, panelLayout_.evalTurnY});
+
+    pvToggle_.setRect(sf::FloatRect(
+        sf::Vector2f(panelLayout_.panelX, panelLayout_.pvToggleY),
+        sf::Vector2f(panelLayout_.panelWidth, 20.f)));
 }
 
 void AnalysisScreen::startEngineAnalysis()
@@ -129,6 +156,68 @@ void AnalysisScreen::startEngineAnalysis()
     engine_->position(navigator_.board().toFen());
     analysisPly_ = navigator_.currentPly();
     engine_->go(0, 0, true);
+}
+
+void AnalysisScreen::loadNotes()
+{
+    notes_.assign(navigator_.totalPlies() + 1, BoardAnnotations{});
+    for (int ply = 0; ply <= navigator_.totalPlies(); ++ply) {
+        const std::string key =
+            "analysis." + notesHash_ + "." + std::to_string(ply);
+        const std::string value = app_.config().get(key);
+        if (!value.empty()) notes::decodeAnnotations(value, notes_[ply]);
+    }
+}
+
+void AnalysisScreen::saveCurrentNotes()
+{
+    const int ply = navigator_.currentPly();
+    if (ply < 0 || ply >= static_cast<int>(notes_.size())) return;
+    const std::string key =
+        "analysis." + notesHash_ + "." + std::to_string(ply);
+    const std::string value = notes::encodeAnnotations(notes_[ply]);
+    if (value.empty())
+        app_.config().remove(key);
+    else
+        app_.config().set(key, value);
+    app_.config().save();
+}
+
+void AnalysisScreen::refreshClassLayer()
+{
+    if (classLayerFetched_) return;
+    EvalHarness& harness = app_.evalHarness();
+    if (harness.progress(key_).state != EvalState::Done) return;
+    classLayerFetched_ = true;
+    // Cached-only: a report computed elsewhere (post-game report screen)
+    // colors this replay for free; nothing is spawned from here.
+    if (auto report = harness.report(key_)) {
+        classLayer_ = quality::classLayerFor(
+            *report, navigator_.initialBoard(), navigator_.moves(),
+            navigator_.sans(), quality::bookPlies(navigator_.sans()));
+        navigator_.setClassLayer(classLayer_);
+
+        // Seed the eval graph + arrow data from the cached report (per-node
+        // evals ride the mover's seat exactly like the live engine's info).
+        {
+            std::lock_guard<std::mutex> lock(evalMutex_);
+            const int count = std::min<int>(
+                static_cast<int>(report->nodes.size()),
+                static_cast<int>(evals_.size()));
+            for (int i = 0; i < count; ++i) {
+                const auto& ne = report->evals[i].eval;
+                evals_[i].score_cp = ne.scoreCp;
+                evals_[i].isMate = ne.isMate;
+                evals_[i].mateIn = ne.mateIn;
+                // SAN -> UCI for the arrow renderer (full PV is not cached).
+                if (auto board = Board::fromFen(report->nodes[i].fen)) {
+                    if (auto move = san::fromSan(*board, ne.bestSan))
+                        evals_[i].bestMove = toUci(*move);
+                }
+                evalDone_[i] = true;
+            }
+        }
+    }
 }
 
 void AnalysisScreen::syncHighlights()
@@ -168,11 +257,47 @@ void AnalysisScreen::handleEvent(const sf::Event& event)
         }
     }
 
+    // 16.4: right-mouse annotation editing over the shown position — a drag
+    // draws an arrow, a tap toggles a circle. Left mouse stays navigator-only.
+    if (const auto* mb = event.getIf<sf::Event::MouseButtonPressed>()) {
+        if (mb->button == sf::Mouse::Button::Right
+            && boardView_.pixelToSquare(local)) {
+            rightDrag_.press(local.x, local.y);
+            return;
+        }
+    }
+    if (const auto* mm = event.getIf<sf::Event::MouseMoved>()) {
+        if (rightDrag_.isActive()) {
+            rightDrag_.move(local.x, local.y);
+            return;
+        }
+    }
+    if (const auto* rb = event.getIf<sf::Event::MouseButtonReleased>()) {
+        if (rb->button == sf::Mouse::Button::Right && rightDrag_.isActive()) {
+            const bool dragged = rightDrag_.release();
+            const int ply = navigator_.currentPly();
+            const auto from = boardView_.pixelToSquare(
+                {rightDrag_.pressX(), rightDrag_.pressY()});
+            const auto to = boardView_.pixelToSquare(local);
+            if (ply >= 0 && ply < static_cast<int>(notes_.size()) && to) {
+                if (dragged && from && *from != *to)
+                    notes_[ply].addArrow(from->first, from->second,
+                                         to->first, to->second);
+                else if (!dragged)
+                    notes_[ply].toggleCircle(to->first, to->second);
+                saveCurrentNotes();
+            }
+            return;
+        }
+    }
+
     if (navigator_.handleEvent(event, local)) return;
 }
 
 void AnalysisScreen::update(float /*dtSec*/)
 {
+    refreshClassLayer();
+
     if (!engineReady_ || !engine_) return;
 
     if (!engine_->isRunning()) {
@@ -200,10 +325,18 @@ void AnalysisScreen::draw(sf::RenderWindow& window)
     boardView_.drawLabels(window, font);
     boardView_.drawPieces(window, font, shown, app_);
 
+    const int ply = navigator_.currentPly();
+    if (ply >= 0 && ply < static_cast<int>(notes_.size())
+        && !notes_[ply].empty())
+        boardView_.drawAnnotations(window, notes_[ply].arrows(),
+                                   notes_[ply].circles());
+
     drawEvalBar(window);
-    drawBestMoveArrow(window);
+    drawBestMoveArrows(window);
     navigator_.draw(window, font, app_);
     drawEvalText(window);
+    drawEvalGraph(window);
+    pvToggle_.draw(window, font);
 
     resultLabel_.draw(window, font);
     analysisLabel_.draw(window, font);
@@ -250,28 +383,39 @@ void AnalysisScreen::drawEvalBar(sf::RenderWindow& window) const
     window.draw(blackBar);
 }
 
-void AnalysisScreen::drawBestMoveArrow(sf::RenderWindow& window) const
+void AnalysisScreen::drawBestMoveArrows(sf::RenderWindow& window) const
 {
     int ply = navigator_.currentPly();
     if (ply < 0 || ply >= static_cast<int>(evals_.size()))
         return;
+    const Board& shown = navigator_.board();
 
-    std::string bm;
+    // Arrow chain to draw: the full PV when the toggle is on, the single
+    // best move otherwise. Tokens replay from the SHOWN board via fromUci
+    // (full legality), so junk or stale lines degrade to nothing.
+    std::vector<std::pair<int, int>> squares;
     {
         std::lock_guard<std::mutex> lock(evalMutex_);
-        bm = evals_[ply].bestMove;
+        const PlyEval& pe = evals_[ply];
+        if (pvToggle_.isChecked() && !pe.pv.empty()) {
+            Board scratch = shown;
+            for (const std::string& uci : pe.pv) {
+                auto m = chess::fromUci(scratch, uci);
+                if (!m) break;
+                auto sq = [](Square s) {
+                    return std::make_pair(static_cast<int>(fileOf(s)),
+                                          static_cast<int>(rankOf(s)));
+                };
+                squares.push_back(sq(m->from));
+                squares.push_back(sq(m->to));
+                scratch.makeMove(*m);
+            }
+        } else if (pe.bestMove.size() >= 4) {
+            squares.emplace_back(pe.bestMove[0] - 'a', pe.bestMove[1] - '1');
+            squares.emplace_back(pe.bestMove[2] - 'a', pe.bestMove[3] - '1');
+        }
     }
-    if (bm.empty() || bm.size() < 4)
-        return;
-
-    int fromFile = bm[0] - 'a';
-    int fromRank = bm[1] - '1';
-    int toFile = bm[2] - 'a';
-    int toRank = bm[3] - '1';
-
-    if (fromFile < 0 || fromFile > 7 || fromRank < 0 || fromRank > 7 ||
-        toFile < 0 || toFile > 7 || toRank < 0 || toRank > 7)
-        return;
+    if (squares.size() < 2) return;
 
     sf::Vector2f origin = boardView_.boardOrigin();
     float sq = boardView_.squareSize();
@@ -284,42 +428,52 @@ void AnalysisScreen::drawBestMoveArrow(sf::RenderWindow& window) const
                  origin.y + static_cast<float>(row) * sq + sq / 2.f };
     };
 
-    sf::Vector2f from = fileRankToPixel(fromFile, fromRank);
-    sf::Vector2f to = fileRankToPixel(toFile, toRank);
+    auto drawArrow = [&](sf::Vector2f from, sf::Vector2f to) {
+        sf::Vector2f dir = to - from;
+        float len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
+        if (len < 1.f) return;
 
-    sf::Vector2f dir = to - from;
-    float len = std::sqrt(dir.x * dir.x + dir.y * dir.y);
-    if (len < 1.f) return;
+        sf::Vector2f unit = dir / len;
 
-    sf::Vector2f unit = dir / len;
+        float shaftLen = len - sq * 0.4f;
+        sf::Vector2f shaftEnd = from + unit * shaftLen;
 
-    float shaftLen = len - sq * 0.4f;
-    sf::Vector2f shaftEnd = from + unit * shaftLen;
+        float shaftW = sq * 0.12f;
+        sf::Vector2f perp(-unit.y, unit.x);
 
-    float shaftW = sq * 0.12f;
-    sf::Vector2f perp(-unit.y, unit.x);
+        sf::ConvexShape shaft(4);
+        shaft.setPoint(0, from + perp * shaftW);
+        shaft.setPoint(1, shaftEnd + perp * shaftW);
+        shaft.setPoint(2, shaftEnd - perp * shaftW);
+        shaft.setPoint(3, from - perp * shaftW);
+        shaft.setFillColor(sf::Color(ui::pal::bestMoveGreen.r,
+                                     ui::pal::bestMoveGreen.g,
+                                     ui::pal::bestMoveGreen.b, 140));
+        window.draw(shaft);
 
-    sf::ConvexShape shaft(4);
-    shaft.setPoint(0, from + perp * shaftW);
-    shaft.setPoint(1, shaftEnd + perp * shaftW);
-    shaft.setPoint(2, shaftEnd - perp * shaftW);
-    shaft.setPoint(3, from - perp * shaftW);
-    shaft.setFillColor(sf::Color(ui::pal::bestMoveGreen.r, ui::pal::bestMoveGreen.g,
-                                 ui::pal::bestMoveGreen.b, 140));
-    window.draw(shaft);
+        sf::Vector2f headBase = shaftEnd;
 
-    float headLen = sq * 0.45f;
-    float headW = sq * 0.22f;
-    sf::Vector2f headBase = shaftEnd;
-    sf::Vector2f headTip = to;
+        sf::ConvexShape head(3);
+        head.setPoint(0, to);
+        head.setPoint(1, headBase + perp * (sq * 0.22f));
+        head.setPoint(2, headBase - perp * (sq * 0.22f));
+        head.setFillColor(sf::Color(ui::pal::bestMoveGreen.r,
+                                    ui::pal::bestMoveGreen.g,
+                                    ui::pal::bestMoveGreen.b, 140));
+        window.draw(head);
+    };
 
-    sf::ConvexShape head(3);
-    head.setPoint(0, headTip);
-    head.setPoint(1, headBase + perp * headW);
-    head.setPoint(2, headBase - perp * headW);
-    head.setFillColor(sf::Color(ui::pal::bestMoveGreen.r, ui::pal::bestMoveGreen.g,
-                                ui::pal::bestMoveGreen.b, 140));
-    window.draw(head);
+    for (std::size_t i = 0; i + 1 < squares.size(); i += 2) {
+        const auto& fromSq = squares[i];
+        const auto& toSq = squares[i + 1];
+        if (fromSq.first < 0 || fromSq.first > 7 || fromSq.second < 0
+            || fromSq.second > 7 || toSq.first < 0 || toSq.first > 7
+            || toSq.second < 0 || toSq.second > 7)
+            break;
+        if (fromSq == toSq) continue; // castle-style from==to tokens
+        drawArrow(fileRankToPixel(fromSq.first, fromSq.second),
+                  fileRankToPixel(toSq.first, toSq.second));
+    }
 }
 
 void AnalysisScreen::drawEvalText(sf::RenderWindow& window)
@@ -340,6 +494,109 @@ void AnalysisScreen::drawEvalText(sf::RenderWindow& window)
     Color sideToMove = navigator_.board().sideToMove();
     turnLabel_.setText(sideToMove == Color::White ? "White to move" : "Black to move");
     turnLabel_.draw(window, font);
+}
+
+// 16.4 eval graph: the 8.5 eval-graph promise, upgraded — a win% polyline
+// (White's seat, White advantage up) across every analyzed ply, with the
+// chip layer's classified plies marked in their class color. Plies the
+// engine never scored are gaps, not fake midlines.
+void AnalysisScreen::drawEvalGraph(sf::RenderWindow& window)
+{
+    const float x = panelLayout_.panelX;
+    const float w = panelLayout_.panelWidth;
+    const float y = panelLayout_.evalGraphY;
+    const float h = panelLayout_.evalGraphH;
+    if (w <= 0.f || h <= 0.f) return;
+
+    sf::RectangleShape bg({w, h});
+    bg.setPosition({x, y});
+    bg.setFillColor(ui::pal::bgSunken);
+    bg.setOutlineColor(ui::pal::stroke);
+    bg.setOutlineThickness(1.f);
+    window.draw(bg);
+
+    // 50% midline.
+    sf::Vertex mid[2] = {
+        sf::Vertex{sf::Vector2f(x + 1.f, y + h / 2.f), ui::pal::strokeFaint},
+        sf::Vertex{sf::Vector2f(x + w - 1.f, y + h / 2.f), ui::pal::strokeFaint},
+    };
+    window.draw(mid, 2, sf::PrimitiveType::Lines);
+
+    const int total = navigator_.totalPlies();
+    if (total <= 0) return;
+
+    // Mover at ply p alternates from the START board's side to move, so
+    // FEN-start replays (history archive) keep White's seat honest.
+    const bool whiteStarts =
+        navigator_.initialBoard().sideToMove() == Color::White;
+    auto moverAt = [&](int ply) {
+        const bool white = whiteStarts == (ply % 2 == 0);
+        return white ? Color::White : Color::Black;
+    };
+
+    auto pointAt = [&](int ply) -> sf::Vector2f {
+        float whiteWin;
+        {
+            std::lock_guard<std::mutex> lock(evalMutex_);
+            const PlyEval& pe = evals_[ply];
+            const float moverWin = pe.isMate
+                ? (pe.mateIn > 0 ? 100.f : 0.f)
+                : quality::winPercent(pe.score_cp);
+            const Color mover = moverAt(ply);
+            whiteWin = mover == Color::White ? moverWin : 100.f - moverWin;
+        }
+        return {
+            x + 1.f + (static_cast<float>(ply) / static_cast<float>(total))
+                * (w - 2.f),
+            y + 1.f + (1.f - whiteWin / 100.f) * (h - 2.f),
+        };
+    };
+
+    // Polyline segments only between consecutive analyzed plies.
+    for (int ply = 0; ply < total; ++ply) {
+        if (!evalDone_[ply] || !evalDone_[ply + 1]) continue;
+        sf::Vertex seg[2] = {
+            sf::Vertex{pointAt(ply), ui::pal::selectionBlue},
+            sf::Vertex{pointAt(ply + 1), ui::pal::selectionBlue},
+        };
+        window.draw(seg, 2, sf::PrimitiveType::Lines);
+    }
+
+    // Classified markers ride the chip layer's colors.
+    for (int ply = 0;
+         ply < static_cast<int>(classLayer_.size()) && ply <= total; ++ply) {
+        if (classLayer_[ply] < 0 || !evalDone_[ply]) continue;
+        sf::CircleShape mark(3.f);
+        mark.setPosition(pointAt(ply) - sf::Vector2f(3.f, 3.f));
+        switch (static_cast<quality::MoveClass>(classLayer_[ply])) {
+            case quality::MoveClass::Best:
+                mark.setFillColor(ui::chips::best); break;
+            case quality::MoveClass::Brilliant:
+                mark.setFillColor(ui::chips::brilliant); break;
+            case quality::MoveClass::Good:
+                mark.setFillColor(ui::chips::good); break;
+            case quality::MoveClass::Inaccuracy:
+                mark.setFillColor(ui::chips::inaccuracy); break;
+            case quality::MoveClass::Mistake:
+                mark.setFillColor(ui::chips::mistake); break;
+            case quality::MoveClass::Blunder:
+                mark.setFillColor(ui::chips::blunder); break;
+            case quality::MoveClass::Book:
+                mark.setFillColor(ui::chips::book); break;
+        }
+        window.draw(mark);
+    }
+
+    // Current-ply cursor: a thin white tick for orientation.
+    const int ply = navigator_.currentPly();
+    if (ply >= 0 && ply <= total && evalDone_[ply]) {
+        sf::Vector2f p = pointAt(ply);
+        sf::Vertex tick[2] = {
+            sf::Vertex{sf::Vector2f(p.x, y + 1.f), ui::pal::white},
+            sf::Vertex{sf::Vector2f(p.x, y + h - 1.f), ui::pal::white},
+        };
+        window.draw(tick, 2, sf::PrimitiveType::Lines);
+    }
 }
 
 } // namespace chess::client

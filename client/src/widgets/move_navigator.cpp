@@ -1,5 +1,6 @@
 #include "move_navigator.h"
 #include "app.h"
+#include "move_quality.h"
 #include "ui/rounded_rect.h"
 #include "ui/theme.h"
 
@@ -374,6 +375,31 @@ void MoveNavigator::drawGrid(sf::RenderWindow& window, const sf::Font& font)
                                                      : ui::pal::textCell);
             moveText.setPosition({cellX, yTop + 1.f});
             window.draw(moveText);
+
+            // 16.4 chip layer: a class mark reads as a 2 px underline bar
+            // spanning the cell width, indexed by the MoveClass ordinal.
+            if (ply < static_cast<int>(classLayer_.size())
+                && classLayer_[ply] >= 0) {
+                sf::RectangleShape chip({colW, ui::chips::barH});
+                chip.setPosition({cellX, yTop + RowH - ui::chips::barH});
+                switch (static_cast<quality::MoveClass>(classLayer_[ply])) {
+                    case quality::MoveClass::Best:
+                        chip.setFillColor(ui::chips::best); break;
+                    case quality::MoveClass::Brilliant:
+                        chip.setFillColor(ui::chips::brilliant); break;
+                    case quality::MoveClass::Good:
+                        chip.setFillColor(ui::chips::good); break;
+                    case quality::MoveClass::Inaccuracy:
+                        chip.setFillColor(ui::chips::inaccuracy); break;
+                    case quality::MoveClass::Mistake:
+                        chip.setFillColor(ui::chips::mistake); break;
+                    case quality::MoveClass::Blunder:
+                        chip.setFillColor(ui::chips::blunder); break;
+                    case quality::MoveClass::Book:
+                        chip.setFillColor(ui::chips::book); break;
+                }
+                window.draw(chip);
+            }
         };
 
         numText.setString(std::to_string(r + 1) + ".");

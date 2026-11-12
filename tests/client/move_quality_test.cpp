@@ -422,3 +422,117 @@ TEST(MoveQuality, StreamFromReportFinishesMateAndRefusesGaps)
     wrongShape.evals[2].valid = true;
     EXPECT_TRUE(streamFromReport(wrongShape, {"Qxf7#"}, {false}).empty());
 }
+
+// --- 16.4 chip layer ------------------------------------------------------------
+
+TEST(MoveQuality, StreamFromReportStampsTheBestMoveEcho)
+{
+    // The engine's own choice echoing the played SAN marks isBest; a
+    // different (or absent) best SAN leaves it false.
+    Board beforeE4 = Board::fromStartPos();
+    Board afterE4 = beforeE4;
+    {
+        auto m = san::fromSan(afterE4, "e4");
+        ASSERT_TRUE(m);
+        afterE4.makeMove(*m);
+    }
+
+    EvalReport echo;
+    echo.nodes = {node(beforeE4.toFen(), "e4")};
+    NodeResult r = scored(10);
+    r.eval.bestSan = "e4";
+    echo.evals = {r};
+    auto stream = streamFromReport(echo, {"e4"}, {false});
+    ASSERT_EQ(stream.size(), 1u);
+    EXPECT_TRUE(stream[0].isBest);
+
+    r.eval.bestSan = "d4";
+    echo.evals = {r};
+    stream = streamFromReport(echo, {"e4"}, {false});
+    ASSERT_EQ(stream.size(), 1u);
+    EXPECT_FALSE(stream[0].isBest);
+
+    r.eval.bestSan.clear();
+    echo.evals = {r};
+    stream = streamFromReport(echo, {"e4"}, {false});
+    ASSERT_EQ(stream.size(), 1u);
+    EXPECT_FALSE(stream[0].isBest);
+}
+
+TEST(MoveQuality, ClassLayerMarksClassesAndGoodStaysUnmarked)
+{
+    // A dead-quiet two-ply game classifies Good on both plies -> unmarked.
+    {
+        Board beforeE4 = Board::fromStartPos();
+        Board afterE4 = beforeE4;
+        {
+            auto m = san::fromSan(afterE4, "e4");
+            ASSERT_TRUE(m);
+            afterE4.makeMove(*m);
+        }
+        EvalReport report;
+        report.nodes = {node(beforeE4.toFen(), "e4"),
+                        node(afterE4.toFen(), "e5")};
+        report.evals = {scored(10), scored(0)};
+
+        auto layer = classLayerFor(report, Board::fromStartPos(),
+                                   chainFrom(Board::fromStartPos().toFen(),
+                                             {"e4", "e5"}),
+                                   {"e4", "e5"}, {});
+        ASSERT_EQ(layer.size(), 2u);
+        EXPECT_EQ(layer[0], -1);
+        EXPECT_EQ(layer[1], -1);
+
+        // Book stamps over the verdict: the bare "e4" umbrella labels ply 0.
+        auto bookLayer = classLayerFor(report, Board::fromStartPos(),
+                                       chainFrom(Board::fromStartPos().toFen(),
+                                                 {"e4", "e5"}),
+                                       {"e4", "e5"}, {true, false});
+        ASSERT_EQ(bookLayer.size(), 2u);
+        EXPECT_EQ(bookLayer[0], static_cast<signed char>(MoveClass::Book));
+    }
+
+    // A real blunder surfaces with its ordinal: 1. f3 e5 2. g4?? Qh4#.
+    {
+        const std::vector<std::string> sans = {"f3", "e5", "g4", "Qh4#"};
+        const auto moves =
+            chainFrom(Board::fromStartPos().toFen(), sans);
+        ASSERT_EQ(moves.size(), 4u);
+
+        // Node fens chain from the start; the g4 node's cp crash flags it.
+        std::vector<Board> boards;
+        Board b = Board::fromStartPos();
+        for (const auto& san : sans) {
+            auto m = san::fromSan(b, san);
+            ASSERT_TRUE(m);
+            b.makeMove(*m);
+            boards.push_back(b);
+        }
+        EvalReport report;
+        report.nodes = {node(Board::fromStartPos().toFen(), "f3"),
+                        node(boards[0].toFen(), "e5"),
+                        node(boards[1].toFen(), "g4"),
+                        node(boards[2].toFen(), "Qh4#")};
+        report.evals = {scored(0), scored(0), scored(-50), scored(900)};
+
+        auto layer = classLayerFor(report, Board::fromStartPos(), moves,
+                                   sans, {});
+        ASSERT_EQ(layer.size(), 4u);
+        EXPECT_EQ(layer[2], static_cast<signed char>(MoveClass::Blunder));
+        // The mating reply itself is no class (mover gains, not gives).
+        EXPECT_EQ(layer[3], -1);
+    }
+
+    // Refusals mirror streamFromReport: shape mismatch -> empty.
+    {
+        EvalReport report;
+        report.nodes = {node(Board::fromStartPos().toFen(), "e4")};
+        report.evals = {scored(10), scored(10)};
+        report.evals[0].valid = true;
+        report.evals[1].valid = true;
+        EXPECT_TRUE(classLayerFor(report, Board::fromStartPos(),
+                                  chainFrom(Board::fromStartPos().toFen(),
+                                            {"e4"}),
+                                  {"e4"}, {}).empty());
+    }
+}

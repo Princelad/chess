@@ -8,6 +8,7 @@ src/connection.cpp
     src/avatars.cpp
     src/eval_harness.cpp
     src/move_quality.cpp
+    src/analysis_notes.cpp
     src/widgets/label.cpp
     src/widgets/panel.cpp
     src/widgets/button.cpp

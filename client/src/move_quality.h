@@ -156,5 +156,18 @@ MoveEvalStream streamFromReport(const EvalReport& report,
                                 const std::vector<std::string>& sans,
                                 const std::vector<bool>& sacrifices);
 
+// --- chip layer (16.4): per-ply move-list class marks -------------------------
+
+// Per-ply chip classes for a computed report, parallel to the SAN list:
+// -1 = unmarked (Good and every refusal case), else the MoveClass ordinal
+// (0..kClassCount-1). Same whole-report refusal as streamFromReport; the
+// board chain drives the sacrifice flags exactly as the report screen does,
+// and the caller stamps book flags (bookPlies) so Book chips match the
+// report's legend — an empty vector simply marks nothing Book.
+std::vector<signed char> classLayerFor(const EvalReport& report,
+                                       const Board& initialBoard,
+                                       const std::vector<chess::Move>& moves,
+                                       const std::vector<std::string>& sans,
+                                       const std::vector<bool>& bookFlags);
 
 } // namespace chess::client::quality

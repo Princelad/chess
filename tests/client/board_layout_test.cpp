@@ -155,6 +155,11 @@ TEST(BoardLayout, AnalysisStackShiftsTheTableAndAddsEvalSlot)
 
     EXPECT_FLOAT_EQ(l.evalTextY, 450.f);
     EXPECT_FLOAT_EQ(l.evalTurnY, 472.f);
+    // 16.4: the eval graph strip and PV toggle slot between the eval text
+    // and the bottom-edge hint.
+    EXPECT_FLOAT_EQ(l.evalGraphY, 490.f);
+    EXPECT_FLOAT_EQ(l.evalGraphH, 44.f);
+    EXPECT_FLOAT_EQ(l.pvToggleY, 536.f);
     EXPECT_FLOAT_EQ(l.hintY, WinH - 40.f); // 600
 }
 

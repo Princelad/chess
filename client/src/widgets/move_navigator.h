@@ -68,6 +68,14 @@ public:
     // Layout / events / drawing
     void setLayout(sf::FloatRect gridRect, sf::FloatRect navRect);
     void handleScroll(float delta);
+    // 16.4 chip layer: per-ply class marks (-1 = unmarked, else the
+    // MoveClass ordinal) rendered as underline bars under the SAN cells.
+    // Pass an empty vector to clear; shorter vectors simply leave the
+    // tail unmarked.
+    void setClassLayer(std::vector<signed char> layer)
+    {
+        classLayer_ = std::move(layer);
+    }
     // 15.3 pure restyle math (unit-tested headlessly):
     //  - visibleLines: full line rows that fit a list height.
     //  - shadedLine: zebra parity (odd move numbers shade), 0 = empty line.
@@ -108,6 +116,7 @@ private:
         return btns;
     }();
     int hoveredCellPly_ = -1;
+    std::vector<signed char> classLayer_; // 16.4: per-ply chip classes
 };
 
 } // namespace chess::client

@@ -174,6 +174,23 @@ namespace board {
 } // namespace board
 
 // ---------------------------------------------------------------------------
+// Move-class chips (16.4): 2 px underline bars on navigator SAN cells.
+// Slots are INDEXED by the MoveClass ordinal (Best..Book in decl order) —
+// keep the order locked to move_quality.h; the Good slot stays neutral
+// because Good moves are never marked.
+// ---------------------------------------------------------------------------
+namespace chips {
+    inline constexpr sf::Color best{ 96, 190, 96 };       // Best
+    inline constexpr sf::Color brilliant{ 48, 187, 201 }; // Brilliant
+    inline constexpr sf::Color good{ 120, 120, 120 };     // (never drawn)
+    inline constexpr sf::Color inaccuracy{ 240, 190, 60 }; // Inaccuracy
+    inline constexpr sf::Color mistake{ 235, 130, 50 };   // Mistake
+    inline constexpr sf::Color blunder{ 220, 70, 70 };    // Blunder
+    inline constexpr sf::Color book{ 165, 160, 150 };     // Book
+    inline constexpr float barH = 2.f; // underline thickness under the cell
+} // namespace chips
+
+// ---------------------------------------------------------------------------
 // Type scale
 // ---------------------------------------------------------------------------
 

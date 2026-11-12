@@ -93,6 +93,11 @@ BoardLayout composeBoardLayout(float windowWidth, float windowHeight,
 
         l.evalTextY = 450.f;
         l.evalTurnY = l.evalTextY + 22.f;
+        // 16.4: eval graph strip (win% polyline with class markers) and the
+        // PV-arrows toggle under it; the hint keeps the bottom edge.
+        l.evalGraphY = l.evalTurnY + 18.f;
+        l.evalGraphH = 44.f;
+        l.pvToggleY = l.evalGraphY + l.evalGraphH + 2.f;
         l.hintY = windowHeight - 40.f;
     }
 
