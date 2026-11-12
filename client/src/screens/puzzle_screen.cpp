@@ -641,7 +641,7 @@ void PuzzleScreen::update(float dtSec)
     }
 }
 
-void PuzzleScreen::draw(sf::RenderWindow& window)
+void PuzzleScreen::drawBoardLayer(sf::RenderWindow& window)
 {
     auto& font = app_.font();
 
@@ -660,61 +660,66 @@ void PuzzleScreen::draw(sf::RenderWindow& window)
             boardView_.drawDraggedPiece(window, font, dragged, cursor_, app_);
     }
 
-    if (promo_) {
-        const auto* puzzle = current();
-        for (int i = 0; i < static_cast<int>(promo_->candidates.size()); ++i) {
-            auto c = promoCell(i);
-            sf::RectangleShape cell({c.size, c.size});
-            cell.setPosition(c.pos);
-            cell.setFillColor(ui::overlay::cellFill);
-            cell.setOutlineColor(ui::overlay::cellStroke);
-            cell.setOutlineThickness(ui::overlay::promoStrokeW);
-            window.draw(cell);
+    if (!promo_)
+        return;
+    const auto* puzzle = current();
+    for (int i = 0; i < static_cast<int>(promo_->candidates.size()); ++i) {
+        auto c = promoCell(i);
+        sf::RectangleShape cell({c.size, c.size});
+        cell.setPosition(c.pos);
+        cell.setFillColor(ui::overlay::cellFill);
+        cell.setOutlineColor(ui::overlay::cellStroke);
+        cell.setOutlineThickness(ui::overlay::promoStrokeW);
+        window.draw(cell);
 
-            if (i == promoHover_) {
-                sf::RectangleShape hover({c.size, c.size});
-                hover.setPosition(c.pos);
-                hover.setFillColor(ui::overlay::cellHover);
-                window.draw(hover);
-            }
+        if (i == promoHover_) {
+            sf::RectangleShape hover({c.size, c.size});
+            hover.setPosition(c.pos);
+            hover.setFillColor(ui::overlay::cellHover);
+            window.draw(hover);
+        }
 
-            chess::PieceType pt = promo_->candidates[i].promotion;
-            float pieceSize = c.size * 0.8f;
-            float offset = (c.size - pieceSize) / 2.f;
+        chess::PieceType pt = promo_->candidates[i].promotion;
+        float pieceSize = c.size * 0.8f;
+        float offset = (c.size - pieceSize) / 2.f;
 
-            if (app_.piecesLoaded() && puzzle) {
-                const auto& tex = app_.pieceTexture(puzzle->solverColor, pt);
-                sf::Sprite sprite(tex);
-                float scale = pieceSize / static_cast<float>(tex.getSize().x);
-                sprite.setScale({scale, scale});
-                sprite.setPosition({c.pos.x + offset, c.pos.y + offset});
-                window.draw(sprite);
-            } else {
-                const char letters[] = {'P', 'N', 'B', 'R', 'Q', 'K'};
-                unsigned int letterSize = static_cast<unsigned int>(c.size * 0.5f);
-                if (letterSize < 12) letterSize = 12;
-                sf::Text letter(font,
-                                std::string(1, letters[static_cast<int>(pt)]),
-                                letterSize);
-                letter.setFillColor(ui::overlay::cellGlyph);
-                auto lb = letter.getLocalBounds();
-                letter.setPosition({
-                    c.pos.x + (c.size - lb.size.x) / 2.f - lb.position.x,
-                    c.pos.y + (c.size - lb.size.y) / 2.f - lb.position.y});
-                window.draw(letter);
-            }
+        if (app_.piecesLoaded() && puzzle) {
+            const auto& tex = app_.pieceTexture(puzzle->solverColor, pt);
+            sf::Sprite sprite(tex);
+            float scale = pieceSize / static_cast<float>(tex.getSize().x);
+            sprite.setScale({scale, scale});
+            sprite.setPosition({c.pos.x + offset, c.pos.y + offset});
+            window.draw(sprite);
+        } else {
+            const char letters[] = {'P', 'N', 'B', 'R', 'Q', 'K'};
+            unsigned int letterSize = static_cast<unsigned int>(c.size * 0.5f);
+            if (letterSize < 12) letterSize = 12;
+            sf::Text letter(font,
+                            std::string(1, letters[static_cast<int>(pt)]),
+                            letterSize);
+            letter.setFillColor(ui::overlay::cellGlyph);
+            auto lb = letter.getLocalBounds();
+            letter.setPosition({
+                c.pos.x + (c.size - lb.size.x) / 2.f - lb.position.x,
+                c.pos.y + (c.size - lb.size.y) / 2.f - lb.position.y});
+            window.draw(letter);
         }
     }
+}
+
+void PuzzleScreen::draw(sf::RenderWindow& window)
+{
+    drawBoardLayer(window);
 
     // Panel
     const float px = panelLayout_.panelX;
-    const float width = static_cast<float>(App::WindowWidth);
     const float height = static_cast<float>(App::WindowHeight);
     sf::RectangleShape panel({panelLayout_.panelEdgeWidth, height});
     panel.setPosition({px, 0.f});
     panel.setFillColor(sf::Color(24, 26, 30)); // puzzle header slate
     window.draw(panel);
 
+    auto& font = app_.font();
     const auto* puzzle = current();
     std::string title = "Puzzles";
     if (puzzle) {

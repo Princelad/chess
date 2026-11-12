@@ -9,6 +9,7 @@ src/connection.cpp
     src/eval_harness.cpp
     src/move_quality.cpp
     src/analysis_notes.cpp
+    src/rush.cpp
     src/widgets/label.cpp
     src/widgets/panel.cpp
     src/widgets/button.cpp
@@ -25,6 +26,7 @@ src/connection.cpp
     src/screens/leaderboard_screen.cpp
     src/screens/local_game_screen.cpp
     src/screens/puzzle_screen.cpp
+    src/screens/rush_screen.cpp
     src/screens/tournament_lobby_screen.cpp
     src/puzzles.cpp
     src/screens/analysis_screen.cpp

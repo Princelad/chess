@@ -33,7 +33,20 @@ public:
     void update(float dtSec) override;
     void draw(sf::RenderWindow& window) override;
 
-private:
+protected:
+    // 17.1: RushScreen derives and swaps the flow hooks (advance instead of
+    // restart on fail, auto-advance on solve, timed solver guard).
+    virtual void onSolved();
+    virtual void onWrongMove();
+    virtual void revealSolution();
+    virtual void nextPuzzle();
+    virtual void backToMenu();
+    virtual bool solverTurn() const;
+
+    // Board + promotion picker rendering shared verbatim by both screens;
+    // each screen draws its own panel around it.
+    void drawBoardLayer(sf::RenderWindow& window);
+
     const Puzzle* current() const;
     void loadPuzzle(int index);
     void resetPosition();
@@ -47,14 +60,8 @@ private:
     void startMovePresentation(const chess::Move& m);
     void scheduleReply();
     void fireReply();
-    void onSolved();
-    void onWrongMove();
     void hint();
-    void revealSolution();
-    void nextPuzzle();
-    void backToMenu();
 
-    bool solverTurn() const;
     bool solverPieceAt(int file, int rank) const;
     void deselect();
     void clearBoardInput();

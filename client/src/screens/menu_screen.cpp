@@ -2,6 +2,7 @@
 #include "connect_screen.h"
 #include "local_game_screen.h"
 #include "puzzle_screen.h"
+#include "rush_screen.h"
 #include "settings_screen.h"
 #include "ui/theme.h"
 #include "version.h"
@@ -23,13 +24,12 @@ MenuScreen::MenuScreen(App& app)
         "Play Online",
         "Play vs Computer",
         "Puzzles",
-        "Archive",
+        "Puzzle Rush",
         "Settings"
     };
     for (int i = 0; i < EntryCount; ++i) {
         entries_[i].setLabel(Labels[i]);
-        const bool disabled = i == 3;
-        entries_[i].setEnabled(!disabled);
+        entries_[i].setEnabled(true);
         entries_[i].setOnClick([this, i] {
             if (i == 0) {
                 app_.pushScreen(std::make_unique<ConnectScreen>(app_));
@@ -40,6 +40,8 @@ MenuScreen::MenuScreen(App& app)
                     app_, Color::White, std::move(enginePath), 5));
             } else if (i == 2) {
                 app_.pushScreen(std::make_unique<PuzzleScreen>(app_));
+            } else if (i == 3) {
+                app_.pushScreen(std::make_unique<RushScreen>(app_));
             } else if (i == 4) {
                 app_.pushScreen(std::make_unique<SettingsScreen>(app_));
             }
