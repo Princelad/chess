@@ -28,6 +28,7 @@ src/connection.cpp
     src/screens/leaderboard_screen.cpp
     src/screens/local_game_screen.cpp
     src/screens/persona_select_screen.cpp
+    src/screens/play_hub_screen.cpp
     src/screens/puzzle_screen.cpp
     src/screens/rush_screen.cpp
     src/screens/tournament_lobby_screen.cpp

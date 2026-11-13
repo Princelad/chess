@@ -2,6 +2,7 @@
 #include "connect_screen.h"
 #include "local_game_screen.h"
 #include "persona_select_screen.h"
+#include "play_hub_screen.h"
 #include "puzzle_screen.h"
 #include "rush_screen.h"
 #include "settings_screen.h"
@@ -22,6 +23,7 @@ MenuScreen::MenuScreen(App& app)
     : app_(app)
 {
     static const char* Labels[EntryCount] = {
+        "Play hub",
         "Play Online",
         "Play vs Computer",
         "Puzzles",
@@ -33,14 +35,17 @@ MenuScreen::MenuScreen(App& app)
         entries_[i].setEnabled(true);
         entries_[i].setOnClick([this, i] {
             if (i == 0) {
-                app_.pushScreen(std::make_unique<ConnectScreen>(app_));
+                // 17.4: the hub is reachable from the opt-out menu too.
+                app_.switchScreen(std::make_unique<PlayHubScreen>(app_));
             } else if (i == 1) {
-                app_.pushScreen(std::make_unique<PersonaSelectScreen>(app_));
+                app_.pushScreen(std::make_unique<ConnectScreen>(app_));
             } else if (i == 2) {
-                app_.pushScreen(std::make_unique<PuzzleScreen>(app_));
+                app_.pushScreen(std::make_unique<PersonaSelectScreen>(app_));
             } else if (i == 3) {
-                app_.pushScreen(std::make_unique<RushScreen>(app_));
+                app_.pushScreen(std::make_unique<PuzzleScreen>(app_));
             } else if (i == 4) {
+                app_.pushScreen(std::make_unique<RushScreen>(app_));
+            } else if (i == 5) {
                 app_.pushScreen(std::make_unique<SettingsScreen>(app_));
             }
         });

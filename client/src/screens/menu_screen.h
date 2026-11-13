@@ -16,7 +16,7 @@ public:
     void draw(sf::RenderWindow& window) override;
 
 private:
-    static constexpr int EntryCount = 5;
+    static constexpr int EntryCount = 6;
     static constexpr float EntryW = 280.f;
     static constexpr float EntryH = 44.f;
     static constexpr float EntryGap = 8.f;

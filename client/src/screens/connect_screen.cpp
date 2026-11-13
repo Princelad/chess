@@ -177,6 +177,43 @@ void ConnectScreen::layoutWidgets()
         sf::Vector2f(FieldW, FieldH)));
 }
 
+// ── 17.4 play-hub drawer API ────────────────────────────────────────────────
+
+void ConnectScreen::embedAsDrawer()
+{
+    title_.setText("");
+    // The hint moves into the drawer's own zone so it stays readable
+    // above the fields.
+    hint_.setPosition({StartX, 55.f});
+}
+
+void ConnectScreen::cancelAttempt()
+{
+    if (phase_ == ConnectPhase::Idle)
+        return;
+    app_.connection().disconnect();
+    phase_ = ConnectPhase::Idle;
+    status_.setText("");
+    error_.setText("");
+    for (auto& field : fields_) field.setEnabled(true);
+}
+
+bool ConnectScreen::quickQueueTc(const std::string& tc)
+{
+    if (phase_ != ConnectPhase::Idle || name().empty())
+        return false;
+    for (std::size_t i = 0; i < timeControls_.size(); ++i) {
+        if (timeControls_[i] == tc) {
+            tcIndex_ = i;
+            updateTimeControlLabel();
+            app_.config().set("general.time_control", tc);
+            break;
+        }
+    }
+    tryConnectOrRetry();
+    return true;
+}
+
 // Cycles the preset forward and stamps the choice into the config, so the
 // next visit starts where the player left off.
 void ConnectScreen::selectTimeControl()
@@ -514,7 +551,8 @@ void ConnectScreen::draw(sf::RenderWindow& window)
     if (phase_ == ConnectPhase::Idle)
         variantBtn_.draw(window, font);
 
-    float statusY = BtnY + 154.f; // row three holds the Watch button now
+    float statusY = BtnY + 104.f; // layoutWidgets' status row (below all
+                                  // three button rows)
     if (!error_.text().empty()) {
         error_.setPosition({StartX, statusY});
         error_.draw(window, font);

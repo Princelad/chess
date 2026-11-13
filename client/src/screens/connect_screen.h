@@ -29,6 +29,26 @@ public:
     void update(float dtSec) override;
     void draw(sf::RenderWindow& window) override;
 
+    // ── 17.4 play-hub drawer API ────────────────────────────────────────
+    // The hub embeds this screen as a collapsible right-side drawer. These
+    // wrappers expose the pieces the hub needs; zero logic is duplicated.
+    // Drops the screen's own title/hint chrome (the hub paints its own).
+    void embedAsDrawer();
+    // Abandon an in-flight attempt so the drawer can collapse without
+    // leaving a stale phase (fields re-enabled, statuses cleared).
+    void cancelAttempt();
+    // Quick-queue: pick the TC preset and immediately connect + join with
+    // the persisted host/port/name. Returns false (state unchanged beyond
+    // the TC pick) when the name is empty or a connect is already running
+    // — the caller then just expands the drawer for manual entry.
+    bool quickQueueTc(const std::string& tc);
+    // Quick browse (archive/leaderboard/arena/watch): same gates as the
+    // buttons, so the hub cards can drive them.
+    void quickBrowse(BrowseTarget target) { startBrowse(target); }
+    // The hub's variant cycler drives the drawer's persisted pick.
+    void cycleVariant() { selectVariant(); }
+    ConnectPhase phase() const { return phase_; }
+
 private:
     static constexpr std::size_t FieldCount = 4;
     // Time-control presets before pairing (11.1); first entry = unlimited.
@@ -39,8 +59,7 @@ private:
 
     void tryConnectOrRetry();
     void startBrowse(BrowseTarget target);
-    void openBrowseTarget();
-    void cycleField(bool backward);
+    void openBrowseTarget();    void cycleField(bool backward);
     void selectTimeControl();
     void updateTimeControlLabel();
     void selectVariant();
