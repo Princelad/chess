@@ -887,10 +887,10 @@ fields survive as a collapsible drawer; suite green; protocol untouched
   - [x] Server-side configurable persona table (`--bot-personas` config) mapping persona names to depth/preset pairs so spawned server bots (8.3's `botSpawnQueue` path, unchanged) play at matching strength — still zero wire changes
   - [x] Persona cards from 14.2/14.3 render like player cards on the 15.2 layout
 
-- [ ] **17.4 Play hub (`client/src/screens/play_hub_screen.{h,cpp}`)**
-  - [ ] Chess.com-style home: quick-queue TC cards (bullet/blitz/rapid/classical from 11.1's presets), variant cards (standard/Chess960 via 12.1, arena from 12.3), vs-Bot persona section, Archive/Leaderboard/Puzzles/Spectate/Settings entries (9.1 menu entries all move here, none lost)
-  - [ ] ConnectScreen survives as a collapsible "connect" drawer inside the hub (last_host/port/name pre-filled from 10.2's persistence, time-control cycler replaces the 11.1 connect-screen cycle button)
-  - [ ] App entry point swaps to the hub (config `general.entry` opt-out keeps the old menu for one version; menu screen stays functional)
+- [x] **17.4 Play hub (`client/src/screens/play_hub_screen.{h,cpp}`)**
+  - [x] Chess.com-style home: quick-queue TC cards (bullet/blitz/rapid/classical from 11.1's presets), variant cards (standard/Chess960 via 12.1, arena from 12.3), vs-Bot persona section, Archive/Leaderboard/Puzzles/Spectate/Settings entries (9.1 menu entries all move here, none lost)
+  - [x] ConnectScreen survives as a collapsible "connect" drawer inside the hub (last_host/port/name pre-filled from 10.2's persistence, time-control cycler replaces the 11.1 connect-screen cycle button)
+  - [x] App entry point swaps to the hub (config `general.entry` opt-out keeps the old menu for one version; menu screen stays functional)
 
 - [ ] **17.5 Final consistency + release pass**
   - [ ] Full sweep: every screen paints from tokens (no stragglers flagged by a debug-only "token violation" overlay build flag); sounds/animation settings apply everywhere
