@@ -67,3 +67,15 @@ install(TARGETS chess-client chess-server
         RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
 install(DIRECTORY "${CMAKE_SOURCE_DIR}/assets/"
         DESTINATION "${CMAKE_INSTALL_DATADIR}/chess/assets")
+
+# 17.5: debug-only design-token audit. Configure with
+# -DCHESS_TOKEN_AUDIT=ON and run `cmake --build build --target token-audit`
+# to flag raw sf::Color literals outside the token files (see
+# tools/token_audit.sh for the documented exempt list).
+option(CHESS_TOKEN_AUDIT "Add the design-token audit target (17.5)" OFF)
+if(CHESS_TOKEN_AUDIT)
+    add_custom_target(token-audit
+        COMMAND /bin/sh "${CMAKE_SOURCE_DIR}/tools/token_audit.sh"
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        VERBATIM)
+endif()

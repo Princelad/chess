@@ -48,7 +48,7 @@ Hud::Hud(App& app, const layout::BoardLayout& panelLayout)
     headerLabel_.setColor(ui::pal::textFaded);
 
     openingLabel_.setFontSize(HeaderFontSize);
-    openingLabel_.setColor(sf::Color(150, 140, 110)); // ECO bronze (HUD-only)
+    openingLabel_.setColor(ui::pal::ecoBronze); // ECO bronze
 
     navigator_.setLayout(panel_.moveList, panel_.navRow);
 

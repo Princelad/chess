@@ -9,6 +9,9 @@ src/connection.cpp
     src/eval_harness.cpp
     src/move_quality.cpp
     src/analysis_notes.cpp
+    src/rush.cpp
+    src/daily.cpp
+    src/bot_personas.cpp
     src/widgets/label.cpp
     src/widgets/panel.cpp
     src/widgets/button.cpp
@@ -24,7 +27,10 @@ src/connection.cpp
     src/screens/history_screen.cpp
     src/screens/leaderboard_screen.cpp
     src/screens/local_game_screen.cpp
+    src/screens/persona_select_screen.cpp
+    src/screens/play_hub_screen.cpp
     src/screens/puzzle_screen.cpp
+    src/screens/rush_screen.cpp
     src/screens/tournament_lobby_screen.cpp
     src/puzzles.cpp
     src/screens/analysis_screen.cpp

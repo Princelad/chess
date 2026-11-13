@@ -173,6 +173,8 @@ TEST(BoardLayout, PuzzleStackBottomAnchorsTheActionColumn)
     EXPECT_FLOAT_EQ(l.puzzleStreakY, 44.f);
     EXPECT_FLOAT_EQ(l.puzzleStatusY, 68.f);
     EXPECT_FLOAT_EQ(l.puzzleSolutionY, 96.f);
+    // 17.2: the daily stats line rides right under the solution line.
+    EXPECT_FLOAT_EQ(l.puzzleDailyY, 118.f);
 
     EXPECT_FLOAT_EQ(l.buttonInsetX, 14.f);
     EXPECT_FLOAT_EQ(l.buttonWidth, 150.f);

@@ -175,7 +175,8 @@ public:
     // this to shorten its select wait so flags fire near-precisely.
     bool clockRuns() const { return clock_.active() && active_; }
 
-    void startBot(chess::Color color, int depth, std::string enginePath);
+    void startBot(chess::Color color, int depth, std::string enginePath,
+                  int movetimeMs = 0, int skillLevel = -1);
     void stopBot();
     void pollBotMove();
     bool isBotTurn() const;
@@ -268,6 +269,11 @@ private:
     std::unique_ptr<chess::uci::UciEngine> botEngine_;
     chess::Color botColor_ = chess::Color::White;
     int botDepth_ = 1;
+    // 17.3 persona presets: go's move-time budget and the UCI Skill Level
+    // option (-1 = leave the engine default). Zero wire impact — the search
+    // params only shape how the bot thinks.
+    int botMovetimeMs_ = 0;
+    int botSkillLevel_ = -1;
     bool botThinking_ = false;
     std::vector<std::string> sanHistory_;
     GameOverCallback gameOverCallback_;

@@ -2,6 +2,7 @@
 
 #include "asset_paths.h"
 #include "screens/menu_screen.h"
+#include "screens/play_hub_screen.h"
 #include "ui/theme.h"
 #include "version.h"
 
@@ -22,7 +23,13 @@ App::App()
     sounds_.setVolume(std::clamp(config_.getInt("sound.volume", 100), 0, 100));
     loadAssets();
     buildView(viewport_.x, viewport_.y);
-    screen_ = std::make_unique<MenuScreen>(*this);
+    // 17.4: the play hub is the app's home; config `general.entry` (any
+    // value other than the default "hub") opts back to the old menu for
+    // one version. The menu stays fully functional either way.
+    if (config_.get("general.entry", "hub") == "hub")
+        screen_ = std::make_unique<PlayHubScreen>(*this);
+    else
+        screen_ = std::make_unique<MenuScreen>(*this);
 }
 
 sf::Vector2f App::toLocal(sf::Vector2i pixel) const

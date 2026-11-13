@@ -872,29 +872,29 @@ retires the old ConnectScreen-first flow.
 fields survive as a collapsible drawer; suite green; protocol untouched
 (bot personas on the server are config-only, Guests still pair like humans)
 
-- [ ] **17.1 Puzzle Rush & Survival (`client/src/screens/rush_screen.{h,cpp}`, extends 12.2)**
-  - [ ] 3-minute and 5-minute rush + endless Survival mode: fail-or-skip advances, streak-and-score counter, time pill (11.1's clock styling)
-  - [ ] Scores persisted per mode as `puzzle.rush_{3m,5m,survival}_best` config keys; "beat your best" status banner; solution-reveal still zeroes the streak (12.2 discipline carries over verbatim)
-  - [ ] Feed shuffling deterministic per session (seed stored in config; shuffle source = the 12.2 loader order)
-  - [ ] Input discipline: the 12.2 `solverTurn()` guard extends to rush timer expiry (a stall mid-animation can never double-apply)
+- [x] **17.1 Puzzle Rush & Survival (`client/src/screens/rush_screen.{h,cpp}`, extends 12.2)**
+  - [x] 3-minute and 5-minute rush + endless Survival mode: fail-or-skip advances, streak-and-score counter, time pill (11.1's clock styling)
+  - [x] Scores persisted per mode as `puzzle.rush_{3m,5m,survival}_best` config keys; "beat your best" status banner; solution-reveal still zeroes the streak (12.2 discipline carries over verbatim)
+  - [x] Feed shuffling deterministic per session (seed stored in config; shuffle source = the 12.2 loader order)
+  - [x] Input discipline: the 12.2 `solverTurn()` guard extends to rush timer expiry (a stall mid-animation can never double-apply)
 
-- [ ] **17.2 Daily puzzle + streaks**
-  - [ ] Date-seeded deterministic selection from the bundled set (year+day hash → shard into the 12.2 list); "Daily" card entry opens PuzzleScreen in daily mode; solving marks `puzzle.daily_last`/`daily_streak` (config) and days skipped reset the streak
-  - [ ] All-time solves + daily stats panel inside PuzzleScreen header
+- [x] **17.2 Daily puzzle + streaks**
+  - [x] Date-seeded deterministic selection from the bundled set (year+day hash → shard into the 12.2 list); "Daily" card entry opens PuzzleScreen in daily mode; solving marks `puzzle.daily_last`/`daily_streak` (config) and days skipped reset the streak
+  - [x] All-time solves + daily stats panel inside PuzzleScreen header
 
-- [ ] **17.3 Persona bots (`client/src/bot_personas.{h,cpp}` + server config table)**
-  - [ ] Named difficulty personas for LOCAL play — fresh, neutral names of our own (NOT chess.com's bot cast): depth presets + style caps (an engine-option set like Skill Level / move-time budgets; zero protocol)
-  - [ ] Server-side configurable persona table (`--bot-personas` config) mapping persona names to depth/preset pairs so spawned server bots (8.3's `botSpawnQueue` path, unchanged) play at matching strength — still zero wire changes
-  - [ ] Persona cards from 14.2/14.3 render like player cards on the 15.2 layout
+- [x] **17.3 Persona bots (`client/src/bot_personas.{h,cpp}` + server config table)**
+  - [x] Named difficulty personas for LOCAL play — fresh, neutral names of our own (NOT chess.com's bot cast): depth presets + style caps (an engine-option set like Skill Level / move-time budgets; zero protocol)
+  - [x] Server-side configurable persona table (`--bot-personas` config) mapping persona names to depth/preset pairs so spawned server bots (8.3's `botSpawnQueue` path, unchanged) play at matching strength — still zero wire changes
+  - [x] Persona cards from 14.2/14.3 render like player cards on the 15.2 layout
 
-- [ ] **17.4 Play hub (`client/src/screens/play_hub_screen.{h,cpp}`)**
-  - [ ] Chess.com-style home: quick-queue TC cards (bullet/blitz/rapid/classical from 11.1's presets), variant cards (standard/Chess960 via 12.1, arena from 12.3), vs-Bot persona section, Archive/Leaderboard/Puzzles/Spectate/Settings entries (9.1 menu entries all move here, none lost)
-  - [ ] ConnectScreen survives as a collapsible "connect" drawer inside the hub (last_host/port/name pre-filled from 10.2's persistence, time-control cycler replaces the 11.1 connect-screen cycle button)
-  - [ ] App entry point swaps to the hub (config `general.entry` opt-out keeps the old menu for one version; menu screen stays functional)
+- [x] **17.4 Play hub (`client/src/screens/play_hub_screen.{h,cpp}`)**
+  - [x] Chess.com-style home: quick-queue TC cards (bullet/blitz/rapid/classical from 11.1's presets), variant cards (standard/Chess960 via 12.1, arena from 12.3), vs-Bot persona section, Archive/Leaderboard/Puzzles/Spectate/Settings entries (9.1 menu entries all move here, none lost)
+  - [x] ConnectScreen survives as a collapsible "connect" drawer inside the hub (last_host/port/name pre-filled from 10.2's persistence, time-control cycler replaces the 11.1 connect-screen cycle button)
+  - [x] App entry point swaps to the hub (config `general.entry` opt-out keeps the old menu for one version; menu screen stays functional)
 
-- [ ] **17.5 Final consistency + release pass**
-  - [ ] Full sweep: every screen paints from tokens (no stragglers flagged by a debug-only "token violation" overlay build flag); sounds/animation settings apply everywhere
-  - [ ] README screenshots + "inspired by chess.com" note + version-table close-out; tag v2.0.0
+- [x] **17.5 Final consistency + release pass**
+  - [x] Full sweep: every screen paints from tokens (no stragglers flagged by a debug-only "token violation" overlay build flag); sounds/animation settings apply everywhere
+  - [x] README screenshots + "inspired by chess.com" note + version-table close-out; tag v2.0.0
 
 ---
 

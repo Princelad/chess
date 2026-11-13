@@ -108,6 +108,7 @@ BoardLayout composeBoardLayout(float windowWidth, float windowHeight,
         l.puzzleStreakY = 44.f;
         l.puzzleStatusY = 68.f;
         l.puzzleSolutionY = 96.f;
+        l.puzzleDailyY = l.puzzleSolutionY + 22.f;
 
         l.buttonInsetX = 14.f;
         l.buttonWidth = 150.f;

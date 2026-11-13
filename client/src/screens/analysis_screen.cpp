@@ -356,7 +356,7 @@ void AnalysisScreen::drawEvalBar(sf::RenderWindow& window) const
     Panel bg(sf::FloatRect(
         sf::Vector2f(origin.x - EvalBarWidth - 4.f, origin.y),
         sf::Vector2f(EvalBarWidth, boardH)),
-        sf::Color(40, 40, 40)); // eval bar track (analysis-only)
+        ui::pal::evalTrack); // eval bar track (analysis-only)
     bg.draw(window);
 
     int ply = navigator_.currentPly();
@@ -379,7 +379,7 @@ void AnalysisScreen::drawEvalBar(sf::RenderWindow& window) const
 
     sf::RectangleShape blackBar({EvalBarWidth, boardH - whiteH});
     blackBar.setPosition({origin.x - EvalBarWidth - 4.f, origin.y});
-    blackBar.setFillColor(sf::Color(50, 50, 50)); // eval bar black side
+    blackBar.setFillColor(ui::pal::evalBlack); // eval bar black side
     window.draw(blackBar);
 }
 

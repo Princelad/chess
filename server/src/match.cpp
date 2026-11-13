@@ -329,7 +329,7 @@ bool Match::handleMoveSAN(Client& sender, const std::string& san)
     if (botEngine_ && board_.sideToMove() == botColor_ && active_) {
         botThinking_ = true;
         botEngine_->position(board_.toFen());
-        botEngine_->go(botDepth_);
+        botEngine_->go(botDepth_, botMovetimeMs_);
     }
 
     return true;
@@ -868,10 +868,13 @@ Match::classifyState(chess::GameState state) const
     }
 }
 
-void Match::startBot(chess::Color color, int depth, std::string enginePath)
+void Match::startBot(chess::Color color, int depth, std::string enginePath,
+                     int movetimeMs, int skillLevel)
 {
     botColor_ = color;
     botDepth_ = depth;
+    botMovetimeMs_ = movetimeMs;
+    botSkillLevel_ = skillLevel;
     botEngine_ = std::make_unique<chess::uci::UciEngine>(std::move(enginePath));
     auto info = botEngine_->init(std::chrono::seconds(2));
     if (info.name.empty() && !botEngine_->isRunning()) {
@@ -882,12 +885,14 @@ void Match::startBot(chess::Color color, int depth, std::string enginePath)
 
     botEngine_->setOption("Threads", "1");
     botEngine_->setOption("Hash", "64");
+    if (skillLevel >= 0)
+        botEngine_->setOption("Skill Level", std::to_string(skillLevel));
     botEngine_->newGame();
     botEngine_->position("startpos");
 
     if (board_.sideToMove() == botColor_) {
         botThinking_ = true;
-        botEngine_->go(botDepth_);
+        botEngine_->go(botDepth_, botMovetimeMs_);
     }
 }
 

@@ -130,6 +130,14 @@ namespace pal {
     inline constexpr sf::Color selectionBlue{ 0, 120, 215 };
     inline constexpr sf::Color hoverWash{ 120, 120, 120 };
     inline constexpr sf::Color bestMoveGreen{ 0, 180, 0 }; // analysis best arrows
+
+    // 17.5 sweep: last stragglers promoted to tokens.
+    inline constexpr sf::Color puzzlePanel{ 24, 26, 30 };  // puzzle header slate
+    inline constexpr sf::Color streakSage{ 160, 190, 130 }; // puzzle streak line
+    inline constexpr sf::Color solutionSlate{ 150, 150, 165 }; // played line
+    inline constexpr sf::Color evalTrack{ 40, 40, 40 };    // eval bar well
+    inline constexpr sf::Color evalBlack{ 50, 50, 50 };    // eval bar black side
+    inline constexpr sf::Color ecoBronze{ 150, 140, 110 }; // HUD opening label
 } // namespace pal
 
 // Shared dialog/overlay chrome (promotion picker, help overlay, dim layerish)
