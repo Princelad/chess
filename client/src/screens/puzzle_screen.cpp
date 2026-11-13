@@ -824,7 +824,7 @@ void PuzzleScreen::draw(sf::RenderWindow& window)
     const float height = static_cast<float>(App::WindowHeight);
     sf::RectangleShape panel({panelLayout_.panelEdgeWidth, height});
     panel.setPosition({px, 0.f});
-    panel.setFillColor(sf::Color(24, 26, 30)); // puzzle header slate
+    panel.setFillColor(ui::pal::puzzlePanel);
     window.draw(panel);
 
     auto& font = app_.font();
@@ -856,7 +856,7 @@ void PuzzleScreen::draw(sf::RenderWindow& window)
                         "Streak " + std::to_string(streak_.current) +
                             "   best " + std::to_string(streak_.best),
                         14);
-    streakText.setFillColor(sf::Color(160, 190, 130)); // streak sage
+    streakText.setFillColor(ui::pal::streakSage);
     streakText.setPosition({px + panelLayout_.buttonInsetX,
                             panelLayout_.puzzleStreakY});
     window.draw(streakText);
@@ -875,7 +875,7 @@ void PuzzleScreen::draw(sf::RenderWindow& window)
             line += s;
         }
         sf::Text lineText(font, safeTruncate(line, 32), 14);
-        lineText.setFillColor(sf::Color(150, 150, 165)); // solution line slate
+        lineText.setFillColor(ui::pal::solutionSlate);
         lineText.setPosition({px + panelLayout_.buttonInsetX,
                               panelLayout_.puzzleSolutionY});
         window.draw(lineText);

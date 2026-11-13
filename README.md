@@ -14,6 +14,18 @@ cmake -S . -B build && cmake --build build   # build
 Open a second terminal and run `chess-client` again. Both players enter a name
 and press Enter to connect. The server pairs them automatically.
 
+## Screenshots
+
+| | |
+|---|---|
+| ![Play hub](docs/screenshots/play_hub.png) | ![Persona select](docs/screenshots/persona_select.png) |
+| ![Puzzles](docs/screenshots/puzzles.png) | ![Puzzle Rush](docs/screenshots/puzzle_rush.png) |
+
+The play hub is the app's home: quick-pair time-control cards, the variant
+and arena entries, a collapsible connect drawer, the local bot persona
+cast, and the offline tools (Daily puzzle, Puzzle Rush, archive,
+leaderboard, settings).
+
 ## Prerequisites
 
 ### CMake and a compiler

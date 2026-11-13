@@ -892,9 +892,9 @@ fields survive as a collapsible drawer; suite green; protocol untouched
   - [x] ConnectScreen survives as a collapsible "connect" drawer inside the hub (last_host/port/name pre-filled from 10.2's persistence, time-control cycler replaces the 11.1 connect-screen cycle button)
   - [x] App entry point swaps to the hub (config `general.entry` opt-out keeps the old menu for one version; menu screen stays functional)
 
-- [ ] **17.5 Final consistency + release pass**
-  - [ ] Full sweep: every screen paints from tokens (no stragglers flagged by a debug-only "token violation" overlay build flag); sounds/animation settings apply everywhere
-  - [ ] README screenshots + "inspired by chess.com" note + version-table close-out; tag v2.0.0
+- [x] **17.5 Final consistency + release pass**
+  - [x] Full sweep: every screen paints from tokens (no stragglers flagged by a debug-only "token violation" overlay build flag); sounds/animation settings apply everywhere
+  - [x] README screenshots + "inspired by chess.com" note + version-table close-out; tag v2.0.0
 
 ---
 
