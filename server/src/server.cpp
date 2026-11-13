@@ -595,6 +595,18 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
     // its arena key, and its rematch gates refuse inside Match itself.
     std::function<Match*(Client&, Client&, bool arena)> startMatch;
 
+    // 17.3 persona lookup: a spawned bot's display name IS its persona
+    // name, so an exact match over the config table restores the preset a
+    // bot was spawned under (rematches re-run startBot with it).
+    auto botPersonaFor = [&config](const Client& bot) -> const BotPersona* {
+        if (config.botPersonas.empty())
+            return nullptr;
+        for (const auto& p : config.botPersonas)
+            if (p.name == bot.name)
+                return &p;
+        return nullptr;
+    };
+
     // Rematch hook (11.7): only fires from a finished match with both
     // seats attached on their game-over screens. Colors swap (startMatch's
     // first client takes White), the finished match keeps only its
@@ -610,10 +622,17 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
         const bool botSeatWhiteNext = bot == black;
         finished.detachAllSeats();
         Match* match = startMatch(*black, *white, false);
-        if (match != nullptr && bot != nullptr)
+        if (match != nullptr && bot != nullptr) {
+            // 17.3: the rematched bot keeps the persona it was spawned
+            // under (its name is the persona name when one was assigned).
+            const BotPersona* persona = botPersonaFor(*bot);
             match->startBot(botSeatWhiteNext ? chess::Color::White
                                              : chess::Color::Black,
-                            config.botDepth, config.botEnginePath);
+                            persona ? persona->depth : config.botDepth,
+                            config.botEnginePath,
+                            persona ? persona->movetimeMs : 0,
+                            persona ? persona->skill : -1);
+        }
     };
 
     startMatch = [&](Client& first, Client& second, bool arena) -> Match* {
@@ -1149,7 +1168,17 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
                 break;
             auto bot = std::make_unique<Client>();
             bot->isBot = true;
-            bot->name = "Bot-" + std::to_string(++botNameCounter);
+            // 17.3: bots cycle through the persona table (round-robin on
+            // the spawn counter) and take its names; without personas the
+            // flat Bot-N naming stays. The counter keeps counting in both
+            // shapes so cycling is stable across the server's lifetime.
+            ++botNameCounter;
+            const BotPersona* persona = config.botPersonas.empty()
+                ? nullptr
+                : &config.botPersonas[(botNameCounter - 1)
+                                          % config.botPersonas.size()];
+            bot->name = persona ? persona->name
+                                : ("Bot-" + std::to_string(botNameCounter));
             bot->state = ClientState::Queued;
             // Bots mirror the waiting human's time control (11.1) and game
             // variant (12.1: a Chess960 request pairs a Chess960 bot game).
@@ -1163,7 +1192,11 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
             if (botPair.has_value()) {
                 auto match = startMatch(*botPair->first, *botPair->second, false);
                 chess::Color botColor = botPair->first->isBot ? chess::Color::White : chess::Color::Black;
-                match->startBot(botColor, config.botDepth, config.botEnginePath);
+                match->startBot(botColor,
+                                persona ? persona->depth : config.botDepth,
+                                config.botEnginePath,
+                                persona ? persona->movetimeMs : 0,
+                                persona ? persona->skill : -1);
             }
         }
 

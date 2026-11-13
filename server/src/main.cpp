@@ -22,6 +22,10 @@ static void printUsage(const char* prog)
               "                    default: 30000)\n"
               "  --arena-rounds <N> Games per entrant before the arena ends\n"
               "                    (12.3, default: 3)\n"
+              "  --bot-personas <spec> Persona presets for spawned bots (17.3):\n"
+              "                    Name=depth:movetime[:skill], comma-separated\n"
+              "                    (e.g. \"Sable=4:500:6,Oracle=0:2000\"; bots\n"
+              "                    cycle through the table and take its names)\n"
               "  --log-file <path> Log to file in addition to stdout\n"
               "  --db <path>       SQLite file for accounts/games (default: off)\n"
               "  --log-level <L>   Min log level: info, warn, error (default: info)\n"
@@ -73,6 +77,14 @@ int main(int argc, char* argv[])
                 LOG_ERROR("Arena rounds must be at least 1");
                 return 1;
             }
+        } else if (arg == "--bot-personas" && i + 1 < argc) {
+            // 17.3: persona table for spawned bots; malformed entries are
+            // skipped by the parser, so a bad flag never kills startup.
+            config.botPersonas =
+                chess::server::parseBotPersonas(argv[++i]);
+            if (config.botPersonas.empty())
+                LOG_WARN("No usable bot personas parsed - falling back to "
+                         "the flat bot naming");
         } else if (arg == "--log-file" && i + 1 < argc) {
             logFile = argv[++i];
         } else if (arg == "--db" && i + 1 < argc) {

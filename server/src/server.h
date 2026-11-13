@@ -2,6 +2,9 @@
 
 #include <atomic>
 #include <string>
+#include <vector>
+
+#include "bot_personas.h"
 
 namespace chess::server {
 
@@ -26,6 +29,10 @@ struct ServerConfig {
     // Arena (12.3): fixed rounds per entrant; the arena ends once every
     // member has played this many games, then broadcasts the final table.
     int arenaRounds = 3;
+    // 17.3 persona bots: the spawned bots cycle through this cast
+    // (--bot-personas "Sable=4:500:6,Oracle=0:2000"; empty = the flat
+    // Bot-N naming at config.botDepth as before).
+    std::vector<BotPersona> botPersonas;
 };
 
 // Runs the server event loop on the calling thread. Blocks until stopped.

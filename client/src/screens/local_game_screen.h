@@ -3,6 +3,7 @@
 #include "app.h"
 #include "board_interaction.h"
 #include "boardview.h"
+#include "bot_personas.h"
 #include "game_over_transition.h"
 #include "hud.h"
 #include "move_animator.h"
@@ -24,7 +25,10 @@ namespace chess::client {
 
 class LocalGameScreen : public Screen {
 public:
-    LocalGameScreen(App& app, Color myColor, std::string enginePath, int depth);
+    // 17.3: local play always runs against a persona (skill level + depth
+    // cap + move-time budget under a named bot card).
+    LocalGameScreen(App& app, Color myColor, std::string enginePath,
+                    const personas::Persona& persona);
     ~LocalGameScreen() override;
 
     void handleEvent(const sf::Event& event) override;
@@ -79,7 +83,7 @@ private:
     GameOverTransition gameOverTransition_;
 
     std::unique_ptr<uci::UciEngine> engine_;
-    int engineDepth_;
+    personas::Persona persona_; // 17.3: strength preset (skill/depth/time)
 
     PromoCell promoCell(int index) const;
     Button backBtn_;

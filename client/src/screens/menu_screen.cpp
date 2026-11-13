@@ -1,6 +1,7 @@
 #include "menu_screen.h"
 #include "connect_screen.h"
 #include "local_game_screen.h"
+#include "persona_select_screen.h"
 #include "puzzle_screen.h"
 #include "rush_screen.h"
 #include "settings_screen.h"
@@ -34,10 +35,7 @@ MenuScreen::MenuScreen(App& app)
             if (i == 0) {
                 app_.pushScreen(std::make_unique<ConnectScreen>(app_));
             } else if (i == 1) {
-                const char* env = std::getenv("CHESS_ENGINE_PATH");
-                std::string enginePath = env ? env : "stockfish";
-                app_.pushScreen(std::make_unique<LocalGameScreen>(
-                    app_, Color::White, std::move(enginePath), 5));
+                app_.pushScreen(std::make_unique<PersonaSelectScreen>(app_));
             } else if (i == 2) {
                 app_.pushScreen(std::make_unique<PuzzleScreen>(app_));
             } else if (i == 3) {

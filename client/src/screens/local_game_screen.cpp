@@ -55,7 +55,8 @@ net::GameResult toResult(GameState state, Color sideToMove)
 }
 
 LocalGameScreen::LocalGameScreen(App& app, Color myColor,
-                                 std::string enginePath, int depth)
+                                 std::string enginePath,
+                                 const personas::Persona& persona)
     : app_(app)
     , myColor_(myColor)
     , boardView_(static_cast<float>(App::WindowWidth),
@@ -70,14 +71,14 @@ LocalGameScreen::LocalGameScreen(App& app, Color myColor,
           layout::BoardLayoutOptions{true, false, false}))
     , hud_(app_, panelLayout_)
     , myTurn_(myColor == Color::White)
-    , engineDepth_(depth)
+    , persona_(persona)
 {
     // 15.5 board entrance: opt-in config key (default off), ctor-armed.
     if (app_.config().getBool("animation.entrance", false))
         entranceSec_ = 0.f;
 
     hud_.setGame(Board::fromStartPos(), {}, {});
-    hud_.setInfo("Computer", myColor_, myTurn_, gameOver_);
+    hud_.setInfo(persona_.name, myColor_, myTurn_, gameOver_);
 
     backBtn_.setLabel("Menu");
     backBtn_.setIcon(ui::icons::IconKind::ArrowBack);
@@ -103,14 +104,17 @@ LocalGameScreen::LocalGameScreen(App& app, Color myColor,
 
     engine_->setOption("Threads", "1");
     engine_->setOption("Hash", "64");
+    // 17.3: the persona's strength preset (Skill Level is standard on
+    // UCI engines; unknown options are ignored by the engine).
+    engine_->setOption("Skill Level", std::to_string(persona_.skill));
     engine_->newGame();
     engine_->position("startpos");
 
     if (myColor_ == Color::Black) {
         myTurn_ = false;
         engineThinking_ = true;
-        hud_.setStatus("Computer thinking...", 999.f);
-        engine_->go(engineDepth_);
+        hud_.setStatus(std::string(persona_.name) + " thinking...", 999.f);
+        engine_->go(persona_.depth, persona_.movetimeMs);
     }
 }
 
@@ -210,7 +214,7 @@ void LocalGameScreen::applyMove(const chess::Move& m)
         gameOver_ = true;
         myTurn_ = false;
         hud_.setGameOver(true);
-        hud_.setInfo("Computer", myColor_, myTurn_, gameOver_);
+        hud_.setInfo(persona_.name, myColor_, myTurn_, gameOver_);
         const auto& cfg = app_.config();
         const float animDur = static_cast<float>(
             cfg.getFloat("animation.duration", 0.3));
@@ -224,10 +228,10 @@ void LocalGameScreen::applyMove(const chess::Move& m)
 
     myTurn_ = false;
     engineThinking_ = true;
-    hud_.setStatus("Computer thinking...", 999.f);
+    hud_.setStatus(std::string(persona_.name) + " thinking...", 999.f);
     engine_->position(hud_.navigator().finalBoard().toFen());
-    engine_->go(engineDepth_);
-    hud_.setInfo("Computer", myColor_, myTurn_, gameOver_);
+    engine_->go(persona_.depth, persona_.movetimeMs);
+    hud_.setInfo(persona_.name, myColor_, myTurn_, gameOver_);
 }
 
 void LocalGameScreen::deselect()
@@ -327,7 +331,7 @@ bool LocalGameScreen::applyEngineMove()
     engineThinking_ = false;
     hud_.setStatus("", 0.f);
     myTurn_ = true;
-    hud_.setInfo("Computer", myColor_, myTurn_, gameOver_);
+    hud_.setInfo(persona_.name, myColor_, myTurn_, gameOver_);
     return true;
 }
 
@@ -339,7 +343,7 @@ void LocalGameScreen::checkGameOver()
     gameOver_ = true;
     myTurn_ = false;
     hud_.setGameOver(true);
-    hud_.setInfo("Computer", myColor_, myTurn_, gameOver_);
+    hud_.setInfo(persona_.name, myColor_, myTurn_, gameOver_);
     const auto& cfg = app_.config();
     const float animDur = static_cast<float>(
         cfg.getFloat("animation.duration", 0.3));

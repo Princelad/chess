@@ -3,6 +3,7 @@ add_library(chessserver STATIC
     src/matchmaker.cpp
     src/match.cpp
     src/tournament.cpp
+    src/bot_personas.cpp
     src/server.cpp
     src/log.cpp)
 

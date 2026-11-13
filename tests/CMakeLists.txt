@@ -75,7 +75,9 @@ if(BUILD_TESTING)
         client/move_quality_test.cpp
         client/analysis_notes_test.cpp
         client/rush_test.cpp
-        client/daily_test.cpp)
+        client/daily_test.cpp
+        client/persona_test.cpp
+        server/bot_personas_test.cpp)
 
     target_link_libraries(chess-tests PRIVATE chesscore chessnet chessclient chessserver chessuci chessdb GTest::gtest_main)
     target_compile_definitions(chess-tests PRIVATE
