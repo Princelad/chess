@@ -882,10 +882,10 @@ fields survive as a collapsible drawer; suite green; protocol untouched
   - [x] Date-seeded deterministic selection from the bundled set (year+day hash → shard into the 12.2 list); "Daily" card entry opens PuzzleScreen in daily mode; solving marks `puzzle.daily_last`/`daily_streak` (config) and days skipped reset the streak
   - [x] All-time solves + daily stats panel inside PuzzleScreen header
 
-- [ ] **17.3 Persona bots (`client/src/bot_personas.{h,cpp}` + server config table)**
-  - [ ] Named difficulty personas for LOCAL play — fresh, neutral names of our own (NOT chess.com's bot cast): depth presets + style caps (an engine-option set like Skill Level / move-time budgets; zero protocol)
-  - [ ] Server-side configurable persona table (`--bot-personas` config) mapping persona names to depth/preset pairs so spawned server bots (8.3's `botSpawnQueue` path, unchanged) play at matching strength — still zero wire changes
-  - [ ] Persona cards from 14.2/14.3 render like player cards on the 15.2 layout
+- [x] **17.3 Persona bots (`client/src/bot_personas.{h,cpp}` + server config table)**
+  - [x] Named difficulty personas for LOCAL play — fresh, neutral names of our own (NOT chess.com's bot cast): depth presets + style caps (an engine-option set like Skill Level / move-time budgets; zero protocol)
+  - [x] Server-side configurable persona table (`--bot-personas` config) mapping persona names to depth/preset pairs so spawned server bots (8.3's `botSpawnQueue` path, unchanged) play at matching strength — still zero wire changes
+  - [x] Persona cards from 14.2/14.3 render like player cards on the 15.2 layout
 
 - [ ] **17.4 Play hub (`client/src/screens/play_hub_screen.{h,cpp}`)**
   - [ ] Chess.com-style home: quick-queue TC cards (bullet/blitz/rapid/classical from 11.1's presets), variant cards (standard/Chess960 via 12.1, arena from 12.3), vs-Bot persona section, Archive/Leaderboard/Puzzles/Spectate/Settings entries (9.1 menu entries all move here, none lost)
