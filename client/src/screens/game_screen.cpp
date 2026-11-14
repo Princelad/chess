@@ -611,6 +611,16 @@ void GameScreen::handleEvent(const sf::Event& event)
             return;
         }
 
+        // Tier 4: the help overlay gates every other input — keys beneath
+        // it must not drive the board (Enter used to select/commit an
+        // invisible move while the overlay covered the screen). Escape
+        // above and the Help toggle here are the only exits.
+        if (showingHelp_) {
+            if (keyToAction(kp->code, kp->shift) == KeyboardAction::Help)
+                showingHelp_ = false;
+            return;
+        }
+
         if (promo_) {
             if (kp->code == sf::Keyboard::Key::Space) { cancelPromotion(); return; }
             if (auto t = promoTypeForKey(kp->code)) {
@@ -692,6 +702,10 @@ void GameScreen::handleEvent(const sf::Event& event)
     if (const auto* te = event.getIf<sf::Event::TextEntered>()) {
         if (chatInput_.handleEvent(*te, {0.f, 0.f})) return;
     }
+
+    // Tier 4: clicks beneath the help overlay do nothing (the overlay
+    // covers the board; a click there is a mis-aim, not a move).
+    if (showingHelp_) return;
 
     sf::Vector2f local(0.f, 0.f);
     if (const auto* mm = event.getIf<sf::Event::MouseMoved>())

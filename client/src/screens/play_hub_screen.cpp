@@ -264,6 +264,14 @@ void PlayHubScreen::draw(sf::RenderWindow& window)
 {
     auto& font = app_.font();
 
+    // Tier 4: dim the left-zone affordances while the drawer is open —
+    // the drawer owns every event then (handleEvent routes wholesale), so
+    // the cards must not look interactive beneath it.
+    for (auto& b : quickBtns_) b.setEnabled(!drawerOpen_);
+    variantBtn_.setEnabled(!drawerOpen_);
+    arenaBtn_.setEnabled(!drawerOpen_);
+    drawerBtn_.setEnabled(!drawerOpen_);
+
     // ── Left zone: always visible ───────────────────────────────────────
     sf::Text title(font, "Chess", ui::type::Display);
     title.setFillColor(ui::pal::white);

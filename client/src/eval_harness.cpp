@@ -80,6 +80,7 @@ public:
         engine_->onInfo([this](const uci::SearchInfo& si) {
             std::lock_guard<std::mutex> lock(infoMutex_);
             lastInfo_ = si;
+            gotInfo_ = true;
         });
         return true;
     }
@@ -94,6 +95,7 @@ public:
         {
             std::lock_guard<std::mutex> lock(infoMutex_);
             lastInfo_ = uci::SearchInfo{};
+            gotInfo_ = false;
         }
         engine_->position(fen);
         engine_->go(0, movetimeMs, false);
@@ -103,6 +105,11 @@ public:
 
         {
             std::lock_guard<std::mutex> lock(infoMutex_);
+            // No info line at all (audit: an engine that streams nothing
+            // would be recorded as a fake 0.00 "even" eval — its default
+            // score_cp is 0). Treat as an invalid node instead; the
+            // report/graph refuse unvalid nodes rather than plotting it.
+            if (!gotInfo_) return false;
             // Mate scores bypass score_cp on some engines; record both.
             out.scoreCp = lastInfo_.score_cp;
             out.isMate = lastInfo_.score_is_mate;
@@ -121,6 +128,7 @@ private:
     std::unique_ptr<uci::UciEngine> engine_;
     std::mutex infoMutex_;
     uci::SearchInfo lastInfo_;
+    bool gotInfo_ = false;
 };
 
 // --------------------------------------------------------------------------

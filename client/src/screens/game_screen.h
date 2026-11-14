@@ -65,7 +65,6 @@ private:
     // either way — sent, or dropped as "now illegal".
     void queuePremove(int fromFile, int fromRank, int toFile, int toRank);
     void flushPremove();
-    void setPremoveHighlight();
     sf::FloatRect autoQueenRect() const;
     std::optional<chess::PieceType> promoTypeForKey(sf::Keyboard::Key key) const;
     PromoCell promoCell(int index) const;
