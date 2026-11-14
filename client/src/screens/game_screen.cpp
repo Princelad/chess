@@ -74,10 +74,13 @@ GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName,
     // Prime the clocks from the agreed time control (11.1): the server
     // starts White's clock at match creation, so both displays begin at
     // base time; each ServerMoveMsg re-syncs real authority afterwards.
+    // Audit 2.5: prime BOTH sides — priming only White left the other
+    // card reading 0:00.0 until the first move's sync.
     timeControl_ = timeControl;
     const auto tc = chess::net::parseTimeControl(timeControl_);
     if (!tc.unlimited)
-        hud_.syncClocks(Color::White, tc.baseSeconds * 60000);
+        hud_.syncClocks(tc.baseSeconds * 60000, tc.baseSeconds * 60000,
+                        Color::White);
 
     chatInput_.setMaxLength(MaxChatInput);
     chatInput_.setPlaceholder("Type a message...");
@@ -444,7 +447,13 @@ void GameScreen::syncViewHighlights()
 void GameScreen::commitMove(const chess::Move& m)
 {
     std::string san = chess::san::toSan(hud_.navigator().finalBoard(), m);
-    app_.connection().send(chess::net::MoveMsg{san});
+    // Audit 2.11: a move committed during a drop is silently lost (the
+    // server never got it) while the UI claimed "opponent thinking".
+    // Surface it; the reconnect flow restores the truth.
+    if (!app_.connection().send(chess::net::MoveMsg{san})) {
+        hud_.setStatus("Connection lost - move not sent", 3.f);
+        return;
+    }
     myTurn_ = false;
     hud_.setInfo(opponentName_, myColor_, myTurn_, gameOver_);
     deselect();
@@ -868,7 +877,12 @@ void GameScreen::update(float dtSec)
                 const float duration = static_cast<float>(
                     cfg.getFloat("animation.duration", 0.3));
                 if (cfg.getBool("animation.enabled", true) && duration > 0.f) {
-                    anim_.start(*parsed, before, duration);
+                    // Audit 2.7: no animation while the player is browsing
+                    // the history (9.7 contract) — the echo used to
+                    // ghost-slide on the historical board and vanish the
+                    // piece standing on the live move's destination there.
+                    if (hud_.navigator().atEnd())
+                        anim_.start(*parsed, before, duration);
                 }
                 app_.sounds().playMove(before, *parsed);
                 hud_.navigator().appendMove(*parsed, move->san);
@@ -955,13 +969,17 @@ void GameScreen::update(float dtSec)
             applySpectateState(*spectateState);
         }
         else if (auto* reconn = std::get_if<chess::net::OpponentReconnectingMsg>(&msg)) {
-            hud_.setOpponentConnection(2);
+            // Audit 2.4: write the state member — update() projects it
+            // onto the HUD every frame, so a direct HUD write here was
+            // overwritten one pass later (the "away" icon flickered and
+            // reverted for the whole grace window).
+            opponentConnection_ = 2;
             hud_.setStatus("Opponent lost connection",
                            static_cast<float>(reconn->graceSeconds));
             addSystemChat("Opponent lost connection");
         }
         else if (std::holds_alternative<chess::net::OpponentResumedMsg>(msg)) {
-            hud_.setOpponentConnection(1);
+            opponentConnection_ = 1;
             hud_.setStatus("Opponent reconnected", 3.f);
             addSystemChat("Opponent reconnected");
         }
@@ -998,6 +1016,14 @@ void GameScreen::update(float dtSec)
 // game-over screen after the give-up window.
 void GameScreen::updateReconnect(float dtSec)
 {
+    // Audit 2.9: a spectator has no seat token and 12.4's egress is the
+    // connect screen — the old instant give-up pushed a GameOverScreen
+    // (Abort) instead of just leaving for the lobby.
+    if (spectator_) {
+        reconnectPhase_ = ReconnectPhase::None;
+        app_.switchScreen(std::make_unique<ConnectScreen>(app_));
+        return;
+    }
     // Defense: a game session with no token has nothing to resume — keep
     // the old instant "Connection lost" behavior.
     if (resumeToken_.empty())
@@ -1125,6 +1151,11 @@ void GameScreen::applyResume(const chess::net::ResumeStateMsg& msg)
     promo_.reset();
     premove_.reset();
     annotations_.clear();
+    // Audit 2.6: a resume can land mid-slide (the drop happened right
+    // after committing a move — exactly when the reconnect loop arms).
+    // drawPieces skips the animation's destination square while a slide
+    // is live, so the rebuilt board would hide that piece.
+    anim_.cancel();
     drawOfferPending_ = false;
     takebackOfferPending_ = false;
     chatLog_.clear();

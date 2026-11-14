@@ -193,6 +193,10 @@ void ConnectScreen::cancelAttempt()
         return;
     app_.connection().disconnect();
     phase_ = ConnectPhase::Idle;
+    // Audit 2.1: the browse target must go with the attempt — a stale
+    // target dispatched openBrowseTarget() on the NEXT login's profile
+    // arrival, dumping the user into a flow they had cancelled.
+    browseTarget_ = BrowseTarget::None;
     status_.setText("");
     error_.setText("");
     for (auto& field : fields_) field.setEnabled(true);
@@ -369,14 +373,20 @@ void ConnectScreen::startBrowse(BrowseTarget target)
 
 void ConnectScreen::handleEvent(const sf::Event& event)
 {
-    if (phase_ == ConnectPhase::WaitingForOpponent) return;
-
+    // Audit 2.2: Escape must work while queued too — the old
+    // WaitingForOpponent early-return dropped every event, turning the
+    // queue screen into a dead end (the only exits were an opponent
+    // arriving or killing the process).
     if (const auto* kp = event.getIf<sf::Event::KeyPressed>()) {
         if (kp->code == sf::Keyboard::Key::Escape) {
             if (phase_ != ConnectPhase::Idle) app_.connection().disconnect();
             app_.goBack();
             return;
         }
+    }
+    if (phase_ == ConnectPhase::WaitingForOpponent) return;
+
+    if (const auto* kp = event.getIf<sf::Event::KeyPressed>()) {
         if (kp->code == sf::Keyboard::Key::Tab) {
             cycleField(kp->shift);
             return;

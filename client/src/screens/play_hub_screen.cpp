@@ -173,9 +173,11 @@ void PlayHubScreen::toggleDrawer()
 void PlayHubScreen::quickQueue(const std::string& tc)
 {
     // The drawer picks the preset and joins with the persisted host/port/
-    // name; without a name it just opens for manual entry.
-    drawer_->quickQueueTc(tc);
-    drawerOpen_ = true;
+    // name; without a name it just opens for manual entry (audit 2.10:
+    // the drawer only expands when the quick attempt could not start —
+    // a successful queue hands the screen over on pairing anyway).
+    if (!drawer_->quickQueueTc(tc))
+        drawerOpen_ = true;
 }
 
 void PlayHubScreen::quickBrowse(BrowseTarget target)
