@@ -55,6 +55,16 @@ Glicko2 applyGames(const Glicko2& player, const std::vector<RatedOpponent>& game
         outcomeSum += gj * (game.score - ej);
     }
     const double v = 1.0 / varianceInverse;
+    // Audit S1 guard: a corrupted/hand-edited DB row with an absurd rating
+    // gap can saturate every Eⱼ to 0 or 1, making varianceInverse 0 — from
+    // here every downstream value would be NaN and a NaN would be WRITTEN
+    // into the ratings tables (NaN ≠ NaN then keeps change-detection
+    // firing forever). Degenerate variance = treat as an idle period.
+    if (!(varianceInverse > 0.0)) {
+        const double grown = std::sqrt(phi * phi + player.volatility * player.volatility);
+        const double capped = std::min(grown, toPhi(MaxDeviation));
+        return {player.rating, toDeviation(capped), player.volatility};
+    }
     const double delta = v * outcomeSum;
 
     // Step 5: new volatility, following the paper's iterative procedure.
@@ -83,6 +93,10 @@ Glicko2 applyGames(const Glicko2& player, const std::vector<RatedOpponent>& game
     double fA = fOfX(paperA);
     double fB = fOfX(paperB);
     while (std::abs(paperB - paperA) > Epsilon) {
+        // Audit S1 guard: a degenerate secant (fA == fB) would divide by
+        // zero and push NaN through the remaining steps.
+        if (fB == fA)
+            break;
         double c = paperA + (paperA - paperB) * fA / (fB - fA);
         double fC = fOfX(c);
         if (fC * fB <= 0) {   // paper, 2022 update: '<' replaced by '<='

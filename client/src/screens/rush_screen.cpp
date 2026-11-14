@@ -57,9 +57,13 @@ void RushScreen::startRun(rush::Mode mode)
         return;
 
     // Per-session feed: a fresh seed each run, recorded in config so the
-    // shuffle stays reproducible within the session (17.1).
-    seed_ = static_cast<std::uint64_t>(
-        std::chrono::steady_clock::now().time_since_epoch().count());
+    // shuffle stays reproducible within the session (17.1). Audit: the
+    // seed is now exactly the 31-bit value that gets STORED — the old
+    // full-64-bit seed truncated on write, so the recorded value could
+    // never reproduce the run it claims to describe.
+    seed_ = (static_cast<std::uint64_t>(
+        std::chrono::steady_clock::now().time_since_epoch().count() >> 12))
+        & 0x7FFFFFFFull;
     app_.config().setInt("puzzle.rush_seed",
                          static_cast<int>(seed_ & 0x7FFFFFFF));
     app_.config().save();

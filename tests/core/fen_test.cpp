@@ -162,6 +162,10 @@ TEST(Fen, RejectsMalformedStrings)
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w kqkq - 0 1",
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR W KQkq - 0 1",
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 0",
+        // Audit 3.4: overflowing clock fields reject instead of running
+        // signed overflow (UB) on a hostile FEN.
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 99999999999999999999 1",
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 99999999999999999999",
     };
     for (const char* fen : invalid) {
         EXPECT_FALSE(fromFen(fen).has_value()) << "expected rejection: " << fen;

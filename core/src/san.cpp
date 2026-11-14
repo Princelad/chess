@@ -121,8 +121,12 @@ std::optional<Move> fromSan(const Board& board, const std::string& san)
 
     std::string s = san;
 
-    // Strip trailing +/#
-    while (!s.empty() && (s.back() == '+' || s.back() == '#')) {
+    // Strip trailing check/mate marks and NAG-style annotation glyphs
+    // (audit 3.5): annotated PGN movetext legitimately carries "!"/"?",
+    // and the old strip rejected every such token — annotated games
+    // silently failed to import whole.
+    while (!s.empty() && (s.back() == '+' || s.back() == '#'
+                          || s.back() == '!' || s.back() == '?')) {
         s.pop_back();
     }
 

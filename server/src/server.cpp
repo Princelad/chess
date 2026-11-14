@@ -15,6 +15,7 @@
 
 #include <chess/chess960.h>
 #include <chess/db/database.h>
+#include <chess/db/auth.h>
 #include <chess/db/game_store.h>
 #include <chess/db/player_store.h>
 #include <chess/net/protocol.h>
@@ -30,7 +31,11 @@
 
 using namespace std::chrono_literals;
 
-static constexpr std::size_t MaxPacketSize = 4096;
+// Audit 3.2: 4096 could not hold a long game's resume payload (~450+ plies
+// of SAN ≈ 4.6 KB) — reconnecting seats got "Packet too large" and lost
+// the rated game. 16384 fits any realistic game; MUST stay in sync with
+// client/src/connection.cpp's constant.
+static constexpr std::size_t MaxPacketSize = 16384;
 static constexpr int MaxBadMessages = 3;
 static constexpr std::size_t MaxNameLength = 32;
 
@@ -218,6 +223,14 @@ static void handleSpectate(Client& client, const chess::net::SpectateMsg& msg,
     if (client.state != ClientState::Connected) {
         sendTo(client, chess::net::ErrorMsg{
             "You have a game of your own — spectate afterwards"});
+        return;
+    }
+
+    // Audit 3.6: the spectate target used to be echoed verbatim into the
+    // error string and the log — a control-byte payload gets the same
+    // charset gate the join verbs apply (generic message, nothing echoed).
+    if (!msg.name.empty() && !chess::db::validAccountName(msg.name)) {
+        sendTo(client, chess::net::ErrorMsg{"No games in progress"});
         return;
     }
 
@@ -1016,7 +1029,16 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
                                     record.playedAt = row->playedAt;
                                     record.rated =
                                         row->whiteId.has_value() && row->blackId.has_value();
-                                    sendTo(client, record);
+                                    // Audit 3.2: refuse records whose payload
+                                    // could never survive the packet budget
+                                    // instead of hard-disconnecting the
+                                    // browser with "Packet too large".
+                                    if (record.sanMoves.size() > 14000) {
+                                        sendTo(client, chess::net::ErrorMsg{
+                                            "Game record too large to replay"});
+                                    } else {
+                                        sendTo(client, record);
+                                    }
                                 }
                             }
                         }
@@ -1054,6 +1076,11 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
                                 sendTo(client, chess::net::ErrorMsg{"Name required"});
                             } else if (arenaJoin->name.size() > MaxNameLength) {
                                 sendTo(client, chess::net::ErrorMsg{"Name too long"});
+                            } else if (!chess::db::validAccountName(arenaJoin->name)) {
+                                // Audit 3.6: the account charset rules
+                                // apply to guest payload names too.
+                                sendTo(client, chess::net::ErrorMsg{
+                                    "Name contains invalid characters"});
                             } else if (players != nullptr
                                        && players->byName(arenaJoin->name).has_value()) {
                                 sendTo(client, chess::net::ErrorMsg{
@@ -1226,6 +1253,16 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
                                     }
                                     if (join->name.size() > MaxNameLength) {
                                         sendTo(client, chess::net::ErrorMsg{"Name too long"});
+                                        return;
+                                    }
+                                    // Audit 3.6: guests get the account
+                                    // charset rules — a control byte or a
+                                    // newline used to reach PGN export
+                                    // headers, chat lines and archive rows
+                                    // verbatim (accounts could never).
+                                    if (!chess::db::validAccountName(join->name)) {
+                                        sendTo(client, chess::net::ErrorMsg{
+                                            "Name contains invalid characters"});
                                         return;
                                     }
                                     // An account is gated by its password, but a

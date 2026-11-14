@@ -13,7 +13,13 @@ using chess::net::deserializeServer;
 
 namespace chess::client {
 
-static constexpr std::size_t MaxPacketSize = 4096;
+// Audit 3.2: 4096 could not hold a long game's resume/archive payload —
+// ~450+ plies of SAN is ~4.6 KB, so a reconnect (or a history browse of a
+// long game) hard-disconnected the client with "Packet too large" and the
+// rated seat was lost. 16384 keeps the sanity limit while fitting any
+// realistic game (~4000 plies of disambiguated SAN); both sides must keep
+// this value in sync.
+static constexpr std::size_t MaxPacketSize = 16384;
 static constexpr auto ConnectTimeout = sf::seconds(3);
 
 Connection::Connection(std::chrono::steady_clock::duration pingInterval,
@@ -120,7 +126,12 @@ void Connection::poll()
     auto now = std::chrono::steady_clock::now();
 
     if (now - lastPingSent_ >= pingInterval_) {
-        outbox_.push(chess::net::PingMsg{});
+        // Audit 3.x-adjacent: the heartbeat rides the same outbox cap as
+        // user traffic — the old direct push could grow the queue without
+        // bound while the link congested (drainOutbox would catch up, but
+        // the cap is the honest admission that the link is behind).
+        if (outbox_.size() < MaxOutboxSize)
+            outbox_.push(chess::net::PingMsg{});
         lastPingSent_ = now;
     }
 

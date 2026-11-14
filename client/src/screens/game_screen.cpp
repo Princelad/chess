@@ -222,8 +222,11 @@ void GameScreen::applySpectateState(const chess::net::SpectateStateMsg& msg)
 
     // 16.4 chip layer: cached-only — the spectate view colors its move list
     // when a report for this game identity was already computed elsewhere
-    // (never spawns an engine from a watch session).
-    const EvalKey key = evalKeyFor(0, startFen_, msg.sans);
+    // (never spawns an engine from a watch session). Audit 3.8: the key's
+    // FEN half must be the concrete start board's FEN — a standard-start
+    // game's startFen_ is EMPTY and the empty-vs-FEN keys never matched
+    // the Report/Analysis screens' keys, so chips silently never showed.
+    const EvalKey key = evalKeyFor(0, startBoard().toFen(), msg.sans);
     EvalHarness& harness = app_.evalHarness();
     if (harness.progress(key).state == EvalState::Done) {
         if (auto report = harness.report(key)) {

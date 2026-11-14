@@ -574,8 +574,25 @@ TimeControl parseTimeControl(std::string_view tc)
     if (!digitsOnlyAll(base) || !digitsOnlyAll(increment))
         return out;
 
-    out.baseSeconds = std::stoll(std::string(base));
-    out.incrementSeconds = std::stoll(std::string(increment));
+    // Overflow-safe parse (audit 3.3): stoll throws out_of_range on
+    // 17+ digit fields, and this function's contract is "malformed
+    // degrades to unlimited, never throws" — a one-new-callsite-away
+    // process killer otherwise. Any field past the seconds-per-millennium
+    // scale is a malformed payload.
+    const auto parseSeconds = [](std::string_view digits) -> long long {
+        constexpr long long kMax = 999999999999999LL; // 15 digits
+        long long value = 0;
+        for (char c : digits) {
+            value = value * 10 + (c - '0');
+            if (value > kMax)
+                return -1; // sentinel: absurd field
+        }
+        return value;
+    };
+    out.baseSeconds = parseSeconds(base);
+    out.incrementSeconds = parseSeconds(increment);
+    if (out.baseSeconds < 0 || out.incrementSeconds < 0)
+        return out; // unlimited
     if (out.baseSeconds > 0 || out.incrementSeconds > 0)
         out.unlimited = false;
     return out;

@@ -690,6 +690,21 @@ TEST(ParseTimeControl, MalformedIsUnlimited)
     EXPECT_TRUE(parseTimeControl("0+0").unlimited); // zeroed = no clock
 }
 
+// Audit 3.3: absurd digit fields degrade to unlimited, never throw —
+// stoll's out_of_range used to escape the digits-only validation (which
+// happily passes for any number of digits) and would have terminated the
+// process at a new callsite.
+TEST(ParseTimeControl, OverflowingDigitsAreUnlimited)
+{
+    EXPECT_TRUE(parseTimeControl("99999999999999999999+0").unlimited);
+    EXPECT_TRUE(parseTimeControl("0+99999999999999999999").unlimited);
+    EXPECT_TRUE(parseTimeControl("99999999999999999999+1").unlimited);
+    // The legal 15-digit ceiling still parses.
+    auto tc = parseTimeControl("999999999999999+0");
+    ASSERT_FALSE(tc.unlimited);
+    EXPECT_EQ(tc.baseSeconds, 999999999999999LL);
+}
+
 TEST(ProtocolRoundTrip, ServerGameOverDraw)
 {
     ServerMessage msg = GameOverMsg{GameResult::Draw, GameOverReason::Stalemate};
