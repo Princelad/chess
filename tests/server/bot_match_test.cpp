@@ -5,6 +5,7 @@
 
 #include <chess/net/messages.h>
 #include <chess/net/protocol.h>
+#include <chess/chess960.h>
 
 #include "client.h"
 #include "match.h"
@@ -20,6 +21,15 @@ protected:
     void SetUp() override {
         const char* mockPath = std::getenv("MOCK_ENGINE_PATH");
         enginePath_ = mockPath ? mockPath : "mock_engine.py";
+        // Audit mocks live beside the main mock (same directory).
+        {
+            auto slash = enginePath_.find_last_of('/');
+            std::string dir = slash == std::string::npos ? std::string(".")
+                                                         : enginePath_.substr(0, slash);
+            noneEnginePath_ = dir + "/mock_engine_none.py";
+            onceEnginePath_ = dir + "/mock_engine_once.py";
+            fenEnginePath_ = dir + "/mock_engine_fen.py";
+        }
 
         ASSERT_EQ(listener_.listen(0), sf::Socket::Status::Done);
         port_ = listener_.getLocalPort();
@@ -74,6 +84,9 @@ protected:
     Client human_;
     Client bot_;
     std::string enginePath_;
+    std::string noneEnginePath_;
+    std::string onceEnginePath_;
+    std::string fenEnginePath_;
 };
 
 TEST_F(BotMatchTest, BotPlaysBlack)
@@ -145,6 +158,132 @@ TEST_F(BotMatchTest, BotClient)
 
     match.startBot(chess::Color::Black, 1, enginePath_);
     EXPECT_EQ(match.botClient(), &bot_);
+}
+
+// Audit 1.3: a consumed-but-invalid bestmove ("(none)", illegal on the
+// live board) must not leave the bot wedged forever — the old
+// `if (!move) return;` treated the rejection as "still searching", so a
+// clocked game ended with the bot flagging. The bot now resigns.
+TEST_F(BotMatchTest, BotResignsWhenBestmoveIsUnusable)
+{
+    human_.state = ClientState::InMatch;
+    bot_.state = ClientState::InMatch;
+
+    Match match(human_, bot_);
+    match.startBot(chess::Color::Black, 1, noneEnginePath_);
+
+    match.handleMessage(human_, chess::net::MoveMsg{"e4"});
+    pollUntilBotDone(match);
+
+    EXPECT_FALSE(match.isBotTurn());
+    EXPECT_FALSE(match.isActive());
+
+    // The human's own move echo precedes the game-over message.
+    auto echo = recvWait();
+    ASSERT_TRUE(echo.has_value());
+    EXPECT_TRUE(std::get_if<chess::net::ServerMoveMsg>(&*echo));
+
+    auto msg = recvWait();
+    ASSERT_TRUE(msg.has_value());
+    auto* over = std::get_if<chess::net::GameOverMsg>(&*msg);
+    ASSERT_NE(over, nullptr);
+    EXPECT_EQ(over->result, chess::net::GameResult::WhiteWins);
+    EXPECT_EQ(over->reason, chess::net::GameOverReason::Resignation);
+}
+
+// Audit 1.3, Dead branch: an engine that dies mid-match must not wedge
+// the game either — the bot's next think attempt ends it as a
+// resignation.
+TEST_F(BotMatchTest, BotResignsWhenEngineDies)
+{
+    human_.state = ClientState::InMatch;
+    bot_.state = ClientState::InMatch;
+
+    Match match(human_, bot_);
+    match.startBot(chess::Color::Black, 1, onceEnginePath_);
+
+    // First bot move works (the engine is still alive).
+    match.handleMessage(human_, chess::net::MoveMsg{"e4"});
+    pollUntilBotDone(match);
+    EXPECT_TRUE(match.isActive());
+    auto echo = recvWait(); // drain 1...e5's echo
+    ASSERT_TRUE(echo.has_value());
+    EXPECT_TRUE(std::get_if<chess::net::ServerMoveMsg>(&*echo));
+
+    // Second think: the engine process is gone.
+    match.handleMessage(human_, chess::net::MoveMsg{"Nf3"});
+    pollUntilBotDone(match);
+
+    EXPECT_FALSE(match.isBotTurn());
+    EXPECT_FALSE(match.isActive());
+
+    // Drain queued move messages until the game-over lands.
+    for (int i = 0; i < 8; ++i) {
+        auto msg = recvWait(200);
+        if (!msg.has_value())
+            break;
+        if (auto* over = std::get_if<chess::net::GameOverMsg>(&*msg)) {
+            EXPECT_EQ(over->result, chess::net::GameResult::WhiteWins);
+            EXPECT_EQ(over->reason, chess::net::GameOverReason::Resignation);
+            return;
+        }
+    }
+    FAIL() << "no GameOverMsg after the dead engine's resignation";
+}
+
+// Audit 1.4: a Chess960 bot that must move FIRST searches the match's
+// start FEN, not "startpos" (the SP #518 sanity half of the non-standard
+// test below — the FEN-aware mock plays Nc3 from the standard-looking
+// placement).
+TEST_F(BotMatchTest, BotSearchesTheChess960StartFen)
+{
+    human_.state = ClientState::InMatch;
+    bot_.state = ClientState::InMatch;
+
+    // Bot as White on the rolled SP: the 12.1 server rolls at pairing;
+    // the unit pins the startBot path with the standard id.
+    const auto sp = chess::chess960StartFen(518);
+    ASSERT_TRUE(sp.has_value());
+    Match match(bot_, human_, "", *sp);
+    match.startBot(chess::Color::White, 1, fenEnginePath_);
+
+    pollUntilBotDone(match);
+    EXPECT_FALSE(match.isBotTurn());
+    EXPECT_TRUE(match.isActive());
+
+    auto msg = recvWait();
+    ASSERT_TRUE(msg.has_value());
+    auto* move = std::get_if<chess::net::ServerMoveMsg>(&*msg);
+    ASSERT_NE(move, nullptr);
+    EXPECT_EQ(move->san, "Nc3");
+}
+
+// Audit 1.4, the real hazard: a NON-standard SP. The old hardcoded
+// "startpos" search made the bot answer for the wrong position, the move
+// was rejected on the live board, and (pre-1.3) the match wedged. The
+// FEN-aware mock plays b1c3 only when a knight actually sits on b1, so
+// it distinguishes the two searches.
+TEST_F(BotMatchTest, BotSearchesNonStandardChess960StartFen)
+{
+    human_.state = ClientState::InMatch;
+    bot_.state = ClientState::InMatch;
+
+    // SP #1's back rank has no knight on b1 — the standard start does.
+    const auto sp = chess::chess960StartFen(1);
+    ASSERT_TRUE(sp.has_value());
+    ASSERT_NE(*sp, *chess::chess960StartFen(518));
+    Match match(bot_, human_, "", *sp);
+    match.startBot(chess::Color::White, 1, fenEnginePath_);
+
+    pollUntilBotDone(match);
+    // The bot must have moved (not wedged, not resigned).
+    EXPECT_FALSE(match.isBotTurn());
+    EXPECT_TRUE(match.isActive());
+    auto msg = recvWait();
+    ASSERT_TRUE(msg.has_value());
+    auto* move = std::get_if<chess::net::ServerMoveMsg>(&*msg);
+    ASSERT_NE(move, nullptr);
+    EXPECT_EQ(move->san, "e4");
 }
 
 TEST_F(BotMatchTest, HumanDisconnectEndsGame)

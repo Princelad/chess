@@ -233,6 +233,9 @@ private:
     Seat seats_[2]; // [0] = White, [1] = Black
     bool active_ = true;
     bool drawOfferPending_ = false;
+    // Audit 1.5: who made the pending draw offer (2 = none). A player
+    // cannot accept their own offer — that was a one-packet rated draw.
+    std::size_t drawOffererIdx_ = 2;
 
     // Takeback (11.3): the pending request's asker seat index while the
     // offer is out.

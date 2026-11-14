@@ -53,6 +53,19 @@ public:
                                      std::chrono::milliseconds timeout = std::chrono::seconds(30));
     std::optional<Move> tryGetBestMove(const Board& board);
 
+    // Tri-state poll (audit 1.3): tryGetBestMove cannot distinguish
+    // "engine still searching" from "answer consumed but unusable" and
+    // "engine died" — a caller that treats nullopt as not-yet wedges
+    // forever once a bad bestmove has been consumed (the answer is gone
+    // from the buffer, so every later poll returns empty too).
+    enum class PollResult {
+        NoAnswer, // still searching — poll again later
+        Move,     // out carries a legal move for the given board
+        Rejected, // bestmove consumed but illegal/(none) for this board
+        Dead,     // engine process is gone
+    };
+    PollResult pollBestMove(const Board& board, Move& out);
+
     void onInfo(std::function<void(const SearchInfo&)> cb);
     void onLine(std::function<void(const std::string&)> cb);
 

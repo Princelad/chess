@@ -163,11 +163,7 @@ void UciEngine::quit()
         m_stdoutFd = -1;
     }
 
-    if (m_reader.joinable()) {
-        m_reader.join();
-    }
-
-    closeProcess();
+    closeProcess(); // joins the reader (closeProcess owns that now)
 }
 
 std::optional<Move> UciEngine::waitBestMove(const Board& board,
@@ -200,6 +196,30 @@ std::optional<Move> UciEngine::tryGetBestMove(const Board& board)
     m_bestmove.clear();
     if (uciStr == "(none)") return std::nullopt;
     return fromUci(board, uciStr);
+}
+
+UciEngine::PollResult UciEngine::pollBestMove(const Board& board, Move& out)
+{
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        if (!m_bestmove.empty()) {
+            std::string uciStr = m_bestmove;
+            m_bestmove.clear();
+            if (uciStr != "(none)") {
+                if (auto move = fromUci(board, uciStr)) {
+                    out = *move;
+                    return PollResult::Move;
+                }
+                // Consumed but unusable: the caller must stop waiting on
+                // this answer — it will never come back (audit 1.3).
+                return PollResult::Rejected;
+            }
+            return PollResult::Rejected; // "(none)"
+        }
+    }
+    // No answer queued: is the process even alive? (The answer could
+    // land between this check and the caller's next poll — harmless.)
+    return isRunning() ? PollResult::NoAnswer : PollResult::Dead;
 }
 
 void UciEngine::onInfo(std::function<void(const SearchInfo&)> cb)
@@ -317,6 +337,12 @@ void UciEngine::closeProcess()
 {
     if (m_stdinFd >= 0) { ::close(m_stdinFd); m_stdinFd = -1; }
     if (m_stdoutFd >= 0) { ::close(m_stdoutFd); m_stdoutFd = -1; }
+    // Audit 1.3 follow-up: the reader must be joined here, not only in
+    // quit() — a Match destroyed with an already-dead engine skips quit()
+    // (m_running is false) and used to destroy a still-joinable reader
+    // thread, which calls std::terminate and takes the server down.
+    if (m_reader.joinable())
+        m_reader.join();
     if (m_pid > 0) {
         int status;
         pid_t result = waitpid(m_pid, &status, WNOHANG);

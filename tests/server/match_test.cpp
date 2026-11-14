@@ -172,6 +172,72 @@ TEST_F(MatchTest, DrawAcceptNoOffer)
     EXPECT_EQ(err->message, "No draw offer pending");
 }
 
+// Audit 1.5: the offerer accepting their own offer must not end the game
+// as a rated draw — that was a one-packet cheat for the losing side.
+TEST_F(MatchTest, DrawOfferSelfAcceptRefused)
+{
+    match_->handleMessage(white_, chess::net::DrawOfferMsg{});
+    match_->handleMessage(white_, chess::net::DrawAcceptMsg{});
+
+    EXPECT_TRUE(match_->isActive());
+
+    auto msg = tryRecvOnClient(*clientWhite_);
+    ASSERT_TRUE(msg.has_value());
+    auto* err = std::get_if<chess::net::ErrorMsg>(&*msg);
+    ASSERT_NE(err, nullptr);
+    EXPECT_EQ(err->message, "That is your own draw offer");
+
+    // The offer survives the refused self-accept: the opponent can still
+    // accept it for real.
+    match_->handleMessage(black_, chess::net::DrawAcceptMsg{});
+    EXPECT_FALSE(match_->isActive());
+    auto wOver = tryRecvOnClient(*clientWhite_);
+    ASSERT_TRUE(wOver.has_value());
+    auto* over = std::get_if<chess::net::GameOverMsg>(&*wOver);
+    ASSERT_NE(over, nullptr);
+    EXPECT_EQ(over->result, chess::net::GameResult::Draw);
+}
+
+// Audit 1.5: a sender who is not a seat never ends the game through the
+// draw/resign verbs (the old resign fallthrough read a non-seat as
+// "White resigned").
+TEST_F(MatchTest, ResignFromNonSeatRefused)
+{
+    Client outsider;
+    outsider.name = "Mallory";
+    match_->handleMessage(outsider, chess::net::ResignMsg{});
+    match_->handleMessage(outsider, chess::net::DrawAcceptMsg{});
+    match_->handleMessage(outsider, chess::net::DrawDeclineMsg{});
+
+    EXPECT_TRUE(match_->isActive());
+    // Nothing was sent to the real seats either.
+    EXPECT_FALSE(tryRecvOnClient(*clientWhite_).has_value());
+    EXPECT_FALSE(tryRecvOnClient(*clientBlack_).has_value());
+}
+
+// Audit 1.6: a draw offer does not survive the opponent's disconnect —
+// the offer notice never reached the absent seat, so a blind accept on
+// the resumed link must be refused.
+TEST_F(MatchTest, DrawOfferDissolvesOnOpponentDisconnect)
+{
+    match_->handleMessage(white_, chess::net::DrawOfferMsg{});
+    auto offer = tryRecvOnClient(*clientBlack_);
+    ASSERT_TRUE(offer.has_value());
+    EXPECT_TRUE(std::get_if<chess::net::ServerDrawOfferMsg>(&*offer));
+
+    match_->handleDisconnect(black_);
+    EXPECT_TRUE(match_->isActive()); // grace window, zero ms in tests
+
+    // The returning seat tries the blind accept — refused.
+    match_->handleMessage(black_, chess::net::DrawAcceptMsg{});
+    auto msg = tryRecvOnClient(*clientBlack_);
+    ASSERT_TRUE(msg.has_value());
+    auto* err = std::get_if<chess::net::ErrorMsg>(&*msg);
+    ASSERT_NE(err, nullptr);
+    EXPECT_EQ(err->message, "No draw offer pending");
+    EXPECT_TRUE(match_->isActive());
+}
+
 TEST_F(MatchTest, ChatRelay)
 {
     match_->handleMessage(white_, chess::net::ChatMsg{"hello"});

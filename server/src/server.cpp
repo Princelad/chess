@@ -105,12 +105,29 @@ static Client* findArenaClient(ClientVec& clients, const std::string& arenaKey,
 // (Connected) or on a finished game's game-over screen — the retention
 // shell detaches right before the row is re-seated. Anything mid-life
 // (queued... can't coexist with membership; live/notice states) waits.
+// A spectator is never idle (audit 1.10): their watch binding must not
+// survive a seating — two concurrent move streams would interleave.
 static bool isArenaIdle(const Client& client)
 {
+    if (client.spectating)
+        return false;
     if (client.state == ClientState::Connected)
         return true;
     return client.state == ClientState::GameOver && client.match != nullptr
         && !client.match->isActive();
+}
+
+// Audit 1.10: acquiring a seat (queue join, arena join, resume) while
+// still bound to the stands of another match would deliver two
+// concurrent ServerMoveMsg/GameOverMsg streams to one connection. Any
+// seat acquisition unbinds the watch first — the exact discipline the
+// SpectateStop verb applies.
+static void unbindSpectator(Client& client)
+{
+    if (client.spectating) {
+        client.spectating->removeSpectator(client);
+        client.spectating = nullptr;
+    }
 }
 
 // A pairing may re-seat a client whose match still sits in retention
@@ -261,6 +278,11 @@ static void handleResume(Client& newcomer, const chess::net::ResumeMsg& msg,
             sendTo(newcomer, chess::net::ErrorMsg{"That seat is already connected"});
             return;
         }
+
+        // Audit 1.10: taking the seat unbinds the stands (a resumed
+        // connection must not also be bound as a watcher of another
+        // match — two move streams on one link).
+        unbindSpectator(newcomer);
 
         const auto nowMs = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::steady_clock::now().time_since_epoch()).count();
@@ -767,10 +789,102 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
             const bool botSeatedForRematch =
                 c.state == ClientState::GameOver && c.match != nullptr;
             if (c.isBot && c.state != ClientState::InMatch && !botSeatedForRematch) {
+                // A spawned-but-unpaired bot still sits in the matchmaker
+                // queue; erasing it without removing that entry leaves a
+                // dangling Client* behind (audit 1.1).
+                if (c.state == ClientState::Queued)
+                    matchmaker.remove(c);
                 botIt = clients.erase(botIt);
             } else {
                 ++botIt;
             }
+        }
+
+        // ── Arena pass (12.3) ────────────────────────────────────────────
+        // Runs every loop pass BEFORE the selector wait (audit 1.7): an
+        // arena game ended by the sweeps above (clock timeout, grace
+        // expiry) must re-pair its survivors without waiting for the
+        // next socket event — pings are 30 s apart, so the old post-wait
+        // position stalled quiet servers for up to a full ping interval.
+        // Reaps rows without a living connection (disconnect paths don't
+        // need special handling), reaps empty arenas, and pairs the idle
+        // members of every running arena.
+        for (auto arenaIt = arenas.begin(); arenaIt != arenas.end();) {
+            Tournament& arena = arenaIt->second;
+
+            // Orphan rows: no connection carries (arenaKey, row id) — a
+            // disconnect or a move-over left this one behind. Rows are
+            // snapshotted before the removals (leave() erases in place).
+            bool reaped = false;
+            {
+                std::vector<std::int64_t> ids;
+                for (const auto& row : arena.entrants())
+                    ids.push_back(row.id);
+                for (const auto id : ids)
+                    if (findArenaClient(clients, arena.key(), id) == nullptr)
+                        reaped = arena.leave(id) || reaped;
+            }
+
+            if (arena.entrants().empty()) {
+                arenaIt = arenas.erase(arenaIt);
+                continue;
+            }
+            if (reaped)
+                broadcastArena(arena);
+
+            if (arena.phase() == ArenaPhase::Open) {
+                // Idle members: quota unmet, not seated, connection live
+                // and not in the middle of anything. A GameOver seat still
+                // holding a finished match's retention shell is fair game —
+                // its seats detach first (the rematch hook's discipline).
+                std::vector<ArenaEntrant> idle;
+                for (const auto& row : arena.entrants()) {
+                    if (arenaGames(row) >= arena.roundsTarget() || row.inGame)
+                        continue;
+                    const Client* c =
+                        findArenaClient(clients, arena.key(), row.id);
+                    if (c == nullptr)
+                        continue;
+                    if (!isArenaIdle(*c))
+                        continue;
+                    idle.push_back(row);
+                }
+
+                bool seated = false;
+                for (const auto& [leftIdx, rightIdx] : arenaPairIdle(idle)) {
+                    Client* left = findArenaClient(
+                        clients, arena.key(), idle[leftIdx].id);
+                    Client* right = findArenaClient(
+                        clients, arena.key(), idle[rightIdx].id);
+                    if (left == nullptr || right == nullptr || left == right)
+                        continue;
+                    detachFinishedMatchFor(*left);
+                    detachFinishedMatchFor(*right);
+                    Match* match = startMatch(*left, *right, true);
+                    if (match == nullptr)
+                        continue;
+                    // Seat the rows for the next pass: both are in game,
+                    // and neither may be paired against the other again
+                    // immediately.
+                    auto markRow = [&](std::int64_t rowId, std::int64_t opponentId) {
+                        if (auto* row = arena.entrant(rowId)) {
+                            row->inGame = true;
+                            row->lastOpponentId = opponentId;
+                        }
+                    };
+                    markRow(idle[leftIdx].id, idle[rightIdx].id);
+                    markRow(idle[rightIdx].id, idle[leftIdx].id);
+                    seated = true;
+                }
+
+                // A pairing broadcast announces the fresh inGame flags —
+                // the lobby shows who is playing. Quiet passes (everyone
+                // seated or unpairable) don't resend the table.
+                if (seated)
+                    broadcastArena(arena);
+            }
+
+            ++arenaIt;
         }
 
         if (!selector.wait(waitTime))
@@ -830,6 +944,12 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
 
                     auto msg = chess::net::deserializeClient(packet);
                     if (msg.has_value()) {
+                        // Audit 3.1: the bad-message budget is a burst
+                        // condition, not a connection-lifetime one — the
+                        // client-side mirror resets on every good message,
+                        // so three truncated packets spread over a
+                        // two-hour rated game must not kick the player.
+                        client.badMessages = 0;
                         LOG_INFO("Received: " + chess::net::debugString(*msg));
 
                         // Archive browsing is answered in every state (it
@@ -902,6 +1022,14 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
                         }
                         else if (auto* arenaJoin =
                                 std::get_if<chess::net::TournamentJoinMsg>(&*msg)) {
+                            // The body runs in an IIFE (audit 1.2): there
+                            // is no switch between the message handlers
+                            // and the per-client loop, so a bare `break`
+                            // here would escape the loop and starve every
+                            // client after this one for the whole pass —
+                            // "stop handling this message" must be a
+                            // `return` inside the lambda instead.
+                            [&] {
                             // Arena join (12.3): refused while seated in a
                             // live game (the lobby return happens after it);
                             // answered from every other state — Connected
@@ -911,7 +1039,7 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
                             if (client.state == ClientState::InMatch) {
                                 sendTo(client, chess::net::ErrorMsg{
                                     "Finish the game first"});
-                                break;
+                                return;
                             }
 
                             // Guests carry their name in the payload (same
@@ -936,7 +1064,7 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
                                 nameOk = true;
                             }
                             if (!nameOk)
-                                break;
+                                return;
 
                             // On the way out of the matchmaking queue (if
                             // any): the arena owns this connection now.
@@ -944,24 +1072,14 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
                                 matchmaker.remove(client);
                                 client.state = ClientState::Connected;
                             }
+                            // Audit 1.10: arena seating unbinds the stands.
+                            unbindSpectator(client);
 
-                            client.timeControl =
-                                canonicalTimeControl(arenaJoin->timeControl);
                             const std::string variant =
                                 chess::net::sanitizeVariant(arenaJoin->variant);
                             const std::string key =
-                                client.timeControl + "|" + variant;
-
-                            // Moving over from a different arena? Leave it
-                            // quietly first.
-                            if (!client.arenaKey.empty() && client.arenaKey != key) {
-                                auto oldIt = arenas.find(client.arenaKey);
-                                if (oldIt != arenas.end()
-                                    && oldIt->second.leave(client.arenaEntrantId))
-                                    broadcastArena(oldIt->second);
-                                client.arenaKey.clear();
-                                client.arenaEntrantId = 0;
-                            }
+                                canonicalTimeControl(arenaJoin->timeControl)
+                                + "|" + variant;
 
                             auto arenaIt = arenas.find(key);
                             if (arenaIt == arenas.end()) {
@@ -979,15 +1097,33 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
                                 // the row survives with its score, no
                                 // quota resets, just the fresh snapshot.
                                 sendArenaSnapshot(arena, client);
-                                break;
+                                return;
                             }
 
                             std::string joinError;
                             auto rowId = arena.join(playerName, joinError);
                             if (!rowId.has_value()) {
+                                // Audit 1.2: refuse BEFORE mutating the
+                                // connection — the old order stamped the
+                                // new time control and dropped the old
+                                // arena's row, stranding the member with
+                                // no row and a hijacked TC.
                                 sendTo(client, chess::net::ErrorMsg{joinError});
-                                break;
+                                return;
                             }
+
+                            // Moving over from a different arena? Leave it
+                            // quietly first (only now that the new row is
+                            // secured).
+                            if (!client.arenaKey.empty() && client.arenaKey != key) {
+                                auto oldIt = arenas.find(client.arenaKey);
+                                if (oldIt != arenas.end()
+                                    && oldIt->second.leave(client.arenaEntrantId))
+                                    broadcastArena(oldIt->second);
+                            }
+
+                            client.timeControl =
+                                canonicalTimeControl(arenaJoin->timeControl);
                             client.name = playerName;
                             client.arenaKey = key;
                             client.arenaEntrantId = *rowId;
@@ -995,12 +1131,16 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
                             LOG_INFO("Arena join: " + client.name
                                 + " (" + key + ", rows="
                                 + std::to_string(arena.entrants().size()) + ")");
+                            }();
                         }
                         else if (std::get_if<chess::net::TournamentLeaveMsg>(&*msg)) {
+                            // IIFE as above (audit 1.2): no bare `break` at
+                            // client-loop scope.
+                            [&] {
                             if (client.state == ClientState::InMatch) {
                                 sendTo(client, chess::net::ErrorMsg{
                                     "Finish the game first"});
-                                break;
+                                return;
                             }
                             if (!client.arenaKey.empty()
                                 && client.arenaEntrantId != 0) {
@@ -1011,6 +1151,7 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
                             }
                             client.arenaKey.clear();
                             client.arenaEntrantId = 0;
+                            }();
                         }
                         else if (std::get_if<
                                      chess::net::TournamentStandingsRequestMsg>(
@@ -1052,16 +1193,40 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
                         else switch (client.state) {
                         case ClientState::Connected:
                             if (auto* login = std::get_if<chess::net::LoginMsg>(&*msg)) {
+                                // Audit 1.8: a login re-brands the connection
+                                // (guest name → account name). Arena rows are
+                                // scored by NAME, so the membership must go —
+                                // a kept row would never match the post-game
+                                // scoring call and the member would strand
+                                // the arena (row stuck inGame, quota unmet).
+                                if (!client.arenaKey.empty()
+                                    && client.arenaEntrantId != 0) {
+                                    auto arenaIt = arenas.find(client.arenaKey);
+                                    if (arenaIt != arenas.end()
+                                        && arenaIt->second.leave(client.arenaEntrantId))
+                                        broadcastArena(arenaIt->second);
+                                }
+                                client.arenaKey.clear();
+                                client.arenaEntrantId = 0;
                                 handleLogin(client, *login, players);
-                            } else if (auto* join = std::get_if<chess::net::JoinMsg>(&*msg)) {                                if (!client.playerId.has_value()) {
+                            } else if (auto* join = std::get_if<chess::net::JoinMsg>(&*msg)) {
+                                // Audit 1.10: queueing unbinds the stands.
+                                unbindSpectator(client);
+                                // IIFE (audit 1.2): the guest-join refusals
+                                // below must not escape the per-client loop
+                                // with a bare break — there is no switch at
+                                // this scope, so a break starves every client
+                                // after this one for the whole pass.
+                                [&] {
+                                if (!client.playerId.has_value()) {
                                     // Guest join: name comes from the payload.
                                     if (join->name.empty()) {
                                         sendTo(client, chess::net::ErrorMsg{"Name required"});
-                                        break;
+                                        return;
                                     }
                                     if (join->name.size() > MaxNameLength) {
                                         sendTo(client, chess::net::ErrorMsg{"Name too long"});
-                                        break;
+                                        return;
                                     }
                                     // An account is gated by its password, but a
                                     // guest name matching one would still put
@@ -1073,7 +1238,7 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
                                             sendTo(client, chess::net::ErrorMsg{
                                                 "Name '" + account->name + "' belongs to an account — "
                                                 "log in with its password or pick another name"});
-                                            break;
+                                            return;
                                         }
                                     }
                                     client.name = join->name;
@@ -1105,13 +1270,13 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
                                             client.timeControl, client.variant);
                                     }
                                 }
+                                } ();
                             } else if (std::get_if<chess::net::ResumeMsg>(&*msg)) {
                                 // Token rejoin (11.2) — checked before the
                                 // generic "Join first" fallback below.
                                 handleResume(client,
                                     std::get<chess::net::ResumeMsg>(*msg),
-                                    matches, players);
-                            } else if (std::get_if<chess::net::RematchRequestMsg>(
+                                    matches, players);                            } else if (std::get_if<chess::net::RematchRequestMsg>(
                                            &*msg)) {
                                 // Rematch (11.7) after the retention sweep
                                 // reset the game-over seat: "Join first"
@@ -1200,92 +1365,26 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
             }
         }
 
-        // ── Arena pass (12.3) ────────────────────────────────────────────
-        // Runs every loop pass: reaps rows without a living connection
-        // (disconnect paths don't need special handling), reaps empty
-        // arenas, and pairs the idle members of every running arena.
-        for (auto arenaIt = arenas.begin(); arenaIt != arenas.end();) {
-            Tournament& arena = arenaIt->second;
-
-            // Orphan rows: no connection carries (arenaKey, row id) — a
-            // disconnect or a move-over left this one behind. Rows are
-            // snapshotted before the removals (leave() erases in place).
-            bool reaped = false;
-            {
-                std::vector<std::int64_t> ids;
-                for (const auto& row : arena.entrants())
-                    ids.push_back(row.id);
-                for (const auto id : ids)
-                    if (findArenaClient(clients, arena.key(), id) == nullptr)
-                        reaped = arena.leave(id) || reaped;
-            }
-
-            if (arena.entrants().empty()) {
-                arenaIt = arenas.erase(arenaIt);
-                continue;
-            }
-            if (reaped)
-                broadcastArena(arena);
-
-            if (arena.phase() == ArenaPhase::Open) {
-                // Idle members: quota unmet, not seated, connection live
-                // and not in the middle of anything. A GameOver seat still
-                // holding a finished match's retention shell is fair game —
-                // its seats detach first (the rematch hook's discipline).
-                std::vector<ArenaEntrant> idle;
-                for (const auto& row : arena.entrants()) {
-                    if (arenaGames(row) >= arena.roundsTarget() || row.inGame)
-                        continue;
-                    const Client* c =
-                        findArenaClient(clients, arena.key(), row.id);
-                    if (c == nullptr)
-                        continue;
-                    if (!isArenaIdle(*c))
-                        continue;
-                    idle.push_back(row);
-                }
-
-                bool seated = false;
-                for (const auto& [leftIdx, rightIdx] : arenaPairIdle(idle)) {
-                    Client* left = findArenaClient(
-                        clients, arena.key(), idle[leftIdx].id);
-                    Client* right = findArenaClient(
-                        clients, arena.key(), idle[rightIdx].id);
-                    if (left == nullptr || right == nullptr || left == right)
-                        continue;
-                    detachFinishedMatchFor(*left);
-                    detachFinishedMatchFor(*right);
-                    Match* match = startMatch(*left, *right, true);
-                    if (match == nullptr)
-                        continue;
-                    // Seat the rows for the next pass: both are in game,
-                    // and neither may be paired against the other again
-                    // immediately.
-                    auto markRow = [&](std::int64_t rowId, std::int64_t opponentId) {
-                        if (auto* row = arena.entrant(rowId)) {
-                            row->inGame = true;
-                            row->lastOpponentId = opponentId;
-                        }
-                    };
-                    markRow(idle[leftIdx].id, idle[rightIdx].id);
-                    markRow(idle[rightIdx].id, idle[leftIdx].id);
-                    seated = true;
-                }
-
-                // A pairing broadcast announces the fresh inGame flags —
-                // the lobby shows who is playing. Quiet passes (everyone
-                // seated or unpairable) don't resend the table.
-                if (seated)
-                    broadcastArena(arena);
-            }
-
-            ++arenaIt;
-        }
-
         if (config.timeout > 0) {
             auto now = std::chrono::steady_clock::now();
             for (auto it = clients.begin(); it != clients.end(); ) {
                 Client& client = **it;
+                // Audit 1.9: the idle sweep must never kill live games.
+                // Bots emit no traffic, so their timestamps went stale the
+                // moment they spawned (any bot game longer than the
+                // timeout dropped the bot mid-game); humans legitimately
+                // sit silent while thinking. Both stay.
+                if (client.isBot) {
+                    client.lastActivity = now;
+                    ++it;
+                    continue;
+                }
+                if (client.state == ClientState::InMatch
+                    || (client.state == ClientState::GameOver
+                        && client.match != nullptr)) {
+                    ++it;
+                    continue;
+                }
                 auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - client.lastActivity).count();
                 if (elapsed > config.timeout) {
                     LOG_INFO("Client idle timeout (" + std::to_string(elapsed) + "s), disconnecting");
