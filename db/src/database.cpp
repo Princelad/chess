@@ -239,6 +239,11 @@ bool Database::open(const std::string& path)
     // last_rated_at column via ALTER; revision 3 seeds one "unlimited"
     // per-class row per existing player from their single flat rating; fresh
     // databases just get stamped.
+    // Audit 3.7: the whole chain runs in ONE transaction — SQLite DDL is
+    // transactional, and the old autocommit-per-statement form bricked the
+    // file permanently when a crash landed between the ALTER and the
+    // user_version write (the next open re-ran the ALTER and failed on
+    // "duplicate column" forever).
     const int version = readUserVersion();
     if (version > SchemaVersion) {
         errorMessage_ = "database schema revision " + std::to_string(version)
@@ -246,39 +251,46 @@ bool Database::open(const std::string& path)
         close();
         return false;
     }
-    if (version < 2) {
-        if (!exec("ALTER TABLE players ADD COLUMN "
-                  "last_rated_at INTEGER NOT NULL DEFAULT 0")) {
+    if (version < SchemaVersion) {
+        if (!exec("BEGIN IMMEDIATE")) {
             std::string message = errorMessage_;
             close();
             errorMessage_ = message;
             return false;
         }
-    }
-    if (version < 3) {
-        // Seed per-class rows from the flat columns: every existing account
-        // becomes the owner of an "unlimited" class row that exactly mirrors
-        // the players-table snapshot it came from. Revision-2-and-fresh
-        // accounts created later still read defaults when a class row is
-        // missing, so only the historical population needs this.
-        if (!exec(
+        bool ok = true;
+        if (version < 2) {
+            ok = exec("ALTER TABLE players ADD COLUMN "
+                      "last_rated_at INTEGER NOT NULL DEFAULT 0");
+        }
+        if (ok && version < 3) {
+            // Seed per-class rows from the flat columns: every existing account
+            // becomes the owner of an "unlimited" class row that exactly mirrors
+            // the players-table snapshot it came from. Revision-2-and-fresh
+            // accounts created later still read defaults when a class row is
+            // missing, so only the historical population needs this.
+            ok = exec(
                 "INSERT INTO player_ratings (player_id, class, rating, "
                 "rating_deviation, volatility, wins, losses, draws, "
                 "last_rated_at) "
                 "SELECT id, 'unlimited', rating, rating_deviation, volatility, "
-                "wins, losses, draws, COALESCE(last_rated_at, 0) FROM players")) {
+                "wins, losses, draws, COALESCE(last_rated_at, 0) FROM players");
+        }
+        if (ok)
+            ok = writeUserVersion(SchemaVersion);
+        if (!ok) {
+            exec("ROLLBACK");
             std::string message = errorMessage_;
             close();
             errorMessage_ = message;
             return false;
         }
-    }
-
-    if (!writeUserVersion(SchemaVersion)) {
-        std::string message = errorMessage_;
-        close();
-        errorMessage_ = message;
-        return false;
+        if (!exec("COMMIT")) {
+            std::string message = errorMessage_;
+            close();
+            errorMessage_ = message;
+            return false;
+        }
     }
 
     return true;}

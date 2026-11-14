@@ -173,9 +173,11 @@ void PlayHubScreen::toggleDrawer()
 void PlayHubScreen::quickQueue(const std::string& tc)
 {
     // The drawer picks the preset and joins with the persisted host/port/
-    // name; without a name it just opens for manual entry.
-    drawer_->quickQueueTc(tc);
-    drawerOpen_ = true;
+    // name; without a name it just opens for manual entry (audit 2.10:
+    // the drawer only expands when the quick attempt could not start —
+    // a successful queue hands the screen over on pairing anyway).
+    if (!drawer_->quickQueueTc(tc))
+        drawerOpen_ = true;
 }
 
 void PlayHubScreen::quickBrowse(BrowseTarget target)
@@ -261,6 +263,14 @@ void PlayHubScreen::update(float dtSec)
 void PlayHubScreen::draw(sf::RenderWindow& window)
 {
     auto& font = app_.font();
+
+    // Tier 4: dim the left-zone affordances while the drawer is open —
+    // the drawer owns every event then (handleEvent routes wholesale), so
+    // the cards must not look interactive beneath it.
+    for (auto& b : quickBtns_) b.setEnabled(!drawerOpen_);
+    variantBtn_.setEnabled(!drawerOpen_);
+    arenaBtn_.setEnabled(!drawerOpen_);
+    drawerBtn_.setEnabled(!drawerOpen_);
 
     // ── Left zone: always visible ───────────────────────────────────────
     sf::Text title(font, "Chess", ui::type::Display);

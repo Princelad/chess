@@ -317,6 +317,7 @@ bool Match::handleMoveSAN(Client& sender, const std::string& san)
     // was for the old position, and the takeback (if one was out and the
     // mover is its asker) issues from a frame that has moved on.
     drawOfferPending_ = false;
+    drawOffererIdx_ = 2;
     takebackPending_.reset();
 
     auto state = chess::evaluateGameState(board_);
@@ -341,13 +342,26 @@ void Match::handleDrawOffer(Client& sender)
     if (idx >= 2)
         return;
     drawOfferPending_ = true;
+    drawOffererIdx_ = idx;
     sendToPresent(seats_[1 - idx].present, chess::net::ServerDrawOfferMsg{});
 }
 
 void Match::handleDrawAccept(Client& sender)
 {
+    // Audit 1.5: non-seat senders never end the game here.
+    const std::size_t idx = seatIndexOf(sender);
+    if (idx >= 2) {
+        sendTo(sender, chess::net::ErrorMsg{"No draw offer pending"});
+        return;
+    }
     if (!drawOfferPending_) {
         sendTo(sender, chess::net::ErrorMsg{"No draw offer pending"});
+        return;
+    }
+    if (idx == drawOffererIdx_) {
+        // Self-accept (audit 1.5): the offerer accepting their own offer
+        // used to end the game as a rated draw on a single packet pair.
+        sendTo(sender, chess::net::ErrorMsg{"That is your own draw offer"});
         return;
     }
     // Agreed draw — both players accepted.
@@ -360,6 +374,7 @@ void Match::handleDrawDecline(Client& sender)
     if (idx >= 2)
         return;
     drawOfferPending_ = false;
+    drawOffererIdx_ = 2;
     sendToPresent(seats_[1 - idx].present, chess::net::ServerDrawDeclineMsg{});
 }
 
@@ -626,7 +641,11 @@ void Match::detachAllSeats()
 
 void Match::handleResign(Client& sender)
 {
+    // Audit 1.5: a non-seat sender must never end an active game (the
+    // old fallthrough read idx >= 2 as "Black resigned" — a White win).
     const std::size_t idx = seatIndexOf(sender);
+    if (idx >= 2)
+        return;
     chess::net::GameResult result = (idx == 0)
         ? chess::net::GameResult::BlackWins
         : chess::net::GameResult::WhiteWins;
@@ -675,6 +694,12 @@ void Match::handleDisconnect(const Client& client)
     // A pending takeback is a two-seat conversation; a seat leaving ends
     // it. A resumed asker can simply ask again once the table is whole.
     takebackPending_.reset();
+    // Audit 1.6: a draw offer must not survive the asker's opponent
+    // dropping — the offer notice never reached the absent seat, so a
+    // blind accept after the resume would end the game as a draw the
+    // returning player never saw offered. The asker offers again.
+    drawOfferPending_ = false;
+    drawOffererIdx_ = 2;
 
     if (bothSeatsAbsent()) {
         // Nobody left behind: nobody wins (Abort results never rate).
@@ -811,6 +836,7 @@ void Match::endGame(chess::net::GameResult result, chess::net::GameOverReason re
     active_ = false;
     graceRunning_ = false;
     drawOfferPending_ = false;
+    drawOffererIdx_ = 2;
     takebackPending_.reset();
     lastGameOver_ = chess::net::GameOverMsg{result, reason};
     finishedAtMs_ = steadyNowMs();
@@ -888,7 +914,11 @@ void Match::startBot(chess::Color color, int depth, std::string enginePath,
     if (skillLevel >= 0)
         botEngine_->setOption("Skill Level", std::to_string(skillLevel));
     botEngine_->newGame();
-    botEngine_->position("startpos");
+    // Audit 1.4: search the match's actual position — the hardcoded
+    // "startpos" made a Chess960 bot (bot-as-White via the 11.7 rematch
+    // color swap) compute for the wrong board, and the rejected bestmove
+    // then fed the 1.3 wedge.
+    botEngine_->position(startFen_.empty() ? "startpos" : startFen_);
 
     if (board_.sideToMove() == botColor_) {
         botThinking_ = true;
@@ -910,16 +940,37 @@ void Match::pollBotMove()
     if (!botEngine_ || !botThinking_ || !active_)
         return;
 
-    auto move = botEngine_->tryGetBestMove(board_);
-    if (!move)
-        return;
+    chess::Move move;
+    const auto poll = botEngine_->pollBestMove(board_, move);
+    if (poll == chess::uci::UciEngine::PollResult::NoAnswer)
+        return; // engine still searching
 
-    std::string san = chess::san::toSan(board_, *move);
+    // Audit 1.3: anything other than NoAnswer ends the thinking state —
+    // the old `if (!move) return;` silently wedged the bot once a bad
+    // bestmove had been consumed (the answer is gone, later polls stay
+    // empty), so a clocked game ended with the bot flagging and an
+    // unlimited game hung until a human resigned.
     botThinking_ = false;
 
-    Client* sender = (botColor_ == chess::Color::White) ? white() : black();
-    if (sender)
-        handleMoveSAN(*sender, san);
+    if (poll == chess::uci::UciEngine::PollResult::Move) {
+        std::string san = chess::san::toSan(board_, move);
+        Client* sender = (botColor_ == chess::Color::White) ? white() : black();
+        if (sender)
+            handleMoveSAN(*sender, san);
+        return;
+    }
+
+    // Rejected (illegal/(none) bestmove) or Dead (process gone): the bot
+    // resigns — the engine is unusable, and sitting wedged was the old
+    // failure mode. Bots are never rated, so this is an unrated outcome
+    // for the human seat either way.
+    LOG_WARN(poll == chess::uci::UciEngine::PollResult::Dead
+        ? "Bot engine died mid-search — bot resigns"
+        : "Bot engine produced an illegal bestmove — bot resigns");
+    endGame(botColor_ == chess::Color::White
+                ? chess::net::GameResult::BlackWins
+                : chess::net::GameResult::WhiteWins,
+            chess::net::GameOverReason::Resignation);
 }
 
 bool Match::isBotTurn() const

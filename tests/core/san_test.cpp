@@ -414,5 +414,22 @@ TEST(SAN, FromSanPromotionCaptureCheckmateSuffix)
     EXPECT_EQ(*m, expected);
 }
 
+// Audit 3.5: NAG-style annotation glyphs ("!", "?", "!?", "?!") must not
+// reject an otherwise valid SAN — annotated PGN movetext (e.g. the puzzle
+// asset family's sources) failed to import whole under the old strip.
+TEST(SAN, FromSanStripsAnnotationGlyphs)
+{
+    auto board = Board::fromStartPos();
+    for (const std::string& annotated : {"e4!", "e4?", "e4!?", "e4?!"}) {
+        auto m = san::fromSan(board, annotated);
+        ASSERT_TRUE(m.has_value()) << annotated;
+        EXPECT_EQ(*m, *san::fromSan(board, "e4")) << annotated;
+    }
+    // Annotation glyphs ride a check suffix too.
+    auto checkBoard = *Board::fromFen("6k1/8/8/8/8/4Q3/8/4K3 w - - 0 1");
+    EXPECT_TRUE(san::fromSan(checkBoard, "Qe6+!").has_value());
+    EXPECT_TRUE(san::fromSan(checkBoard, "Qe6!?").has_value());
+}
+
 } // namespace
 } // namespace chess

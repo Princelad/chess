@@ -46,6 +46,7 @@ phase, PATCH for bugfixes/hotfixes landed within a phase.
 | 15 — Game experience rebuild | `v1.8.0` | Board-first game layout, player cards, quick chat |
 | 16 — Engine intelligence | `v1.9.0` | Move classification, accuracy, game report |
 | 17 — Puzzles, personas & play hub | `v2.0.0` | Puzzle Rush, daily puzzle, persona bots, play hub |
+| Audit — post-2.0 bug sweep | `v2.0.1` | Server lifecycle / client state / protocol-db-core fixes |
 
 ---
 

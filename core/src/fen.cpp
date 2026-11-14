@@ -78,6 +78,14 @@ std::optional<int> parseNumber(std::string_view s)
     if (s.empty()) {
         return std::nullopt;
     }
+    // Audit 3.4: a hostile FEN (archive replay, PGN header) must never
+    // run signed overflow here — long digit fields reject instead of
+    // wrapping. Nothing legitimate needs more than 6 digits (the clock
+    // fields cap at 100 moves / 100 halfmoves in practice; 999999 is a
+    // generous ceiling).
+    if (s.size() > 6) {
+        return std::nullopt;
+    }
     int value = 0;
     for (char ch : s) {
         if (ch < '0' || ch > '9') {

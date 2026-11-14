@@ -57,9 +57,13 @@ void RushScreen::startRun(rush::Mode mode)
         return;
 
     // Per-session feed: a fresh seed each run, recorded in config so the
-    // shuffle stays reproducible within the session (17.1).
-    seed_ = static_cast<std::uint64_t>(
-        std::chrono::steady_clock::now().time_since_epoch().count());
+    // shuffle stays reproducible within the session (17.1). Audit: the
+    // seed is now exactly the 31-bit value that gets STORED — the old
+    // full-64-bit seed truncated on write, so the recorded value could
+    // never reproduce the run it claims to describe.
+    seed_ = (static_cast<std::uint64_t>(
+        std::chrono::steady_clock::now().time_since_epoch().count() >> 12))
+        & 0x7FFFFFFFull;
     app_.config().setInt("puzzle.rush_seed",
                          static_cast<int>(seed_ & 0x7FFFFFFF));
     app_.config().save();
@@ -169,6 +173,9 @@ void RushScreen::nextPuzzle()
         backToSelect();
         return;
     }
+    // Unreachable while a run is live (the Next button is inert — audit
+    // 2.3 — and Enter is gated by solverTurn()); the base call stays for
+    // the run-over/select paths above.
     PuzzleScreen::nextPuzzle();
 }
 
@@ -363,9 +370,15 @@ void RushScreen::drawRunPanel(sf::RenderWindow& window)
     hintBtn_.setEnabled(puzzle && !run_.over && !solved_ && !revealed_);
     solutionBtn_.setEnabled(puzzle && !run_.over && !solved_ && !revealed_);
     backBtn_.setEnabled(true);
+    // Audit 2.3: the run's flow advances through onSolved/onWrongMove and
+    // the advance timer, never through Next — and the base handler still
+    // hit-tests these two while they are not drawn (a click on the blank
+    // Next spot was a free skip desyncing the run order; the Daily spot
+    // would swap the board mid-run). Keep them inert while live.
+    nextBtn_.setEnabled(run_.over);
+    dailyBtn_.setEnabled(false);
 
     if (run_.over) {
-        nextBtn_.setEnabled(true);
         nextBtn_.draw(window, font);
     }
     hintBtn_.draw(window, font);

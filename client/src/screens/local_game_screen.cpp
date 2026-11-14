@@ -388,6 +388,11 @@ void LocalGameScreen::takeback()
     nav.goEnd();
     clearBoardInput();
     deselect();
+    // Audit 2.8: a promotion picker armed before the takeback showed
+    // candidates for the pre-takeback position — clicking one applied a
+    // move that no longer existed and corrupted the rebuilt game (the
+    // online applyTakeback already resets promo_).
+    cancelPromotion();
     hl_.lastMoveFrom = nav.lastMoveFrom();
     hl_.lastMoveTo = nav.lastMoveTo();
     syncViewHighlights();

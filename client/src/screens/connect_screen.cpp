@@ -1,6 +1,7 @@
 #include "connect_screen.h"
 
 #include "ui/theme.h"
+#include "ui_helpers.h"
 #include "game_screen.h"
 #include "history_screen.h"
 #include "leaderboard_screen.h"
@@ -18,6 +19,23 @@ constexpr float FieldW = 280.f;
 constexpr float FieldH = 36.f;
 constexpr float RowGap = 56.f;
 constexpr float BtnY = 148.f + 6.f * RowGap + 10.f;
+
+// Tier 4: the status column starts at StartX with ~448 px of window left;
+// a long status/error ran off the window edge. Clip to the column.
+constexpr float StatusMaxWidth = 960.f - StartX - 12.f;
+
+void drawClippedLabel(Label& label, sf::RenderWindow& window,
+                      const sf::Font& font, float y)
+{
+    label.setPosition({StartX, y});
+    if (label.size(font).x > StatusMaxWidth) {
+        // ~9 px per glyph at the status font size; safeTruncate keeps
+        // UTF-8 sequences whole and appends the ellipsis.
+        const auto cap = static_cast<std::size_t>(StatusMaxWidth / 9.f);
+        label.setText(safeTruncate(label.text(), cap));
+    }
+    label.draw(window, font);
+}
 }
 
 ConnectScreen::ConnectScreen(App& app)
@@ -193,6 +211,10 @@ void ConnectScreen::cancelAttempt()
         return;
     app_.connection().disconnect();
     phase_ = ConnectPhase::Idle;
+    // Audit 2.1: the browse target must go with the attempt — a stale
+    // target dispatched openBrowseTarget() on the NEXT login's profile
+    // arrival, dumping the user into a flow they had cancelled.
+    browseTarget_ = BrowseTarget::None;
     status_.setText("");
     error_.setText("");
     for (auto& field : fields_) field.setEnabled(true);
@@ -369,14 +391,20 @@ void ConnectScreen::startBrowse(BrowseTarget target)
 
 void ConnectScreen::handleEvent(const sf::Event& event)
 {
-    if (phase_ == ConnectPhase::WaitingForOpponent) return;
-
+    // Audit 2.2: Escape must work while queued too — the old
+    // WaitingForOpponent early-return dropped every event, turning the
+    // queue screen into a dead end (the only exits were an opponent
+    // arriving or killing the process).
     if (const auto* kp = event.getIf<sf::Event::KeyPressed>()) {
         if (kp->code == sf::Keyboard::Key::Escape) {
             if (phase_ != ConnectPhase::Idle) app_.connection().disconnect();
             app_.goBack();
             return;
         }
+    }
+    if (phase_ == ConnectPhase::WaitingForOpponent) return;
+
+    if (const auto* kp = event.getIf<sf::Event::KeyPressed>()) {
         if (kp->code == sf::Keyboard::Key::Tab) {
             cycleField(kp->shift);
             return;
@@ -554,13 +582,11 @@ void ConnectScreen::draw(sf::RenderWindow& window)
     float statusY = BtnY + 104.f; // layoutWidgets' status row (below all
                                   // three button rows)
     if (!error_.text().empty()) {
-        error_.setPosition({StartX, statusY});
-        error_.draw(window, font);
+        drawClippedLabel(error_, window, font, statusY);
         statusY += 30.f;
     }
     if (!status_.text().empty()) {
-        status_.setPosition({StartX, statusY});
-        status_.draw(window, font);
+        drawClippedLabel(status_, window, font, statusY);
     }
 
     title_.draw(window, font);
