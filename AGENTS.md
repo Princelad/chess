@@ -133,6 +133,14 @@ Library targets: `chesscore` (rules), `chessnet` (protocol), `chessdb` (SQLite p
   - **Rush seed (17.1 follow-up):** `startRun` generates exactly the 31-bit value that gets stored (`count >> 12 & 0x7FFFFFFF`) — the old full-64-bit seed truncated on write, so the recorded `puzzle.rush_seed` could never reproduce the run it claims to describe.
   - **Glicko S1 guards:** `varianceInverse <= 0` (saturated E_j from a corrupted row) returns the idle-period deviation growth instead of writing NaN into the ratings tables; the volatility secant breaks on `fA == fB` (zero-divide NaN).
 
+- **Deferred audit sweep (v2.0.2, branch `bugfix-deferred-2.0`):** the six items the v2.0.1 audit deferred; contract rules they created:
+  - **Config header-less keys round-trip:** `load()` stores a file's bare top-level `key = value` under its bare name (NOT `".key"` — `get("key")` never matched that) and `save()` writes all dot-free keys FIRST, before any `[section]`; production code keeps the dotted-key discipline (`set()` refuses section-less keys — only hand-edited files produce them).
+  - **`safeTruncate` has no unconditional extra trim:** the continuation-walk targets the first EXCLUDED byte `s[n]`, so `substr(0, n)` is already a whole-sequence boundary; the old `n - 1` dropped a byte on every clean ASCII cut.
+  - **TextField input modes:** `InputMode {Ascii, Utf8}` (default Ascii — names/passwords/hosts are hard-ASCII server-side via `validAccountName`/`validPassword`); chat input and the settings pieces-path field opt into Utf8, which encodes `TextEntered` codepoints (control/DEL/surrogate halves refused), pops WHOLE UTF-8 sequences on backspace, and counts `maxLength_` in bytes (a multibyte char is refused whole). Pure helpers `utf8Encode`/`utf8PopBack`/`inputAccepts` live in text_field.h for headless tests.
+  - **Negative ratings refused everywhere on the wire:** WelcomeMsg/ProfileMsg/leaderboard rows reject rating/deviation < 0 exactly like SpectateState (logistic-curve inputs); a corrupt/hostile packet is a `nullopt`, not a NaN seed.
+  - **Grace re-arm budget:** a match tolerates at most 2x graceMs of CUMULATIVE absence — each solo drop draws `window = min(graceMs, budget - used)`, a resume books the absence's real span into `used`, the survivor's `OpponentReconnectingMsg` carries the capped figure, and a spent budget forfeits at drop time (no notice, just GameOver). The zero-grace legacy shape is pinned: the budget NEVER forfeits a zero-window drop (deadline = drop time, next `pollReconnect` decides). Test scheme: grace 400 ms/budget 800 ms, two ~250 ms drop-resume cycles leave ~300 ms — the third drop expires at +350 ms where a full re-arm would not.
+  - **`Match::leave` deleted** (dead code: nothing ever routed `LeaveMsg` to it); `dissolveRematch` stays (rematch handlers + disconnect path still own it).
+
 ## 0x88 board reference
 
 - Square encoding: `squareOf(file, rank) = rank * 16 + file`
@@ -165,3 +173,4 @@ SemVer-style, pre-1.0: MINOR bump per phase, PATCH for bugfixes within a phase. 
 | 13 — Release engineering | `v1.6.0` | done |
 | 14 — Design system v2 | `v1.7.0` | done |
 | Post-2.0 bug audit | `v2.0.1` | done |
+| Deferred audit sweep | `v2.0.2` | done |

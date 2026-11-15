@@ -47,6 +47,7 @@ phase, PATCH for bugfixes/hotfixes landed within a phase.
 | 16 — Engine intelligence | `v1.9.0` | Move classification, accuracy, game report |
 | 17 — Puzzles, personas & play hub | `v2.0.0` | Puzzle Rush, daily puzzle, persona bots, play hub |
 | Audit — post-2.0 bug sweep | `v2.0.1` | Server lifecycle / client state / protocol-db-core fixes |
+| Audit — deferred sweep | `v2.0.2` | Config round-trip, UTF-8 input, wire rating guards, grace budget |
 
 ---
 
