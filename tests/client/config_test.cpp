@@ -176,6 +176,33 @@ TEST(Config, SetRequiresDottedKey)
     EXPECT_EQ(c.get("section.key"), "y");
 }
 
+// A hand-edited file may carry a header-less top-level key; it must be
+// readable by get() and survive a save() — the old save silently dropped
+// it (and load() stored it as ".key", which get("key") never matched).
+TEST(Config, HeaderlessKeyRoundTrips)
+{
+    const auto path = tempPath("headerless");
+    {
+        std::ofstream out(path);
+        out << "custom = kept\n"
+            << "[general]\n"
+            << "auto_queen = true\n";
+    }
+    {
+        Config c(path.string());
+        ASSERT_TRUE(c.load());
+        EXPECT_EQ(c.get("custom"), "kept");
+        ASSERT_TRUE(c.save());
+    }
+    {
+        Config c(path.string());
+        ASSERT_TRUE(c.load());
+        EXPECT_EQ(c.get("custom"), "kept");
+        EXPECT_EQ(c.get("general.auto_queen"), "true");
+    }
+    std::filesystem::remove(path);
+}
+
 TEST(Config, EmptyPathSaveFails)
 {
     Config c("");

@@ -83,6 +83,8 @@ GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName,
                         Color::White);
 
     chatInput_.setMaxLength(MaxChatInput);
+    // Chat accepts full Unicode (audit); names/hosts stay ASCII server-side.
+    chatInput_.setInputMode(InputMode::Utf8);
     chatInput_.setPlaceholder("Type a message...");
     chatInput_.setOnCommit([this] {
         sendChat();

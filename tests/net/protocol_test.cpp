@@ -850,6 +850,54 @@ TEST(ProtocolRoundTrip, ServerProfileGuest)
     EXPECT_DOUBLE_EQ(m->rating, 1500.0);
 }
 
+// Ratings/deviations are logistic-curve inputs, never negative on a
+// genuine wire — SpectateState already refuses them; Welcome, Profile and
+// leaderboard rows must not admit a corrupt/hostile packet either.
+
+TEST(ProtocolGarbage, ServerWelcomeNegativeRatingRefused)
+{
+    ServerMessage msg = WelcomeMsg{Color::White, "Bob", -1500.0, 132.5, true};
+    sf::Packet p = freshPacket(serializeServer(msg));
+    EXPECT_FALSE(deserializeServer(p).has_value());
+}
+
+TEST(ProtocolGarbage, ServerWelcomeNegativeDeviationRefused)
+{
+    ServerMessage msg = WelcomeMsg{Color::Black, "Alice", 1500.0, -350.0, false};
+    sf::Packet p = freshPacket(serializeServer(msg));
+    EXPECT_FALSE(deserializeServer(p).has_value());
+}
+
+TEST(ProtocolGarbage, ServerProfileNegativeRatingRefused)
+{
+    ServerMessage msg = ProfileMsg{"Alice", -1487.25, 201.75, false};
+    sf::Packet p = freshPacket(serializeServer(msg));
+    EXPECT_FALSE(deserializeServer(p).has_value());
+}
+
+TEST(ProtocolGarbage, ServerProfileNegativeDeviationRefused)
+{
+    ServerMessage msg = ProfileMsg{"Alice", 1487.25, -201.75, false};
+    sf::Packet p = freshPacket(serializeServer(msg));
+    EXPECT_FALSE(deserializeServer(p).has_value());
+}
+
+TEST(ProtocolGarbage, ServerLeaderboardNegativeRatingRefused)
+{
+    LeaderboardEntryMsg entry{"Alice", -1500.0, 350.0, 1, 0, 0};
+    ServerMessage msg = LeaderboardListMsg{{entry}};
+    sf::Packet p = freshPacket(serializeServer(msg));
+    EXPECT_FALSE(deserializeServer(p).has_value());
+}
+
+TEST(ProtocolGarbage, ServerLeaderboardNegativeDeviationRefused)
+{
+    LeaderboardEntryMsg entry{"Alice", 1500.0, -350.0, 1, 0, 0};
+    ServerMessage msg = LeaderboardListMsg{{entry}};
+    sf::Packet p = freshPacket(serializeServer(msg));
+    EXPECT_FALSE(deserializeServer(p).has_value());
+}
+
 // ── Takeback (11.3) ─────────────────────────────────────────────────────────
 
 TEST(ProtocolRoundTrip, ClientTakebackRequest)

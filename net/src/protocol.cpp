@@ -751,6 +751,9 @@ std::optional<ServerMessage> deserializeServer(sf::Packet& packet)
             packet >> color >> msg.opponent >> msg.rating >> msg.deviation;
             if (!static_cast<bool>(packet)) return std::nullopt;
             if (!validColor(color)) return std::nullopt;
+            // Ratings/deviations are logistic-curve inputs, never negative
+            // on a genuine wire (same rule SpectateState applies).
+            if (msg.rating < 0 || msg.deviation < 0) return std::nullopt;
             if (!readFlag(packet, msg.rated)) return std::nullopt;
             packet >> msg.timeControl >> msg.resumeToken
                    >> msg.variant >> msg.startFen;
@@ -811,6 +814,7 @@ std::optional<ServerMessage> deserializeServer(sf::Packet& packet)
             ProfileMsg msg;
             packet >> msg.name >> msg.rating >> msg.deviation;
             if (!static_cast<bool>(packet)) return std::nullopt;
+            if (msg.rating < 0 || msg.deviation < 0) return std::nullopt;
             if (!readFlag(packet, msg.isGuest)) return std::nullopt;
             return msg;
         }
@@ -857,9 +861,11 @@ std::optional<ServerMessage> deserializeServer(sf::Packet& packet)
                 packet >> entry.name >> entry.rating >> entry.deviation
                        >> entry.wins >> entry.losses >> entry.draws;
                 if (!static_cast<bool>(packet)) return std::nullopt;
-                // Counters are never negative in the players table; any other
-                // value means a corrupt or hostile packet.
-                if (entry.wins < 0 || entry.losses < 0 || entry.draws < 0)
+                // Ratings/deviations are logistic-curve inputs, counters are
+                // never negative in the players table; any other value means
+                // a corrupt or hostile packet.
+                if (entry.rating < 0 || entry.deviation < 0
+                    || entry.wins < 0 || entry.losses < 0 || entry.draws < 0)
                     return std::nullopt;
                 msg.players.push_back(std::move(entry));
             }

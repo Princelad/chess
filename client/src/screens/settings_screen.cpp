@@ -116,6 +116,8 @@ SettingsScreen::SettingsScreen(App& app)
     piecesCaption_.setText("Piece set path");
     piecesField_.setText(app_.config().get("pieces.path", ""));
     piecesField_.setMaxLength(256);
+    // Directory paths may carry non-ASCII characters.
+    piecesField_.setInputMode(InputMode::Utf8);
     piecesField_.setPlaceholder("directory with pieces (empty = bundled)");
     applyBtn_.setLabel("Apply");
     applyBtn_.setOnClick([this] { applyPiecesPath(); });
