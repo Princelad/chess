@@ -75,6 +75,7 @@ Match::Match(Client& white, Client& black, const std::string& timeControl,
     , board_(startBoardFrom(startFen))
     , seats_{}
     , graceMs_(graceMs)
+    , graceBudgetMs_(2 * graceMs)
 {
     auto fill = [this](std::size_t idx, Client& client) {
         Seat& seat = seats_[idx];
@@ -619,19 +620,6 @@ void Match::dissolveRematch(bool withdrawn)
                   chess::net::ServerRematchDeclineMsg{withdrawn});
 }
 
-// Voluntary departure from a finished match's game-over seat: the seat is
-// released, a pending rematch dissolves with the requester notified (the
-// asker leaving reads as withdrawn, the asked seat leaving as a decline).
-void Match::leave(const Client& client)
-{
-    const std::size_t idx = seatIndexOf(client);
-    if (idx >= 2)
-        return;
-    seats_[idx].present = nullptr;
-    if (rematchPending_.has_value())
-        dissolveRematch(*rematchPending_ == idx);
-}
-
 void Match::detachAllSeats()
 {
     for (auto& seat : seats_)
@@ -709,15 +697,35 @@ void Match::handleDisconnect(const Client& client)
     }
 
     // Solo drop: hold the game open for the rejoin window and tell the
-    // survivor. The absent seat's clock keeps running meanwhile.
+    // survivor. The absent seat's clock keeps running meanwhile. The
+    // window draws from a per-match budget of 2x graceMs_: each absence
+    // burns the time the seat actually stayed away, so flapping the
+    // connection cannot stall the game indefinitely — a spent budget
+    // forfeits at once instead of re-arming a full window.
+    const std::int64_t now = steadyNowMs();
+    const std::int64_t remaining = graceBudgetMs_ - graceUsedMs_;
+    const std::int64_t window = std::min(graceMs_, remaining);
+    // Legacy zero-grace semantics keep their shape: the window is the drop
+    // time itself and the next pollReconnect decides — the budget must not
+    // turn a zero-window drop into an instant forfeit.
+    if (graceMs_ > 0 && window <= 0) {
+        LOG_INFO("Seat absent (" + seats_[idx].name
+                 + "), reconnect budget exhausted");
+        endGame(idx == 0 ? chess::net::GameResult::BlackWins
+                         : chess::net::GameResult::WhiteWins,
+                chess::net::GameOverReason::Disconnection);
+        return;
+    }
     graceRunning_ = true;
-    graceDeadlineMs_ = steadyNowMs() + graceMs_;
+    graceStartMs_ = now;
+    graceDeadlineMs_ = now + window;
     Seat& survivor = seats_[1 - idx];
     if (survivor.present)
         sendTo(*survivor.present, chess::net::OpponentReconnectingMsg{
-            static_cast<std::int32_t>((graceMs_ + 999) / 1000)});
+            static_cast<std::int32_t>((window + 999) / 1000)});
     LOG_INFO("Seat absent (" + seats_[idx].name + "), grace "
-             + std::to_string(graceMs_ / 1000) + "s");
+             + std::to_string(window / 1000) + "s"
+             + (window < graceMs_ ? " (budget-capped)" : ""));
 }
 
 bool Match::bothSeatsAbsent() const
@@ -756,6 +764,9 @@ Match::ResumeOutcome Match::resume(const std::string& token, Client& newcomer,
             return ResumeOutcome::AlreadyConnected;
 
         seat.present = &newcomer;
+        // The absence burned its real wall-clock span off the match's
+        // re-arm budget; the next drop's window shrinks accordingly.
+        graceUsedMs_ += std::max<std::int64_t>(0, steadyNowMs() - graceStartMs_);
         graceRunning_ = false;
         reboundColorOut = i == 0 ? chess::Color::White : chess::Color::Black;
         LOG_INFO("Seat rebound (" + seat.name + ")");
