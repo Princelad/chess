@@ -23,7 +23,9 @@ public:
     // An empty startFen (12.1) is the standard start position; otherwise it
     // must parse into a legal board (Chess960 SP). graceMs is the reconnect
     // window (11.2): a mid-game drop holds the match open that long before
-    // the absent seat loses on disconnection.
+    // the absent seat loses on disconnection — but a match tolerates at
+    // most 2x that much CUMULATIVE absence, so repeated flaps shrink the
+    // window instead of re-arming it forever.
     Match(Client& white, Client& black, const std::string& timeControl = {},
           const std::string& startFen = {}, std::int64_t graceMs = 30000);
 
@@ -130,12 +132,6 @@ public:
     {
         rematchCallback_ = std::move(callback);
     }
-
-    // Voluntary departure from a finished match's game-over seat (the
-    // client requeues or resumes elsewhere). The seat is released; a
-    // pending rematch offer dissolves with a decline notice to the
-    // requester (withdrawn when the requester is the one leaving).
-    void leave(const Client& client);
 
     // Clears every seat's presence and any pending rematch without
     // notification (11.7): the server calls this when a rematch just
@@ -264,6 +260,13 @@ private:
     std::int64_t graceMs_ = 30000;
     std::int64_t graceDeadlineMs_ = 0;
     bool graceRunning_ = false;
+    // The re-arm budget: a match tolerates at most 2x graceMs_ of CUMULATIVE
+    // absence. Each drop's window is min(graceMs_, budget - used); a resume
+    // books the absence's real span into `used`, so repeated flaps shrink
+    // (then forfeit) instead of re-arming a full window every time.
+    std::int64_t graceBudgetMs_ = 0;
+    std::int64_t graceUsedMs_ = 0;
+    std::int64_t graceStartMs_ = 0;
 
     // Finished-game retention for late token rejoins (11.2).
     std::optional<chess::net::GameOverMsg> lastGameOver_;

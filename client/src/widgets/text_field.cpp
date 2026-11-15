@@ -59,9 +59,19 @@ bool TextField::handleEvent(const sf::Event& event, const sf::Vector2f& localMou
         if (!focused_ || !enabled_) return false;
         const char32_t code = te->unicode;
         if (code == '\b') {
-            if (!text_.empty()) text_.pop_back();
-        } else if (code >= 32 && code < 127 && text_.size() < maxLength_) {
-            text_ += static_cast<char>(code);
+            // Utf8 mode backspaces a whole sequence, not a byte — popping
+            // a lead byte alone would leave a dangling fragment the font
+            // renders as garbage until the next backspace.
+            if (inputMode_ == InputMode::Utf8)
+                utf8PopBack(text_);
+            else if (!text_.empty())
+                text_.pop_back();
+        } else if (inputAccepts(inputMode_, code)) {
+            const std::string encoded = utf8Encode(code);
+            // maxLength_ counts bytes, so a multibyte character is refused
+            // whole when it would overflow the cap.
+            if (text_.size() + encoded.size() <= maxLength_)
+                text_ += encoded;
         }
         caretVisible_ = true;
         caretBlink_ = 0.f;

@@ -6,9 +6,10 @@
 namespace chess::client {
 
 // Minimal INI-style config persisted to a single file. Keys are stored
-// flattened as "section.key". `load()` parses `[section]` headers and
+// flattened as "section.key" (a header-less top-level key from the file
+// keeps its bare name). `load()` parses `[section]` headers and
 // `key = value` lines (ignoring `#`/`;` comments and malformed lines);
-// `save()` groups entries by section and writes them sorted.
+// `save()` writes header-less keys first, then groups entries by section.
 class Config {
 public:
     explicit Config(std::string path) : path_(std::move(path)) {}

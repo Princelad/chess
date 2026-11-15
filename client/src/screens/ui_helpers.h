@@ -20,9 +20,12 @@ inline std::pair<int, int> findKingSquare(const Board& board, Color color)
 inline std::string safeTruncate(const std::string& s, std::size_t maxBytes)
 {
     if (s.size() <= maxBytes) return s;
+    // Back off while the first EXCLUDED byte is a UTF-8 continuation, so
+    // the kept prefix ends on a whole sequence boundary. No unconditional
+    // extra trim: a clean ASCII cut keeps all maxBytes bytes.
     std::size_t n = maxBytes;
     while (n > 0 && (static_cast<unsigned char>(s[n]) & 0xC0) == 0x80) --n;
-    return s.substr(0, n > 0 ? n - 1 : 0) + "...";
+    return s.substr(0, n) + "...";
 }
 
 } // namespace chess::client

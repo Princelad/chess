@@ -91,7 +91,10 @@ bool Config::load()
         const std::string key = trim(line.substr(0, eq));
         const std::string value = trim(line.substr(eq + 1));
         if (key.empty()) continue;
-        entries_[sectionKey(section, key)] = value;
+        // A header-less top-level key stores under its bare name so
+        // get("key") finds it; the dotted storage shape is only for
+        // sectioned keys.
+        entries_[section.empty() ? key : sectionKey(section, key)] = value;
     }
     return true;
 }
@@ -108,6 +111,14 @@ bool Config::save() const
 
     std::ofstream out(path_, std::ios::trunc);
     if (!out.is_open()) return false;
+
+    // Header-less top-level keys (a hand-edited file's bare `key = value`)
+    // write first, before any section header, so load() re-reads them
+    // under the same bare name instead of dropping them.
+    for (const auto& [key, value] : entries_) {
+        if (key.find('.') == std::string::npos)
+            out << key << " = " << value << "\n";
+    }
 
     std::string currentSection;
     for (const auto& [key, value] : entries_) {

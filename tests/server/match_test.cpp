@@ -319,6 +319,114 @@ TEST_F(MatchTest, GraceExpiryEndsGameWithOpponentWin)
     EXPECT_EQ(bOver->reason, chess::net::GameOverReason::Disconnection);
 }
 
+TEST_F(MatchTest, GraceBudgetShrinksRepeatedDrops)
+{
+    // The re-arm budget: a match tolerates 2x graceMs_ of CUMULATIVE
+    // absence. Two drops each burning ~250 ms of a 400 ms window leave
+    // ~300 ms for the third drop — which expires at +350 ms where a full
+    // re-armed window (400 ms) would still be running.
+    constexpr std::int64_t graceMs = 400;
+    Match m(white_, black_, std::string(), std::string(), graceMs);
+
+    auto nowMs = [] {
+        return std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count();
+    };
+    Client rejoiner; // fresh connection object, no socket needed
+    rejoiner.name = "Ada";
+
+    for (int drop = 0; drop < 2; ++drop) {
+        // After the first resume the rejoiner owns seat 0 — white_'s
+        // departure is a silent no-op from then on.
+        m.handleDisconnect(drop == 0 ? white_ : rejoiner);
+        ASSERT_TRUE(m.isActive());
+        // The survivor sees the full window on an unconsumed budget.
+        auto rc = tryRecvOnClient(*clientBlack_);
+        ASSERT_TRUE(rc.has_value());
+        auto* notice = std::get_if<chess::net::OpponentReconnectingMsg>(&*rc);
+        ASSERT_NE(notice, nullptr);
+        EXPECT_EQ(notice->graceSeconds,
+                  static_cast<std::int32_t>((graceMs + 999) / 1000));
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(250));
+        // Still inside the window (a full 400 ms runs; 250 ms elapsed).
+        m.pollClock(nowMs());
+        m.pollReconnect(nowMs());
+        ASSERT_TRUE(m.isActive());
+
+        const auto outcome = m.resume(m.resumeToken(chess::Color::White), rejoiner);
+        ASSERT_EQ(outcome, Match::ResumeOutcome::Rebound);
+        // Drain the resumed notice so the next drop's is next in line.
+        while (tryRecvOnClient(*clientBlack_).has_value())
+            ;
+    }
+
+    // Third drop: the budget has ~300 ms left, so the window shrinks below
+    // graceMs and expires within 350 ms — a full re-arm would not.
+    m.handleDisconnect(rejoiner);
+    ASSERT_TRUE(m.isActive());
+    std::this_thread::sleep_for(std::chrono::milliseconds(350));
+    m.pollClock(nowMs());
+    m.pollReconnect(nowMs());
+    EXPECT_FALSE(m.isActive());
+
+    const auto over = m.lastGameOver();
+    ASSERT_TRUE(over.has_value());
+    EXPECT_EQ(over->result, chess::net::GameResult::BlackWins);
+    EXPECT_EQ(over->reason, chess::net::GameOverReason::Disconnection);
+}
+
+TEST_F(MatchTest, GraceBudgetForfeitsWhenSpent)
+{
+    // Zero grace keeps the legacy semantics (deadline = drop time; the
+    // next poll decides) — the budget must not turn a zero-window drop
+    // into a forfeit at drop time.
+    {
+        Match m(white_, black_, std::string(), std::string(), 0);
+        m.handleDisconnect(white_);
+        EXPECT_TRUE(m.isActive());
+    }
+
+    // A spent budget forfeits immediately: each absence books its real
+    // span, so four short drop-resume cycles spend the whole 2x budget and
+    // the fifth drop gets no window at all.
+    constexpr std::int64_t graceMs = 100;
+    Match m(white_, black_, std::string(), std::string(), graceMs);
+    Client rejoiner;
+    rejoiner.name = "Ada";
+
+    auto nowMs = [] {
+        return std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count();
+    };
+
+    for (int drop = 0; drop < 4; ++drop) {
+        m.handleDisconnect(drop == 0 ? white_ : rejoiner);
+        std::this_thread::sleep_for(std::chrono::milliseconds(60));
+        m.pollClock(nowMs());
+        m.pollReconnect(nowMs());
+        // Each absence burns ~60 ms of the 200 ms budget; once the spent
+        // total passes it, a poll (or the next drop) ends the game — both
+        // converge on the assertions below, so only resume while alive.
+        if (!m.isActive()) break;
+        ASSERT_EQ(m.resume(m.resumeToken(chess::Color::White), rejoiner),
+                  Match::ResumeOutcome::Rebound);
+        while (tryRecvOnClient(*clientBlack_).has_value())
+            ;
+    }
+
+    // The budget is spent: the next drop forfeits on the spot, with no
+    // reconnect notice — only the game-over broadcast.
+    if (m.isActive()) {
+        m.handleDisconnect(white_);
+        EXPECT_FALSE(m.isActive());
+    }
+    const auto over = m.lastGameOver();
+    ASSERT_TRUE(over.has_value());
+    EXPECT_EQ(over->result, chess::net::GameResult::BlackWins);
+    EXPECT_EQ(over->reason, chess::net::GameOverReason::Disconnection);
+}
+
 TEST_F(MatchTest, ResumeRebindsSeatAndNotifiesOpponent)
 {
     match_->handleDisconnect(white_);

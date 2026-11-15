@@ -268,6 +268,88 @@ TEST(WidgetTextField, TextEnteredHonorsMaxLength)
     EXPECT_EQ(field.text(), "abc");
 }
 
+TEST(WidgetTextField, Utf8ModeAppendsAndBackspacesWholeSequences)
+{
+    TextField field(sf::FloatRect({10.f, 10.f}, {200.f, 28.f}));
+    field.setInputMode(InputMode::Utf8);
+    field.setFocused(true);
+
+    field.handleEvent(textEntered(U'é'), {10.f, 10.f}); // U+00E9 -> C3 A9
+    field.handleEvent(textEntered(U'x'), {10.f, 10.f});
+    EXPECT_EQ(field.text(), "\xC3\xA9x");
+
+    // Backspace pops the whole sequence, not a dangling byte.
+    field.handleEvent(textEntered(U'\b'), {10.f, 10.f});
+    EXPECT_EQ(field.text(), "\xC3\xA9");
+    field.handleEvent(textEntered(U'\b'), {10.f, 10.f});
+    EXPECT_EQ(field.text(), "");
+}
+
+TEST(WidgetTextField, Utf8ModeRefusesControlDelAndSurrogates)
+{
+    TextField field(sf::FloatRect({10.f, 10.f}, {200.f, 28.f}));
+    field.setInputMode(InputMode::Utf8);
+    field.setFocused(true);
+
+    field.handleEvent(textEntered(static_cast<char32_t>(0x01)), {10.f, 10.f});
+    field.handleEvent(textEntered(static_cast<char32_t>(0x7F)), {10.f, 10.f});
+    field.handleEvent(textEntered(static_cast<char32_t>(0xD800)), {10.f, 10.f});
+    field.handleEvent(textEntered(static_cast<char32_t>(0xDFFF)), {10.f, 10.f});
+    EXPECT_EQ(field.text(), "");
+}
+
+TEST(WidgetTextField, Utf8MaxLengthCountsBytes)
+{
+    TextField field(sf::FloatRect({10.f, 10.f}, {200.f, 28.f}));
+    field.setMaxLength(3);
+    field.setInputMode(InputMode::Utf8);
+    field.setFocused(true);
+
+    field.handleEvent(textEntered(U'é'), {10.f, 10.f}); // 2 bytes
+    EXPECT_EQ(field.text(), "\xC3\xA9");
+    // A second é would need 4 bytes — refused whole, no partial append.
+    field.handleEvent(textEntered(U'é'), {10.f, 10.f});
+    EXPECT_EQ(field.text(), "\xC3\xA9");
+    field.handleEvent(textEntered(U'x'), {10.f, 10.f}); // 3 bytes total
+    EXPECT_EQ(field.text(), "\xC3\xA9x");
+}
+
+TEST(WidgetTextField, AsciiModeStillRefusesNonAscii)
+{
+    TextField field(sf::FloatRect({10.f, 10.f}, {200.f, 28.f}));
+    field.setFocused(true);
+
+    field.handleEvent(textEntered(U'é'), {10.f, 10.f});
+    EXPECT_EQ(field.text(), "");
+    field.handleEvent(textEntered(U'x'), {10.f, 10.f});
+    EXPECT_EQ(field.text(), "x");
+}
+
+TEST(Utf8Helpers, EncodeSequenceShapes)
+{
+    EXPECT_EQ(utf8Encode(U'a'), "a");
+    EXPECT_EQ(utf8Encode(U'é'), "\xC3\xA9");
+    EXPECT_EQ(utf8Encode(static_cast<char32_t>(0x20AC)), "\xE2\x82\xAC");
+    EXPECT_EQ(utf8Encode(static_cast<char32_t>(0x1F600)),
+              "\xF0\x9F\x98\x80");
+}
+
+TEST(Utf8Helpers, PopBackHandlesTruncatedTail)
+{
+    std::string s = "\xE4\xB8\xAD"; // U+4E2D, 3-byte sequence
+    utf8PopBack(s);
+    EXPECT_EQ(s, "");
+
+    // A truncated sequence carried in via setText still shrinks cleanly.
+    s = "\xE4";
+    utf8PopBack(s);
+    EXPECT_EQ(s, "");
+
+    s = "hi";
+    utf8PopBack(s);
+    EXPECT_EQ(s, "h");
+}
+
 TEST(WidgetTextField, EnterFiresCommitOnceWhileFocused)
 {
     TextField field(sf::FloatRect({10.f, 10.f}, {200.f, 28.f}));
