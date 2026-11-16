@@ -26,6 +26,8 @@ static void printUsage(const char* prog)
               "                    Name=depth:movetime[:skill], comma-separated\n"
               "                    (e.g. \"Sable=4:500:6,Oracle=0:2000\"; bots\n"
               "                    cycle through the table and take its names)\n"
+              "  --bots            Enable matchmaking bots: a solo join spawns\n"
+              "                    a bot opponent (also implied by --bot-personas)\n"
               "  --log-file <path> Log to file in addition to stdout\n"
               "  --db <path>       SQLite file for accounts/games (default: off)\n"
               "  --log-level <L>   Min log level: info, warn, error (default: info)\n"
@@ -77,11 +79,18 @@ int main(int argc, char* argv[])
                 LOG_ERROR("Arena rounds must be at least 1");
                 return 1;
             }
+        } else if (arg == "--bots") {
+            // Audit: botsEnabled could never be true from the shipped
+            // binary — no flag reached it, so a solo join never spawned a
+            // bot and the whole persona table was dead in production.
+            config.botsEnabled = true;
         } else if (arg == "--bot-personas" && i + 1 < argc) {
             // 17.3: persona table for spawned bots; malformed entries are
             // skipped by the parser, so a bad flag never kills startup.
+            // Providing personas implies the bots feature.
             config.botPersonas =
                 chess::server::parseBotPersonas(argv[++i]);
+            config.botsEnabled = true;
             if (config.botPersonas.empty())
                 LOG_WARN("No usable bot personas parsed - falling back to "
                          "the flat bot naming");

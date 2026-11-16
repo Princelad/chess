@@ -1151,6 +1151,13 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
 
                             client.timeControl =
                                 canonicalTimeControl(arenaJoin->timeControl);
+                            // Audit: the variant must live on the
+                            // connection exactly like the TC — startMatch
+                            // reads first.variant to roll the SP and to
+                            // stamp Match's arena key ("tc|variant"), and
+                            // a stale variant from an earlier queue join
+                            // would poison a standard arena the same way.
+                            client.variant = variant;
                             client.name = playerName;
                             client.arenaKey = key;
                             client.arenaEntrantId = *rowId;
@@ -1210,11 +1217,17 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
                                 client.spectating = nullptr;
                             }
                         }
-                        else if (std::get_if<chess::net::PingMsg>(&*msg)
-                                 && client.spectating) {
-                            // A watcher sits outside the seat routing, so
-                            // its keepalive pings are answered here instead
-                            // of landing in the Connected fallback.
+                        else if (std::get_if<chess::net::PingMsg>(&*msg)) {
+                            // Keepalive pings are answered for EVERY
+                            // connection state here — the client
+                            // heartbeats unconditionally and self-kills a
+                            // link after ~90 s without a Pong, which used
+                            // to kick every lobby-dwelling session
+                            // (archive/leaderboard browsing, arena
+                            // waiting, post-failed-login retries) whose
+                            // state fell through to the "Join first"
+                            // fallback. Seat traffic is unaffected: seats
+                            // get their Pong via Match::handlePing.
                             sendTo(client, chess::net::PongMsg{});
                         }
                         else switch (client.state) {

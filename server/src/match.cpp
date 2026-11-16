@@ -8,6 +8,7 @@
 
 #include <chess/fen.h>
 #include <chess/movegen.h>
+#include <chess/net/protocol.h>
 #include <chess/san.h>
 #include <chess/uci/engine.h>
 
@@ -281,6 +282,20 @@ bool Match::handleMoveSAN(Client& sender, const std::string& san)
     const std::size_t moverIdx = seatIndexOf(sender);
     if ((whiteToMove && moverIdx != 0) || (!whiteToMove && moverIdx != 1)) {
         sendTo(sender, chess::net::ErrorMsg{"Not your turn"});
+        return false;
+    }
+
+    // Game-length cap: sanHistory feeds ResumeStateMsg, TakebackAcceptedMsg
+    // and SpectateStateMsg, whose wire guard refuses counts past
+    // MaxResumeMoves — a game reaching ply 512 used to desync takeback and
+    // strand a rejoining seat with packets its own client calls hostile.
+    // The match ends as a draw (rated like an agreed draw) before any
+    // oversize packet can exist.
+    if (sanHistory_.size() >= static_cast<std::size_t>(chess::net::MaxResumeMoves)) {
+        LOG_INFO("Game reached the " + std::to_string(chess::net::MaxResumeMoves)
+                 + "-ply record cap - auto-draw");
+        endGame(chess::net::GameResult::Draw,
+                chess::net::GameOverReason::AgreedDraw);
         return false;
     }
 
@@ -917,6 +932,15 @@ void Match::startBot(chess::Color color, int depth, std::string enginePath,
     if (info.name.empty() && !botEngine_->isRunning()) {
         LOG_ERROR("Bot engine failed to start");
         botEngine_.reset();
+        // Audit: a start failure is an engine failure like any other — the
+        // 1.3 tri-state only covers mid-search deaths, so an engine-less
+        // host used to leave the bot seat permanently unable to move
+        // (hangs an unlimited game). The human wins by resignation; bots
+        // never rate, so the result stays unrated either way.
+        endGame(botColor_ == chess::Color::White
+                    ? chess::net::GameResult::BlackWins
+                    : chess::net::GameResult::WhiteWins,
+                chess::net::GameOverReason::Resignation);
         return;
     }
 

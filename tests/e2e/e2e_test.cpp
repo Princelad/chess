@@ -514,3 +514,43 @@ TEST_F(E2eTest, LeaderboardWithoutDbIsAnError)
         return false;
     }));
 }
+
+// ── Lobby-state keepalive (audit) ───────────────────────────────────────────
+
+// The client heartbeats unconditionally and self-kills a link after ~90 s
+// without a Pong — every lobby-dwelling connection (no seat: post-failed-
+// login retries, archive/leaderboard browsing, arena waiting) used to fall
+// through to the "Join first" fallback and be dropped by its own client.
+// Pings must be answered in EVERY connection state; seat traffic semantics
+// ("Join first" for play verbs from the lobby) stay untouched.
+TEST_F(E2eTest, LobbyPingGetsPong)
+{
+    sf::TcpSocket sock = connectClient();
+    sendMsg(sock, chess::net::PingMsg{});
+
+    bool gotPong = false;
+    ASSERT_TRUE(pollUntil([&]() {
+        if (gotPong) return true;
+        auto m = tryRecv(sock);
+        if (m && std::get_if<chess::net::PongMsg>(&*m)) {
+            gotPong = true;
+            return true;
+        }
+        return false;
+    }));
+
+    // The Connected fallback still answers play verbs with "Join first" —
+    // the unconditional Pong must not have widened seat routing.
+    sendMsg(sock, chess::net::ResignMsg{});
+    bool gotJoinFirst = false;
+    ASSERT_TRUE(pollUntil([&]() {
+        if (gotJoinFirst) return true;
+        auto m = tryRecv(sock);
+        if (auto* err = m ? std::get_if<chess::net::ErrorMsg>(&*m) : nullptr) {
+            gotJoinFirst = err->message == "Join first";
+            return true;
+        }
+        return false;
+    }));
+    EXPECT_TRUE(gotJoinFirst);
+}

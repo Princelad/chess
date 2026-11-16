@@ -188,6 +188,50 @@ TEST_F(ArenaE2eTest, RematchRefusedOnArenaGames)
     EXPECT_NE(afterGame->message.find("rematch"), std::string::npos);
 }
 
+// Audit: the arena join never stamped client.variant, so startMatch read
+// an empty variant — the "tc|chess960" lobby paired its members but every
+// game was a STANDARD start (wrong game), Match's arena key was
+// "tc|" (standings still worked), and a standard queue join earlier on
+// the connection could not be told apart. The pairing must roll an SP and
+// stamp both seats with the arena's variant.
+TEST_F(ArenaE2eTest, Chess960ArenaPairsBothSeatsIntoTheSameStartPos)
+{
+    sf::TcpSocket white = connectClient();
+    sf::TcpSocket black = connectClient();
+
+    // Both joins land before the next server pass, so the pairing pairs
+    // them on the second.
+    sendMsg(white, chess::net::TournamentJoinMsg{"Agata", "", "chess960"});
+    sendMsg(black, chess::net::TournamentJoinMsg{"Bruno", "", "chess960"});
+
+    auto w = await<chess::net::WelcomeMsg>(white);
+    auto b = await<chess::net::WelcomeMsg>(black);
+    ASSERT_TRUE(w.has_value());
+    ASSERT_TRUE(b.has_value());
+    EXPECT_EQ(w->variant, chess::net::Chess960Variant);
+    EXPECT_EQ(b->variant, chess::net::Chess960Variant);
+    // One identical FEN rolled at pairing — both seats see the same SP.
+    EXPECT_EQ(w->startFen, b->startFen);
+    EXPECT_FALSE(w->startFen.empty());
+    EXPECT_TRUE(w->arena);
+
+    // The game is a real arena game: a resignation scores into the
+    // standings like any other (the pair never crossed into the standard
+    // arena keyed "tc|").
+    sendMsg(white, chess::net::ResignMsg{});
+    ASSERT_TRUE(await<chess::net::GameOverMsg>(white).has_value());
+    ASSERT_TRUE(await<chess::net::GameOverMsg>(black).has_value());
+
+    auto wTable = awaitStandingsWhere(white, [](const auto& t) {
+        return t.rows.size() == 2;
+    });
+    ASSERT_TRUE(wTable.has_value());
+    ASSERT_EQ(wTable->rows.size(), 2u);
+    EXPECT_EQ(wTable->rows[0].name, "Bruno"); // won by resignation
+    EXPECT_EQ(wTable->rows[0].points, 2);
+    EXPECT_EQ(wTable->rows[1].name, "Agata");
+}
+
 TEST_F(ArenaE2eTest, ArenaNameValidationAndNonMemberRequests)
 {
     sf::TcpSocket solo = connectClient();

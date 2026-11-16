@@ -70,9 +70,8 @@ constexpr int32_t MaxArchiveEntries = 100;
 // maximum, so a genuine reply can never trip this).
 constexpr int32_t MaxLeaderboardEntries = 100;
 
-// Same guard for the resumed game's SAN list (11.2): a real game stays far
-// below this; server clamps its own replies to the same maximum.
-constexpr int32_t MaxResumeMoves = 512;
+// Same guard for the resumed game's SAN list (11.2): MaxResumeMoves lives
+// in the public protocol.h — the server enforces it on its own sanHistory.
 
 // Same guard for arena standings rows (12.3): the server refuses the
 // entrant that would exceed its own maximum, so a genuine snapshot can
@@ -593,6 +592,18 @@ TimeControl parseTimeControl(std::string_view tc)
     out.incrementSeconds = parseSeconds(increment);
     if (out.baseSeconds < 0 || out.incrementSeconds < 0)
         return out; // unlimited
+
+    // Audit: a base of 0 arms a 0 ms clock — the side to move flags before
+    // its first move — and any field past the clock's expressible range
+    // wraps the int32 millisecond casts on the wire (clock figures ride
+    // ServerMoveMsg/ResumeState/SpectateState as int32). Both degrade to
+    // the unlimited game like every other malformed payload.
+    constexpr long long kMaxClockUnits = 35791; // units * 60000 < 2^31 - 1
+    if (out.baseSeconds == 0
+        || out.baseSeconds > kMaxClockUnits
+        || out.incrementSeconds > kMaxClockUnits)
+        return out; // unlimited
+
     if (out.baseSeconds > 0 || out.incrementSeconds > 0)
         out.unlimited = false;
     return out;

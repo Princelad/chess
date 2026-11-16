@@ -671,11 +671,16 @@ TEST(ParseTimeControl, ValidForms)
     ASSERT_FALSE(tc.unlimited);
     EXPECT_EQ(tc.baseSeconds, 90);
     EXPECT_EQ(tc.incrementSeconds, 0);
+}
 
-    tc = parseTimeControl("0+3"); // increment-only: the clock still runs
-    ASSERT_FALSE(tc.unlimited);
-    EXPECT_EQ(tc.baseSeconds, 0);
-    EXPECT_EQ(tc.incrementSeconds, 3);
+// Audit: a base of 0 armed a 0 ms clock — the side to move flagged on the
+// first pollClock pass, before any move. A base-less ("increment-only")
+// form cannot be played with this clock, so it degrades to the unlimited
+// game like every other malformed payload.
+TEST(ParseTimeControl, ZeroBaseIsUnlimited)
+{
+    EXPECT_TRUE(parseTimeControl("0+3").unlimited);
+    EXPECT_TRUE(parseTimeControl("0+0").unlimited);
 }
 
 TEST(ParseTimeControl, MalformedIsUnlimited)
@@ -687,22 +692,29 @@ TEST(ParseTimeControl, MalformedIsUnlimited)
     EXPECT_TRUE(parseTimeControl("5+a").unlimited);
     EXPECT_TRUE(parseTimeControl("a+3").unlimited);
     EXPECT_TRUE(parseTimeControl("5+3 ").unlimited);
-    EXPECT_TRUE(parseTimeControl("0+0").unlimited); // zeroed = no clock
 }
 
 // Audit 3.3: absurd digit fields degrade to unlimited, never throw —
 // stoll's out_of_range used to escape the digits-only validation (which
 // happily passes for any number of digits) and would have terminated the
-// process at a new callsite.
+// process at a new callsite. The audit also tightened the usable ceiling:
+// clock figures ride the wire as int32 milliseconds, so a field whose
+// millisecond value cannot survive that cast is a malformed payload, not
+// a time control.
 TEST(ParseTimeControl, OverflowingDigitsAreUnlimited)
 {
     EXPECT_TRUE(parseTimeControl("99999999999999999999+0").unlimited);
     EXPECT_TRUE(parseTimeControl("0+99999999999999999999").unlimited);
     EXPECT_TRUE(parseTimeControl("99999999999999999999+1").unlimited);
-    // The legal 15-digit ceiling still parses.
-    auto tc = parseTimeControl("999999999999999+0");
+    // Past the clock-expressible range (int32 ms): unlimited.
+    EXPECT_TRUE(parseTimeControl("999999999999999+0").unlimited);
+    EXPECT_TRUE(parseTimeControl("35792+0").unlimited);
+    EXPECT_TRUE(parseTimeControl("5+35792").unlimited);
+    // The legal ceiling still parses (35791 units * 60000 < 2^31 - 1).
+    auto tc = parseTimeControl("35791+35791");
     ASSERT_FALSE(tc.unlimited);
-    EXPECT_EQ(tc.baseSeconds, 999999999999999LL);
+    EXPECT_EQ(tc.baseSeconds, 35791);
+    EXPECT_EQ(tc.incrementSeconds, 35791);
 }
 
 TEST(ProtocolRoundTrip, ServerGameOverDraw)
