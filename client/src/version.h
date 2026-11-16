@@ -2,9 +2,9 @@
 
 // App version for the runtime chrome (14.5): the window title and the
 // menu badge come from here, and the value tracks TODO.md's version
-// table (the deferred-audit sweep closes as v2.0.2).
+// table (the round-3 audit closes as v2.0.3).
 namespace chess::client {
 
-inline constexpr const char* kAppVersion = "2.0.2";
+inline constexpr const char* kAppVersion = "2.0.3";
 
 } // namespace chess::client
