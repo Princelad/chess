@@ -85,8 +85,9 @@ inline bool chatMuteNamePersistable(const std::string& name)
     if (name.front() == '[' || name.front() == '#' || name.front() == ';')
         return false;
     for (unsigned char c : name) {
-        if (c == '#' || c == ';' || c == '=' || c < ' ')
-            return false; // covers '\n', '\r', tabs-as-controls
+        if (c == '#' || c == ';' || c == '=' || c == ',' || c < ' ')
+            return false; // covers '\n', '\r', tabs-as-controls; ',' is the
+                          // CSV separator a mute list round-trips through
     }
     const char front = name.front(), back = name.back();
     if (front == ' ' || front == '\t' || back == ' ' || back == '\t')

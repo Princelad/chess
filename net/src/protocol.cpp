@@ -70,9 +70,8 @@ constexpr int32_t MaxArchiveEntries = 100;
 // maximum, so a genuine reply can never trip this).
 constexpr int32_t MaxLeaderboardEntries = 100;
 
-// Same guard for the resumed game's SAN list (11.2): a real game stays far
-// below this; server clamps its own replies to the same maximum.
-constexpr int32_t MaxResumeMoves = 512;
+// Same guard for the resumed game's SAN list (11.2): MaxResumeMoves lives
+// in the public protocol.h — the server enforces it on its own sanHistory.
 
 // Same guard for arena standings rows (12.3): the server refuses the
 // entrant that would exceed its own maximum, so a genuine snapshot can
@@ -593,6 +592,21 @@ TimeControl parseTimeControl(std::string_view tc)
     out.incrementSeconds = parseSeconds(increment);
     if (out.baseSeconds < 0 || out.incrementSeconds < 0)
         return out; // unlimited
+
+    // Audit: fields past the clock's expressible range wrap the int32
+    // millisecond casts on the wire (clock figures ride ServerMoveMsg/
+    // ResumeState/SpectateState as int32), so anything above ~35791
+    // minutes is a malformed payload, not a time control — it degrades
+    // to the unlimited game like every other malformed payload. A base
+    // of 0 stays LEGAL: it is the increment-only form and the e2e
+    // quick-timeout fixture (a 0 base flags the side to move on the
+    // first pollClock pass — graceful, and the only way to test a flag
+    // fall without waiting out a whole minute).
+    constexpr long long kMaxClockUnits = 35791; // units * 60000 < 2^31 - 1
+    if (out.baseSeconds > kMaxClockUnits
+        || out.incrementSeconds > kMaxClockUnits)
+        return out; // unlimited
+
     if (out.baseSeconds > 0 || out.incrementSeconds > 0)
         out.unlimited = false;
     return out;
@@ -877,6 +891,10 @@ std::optional<ServerMessage> deserializeServer(sf::Packet& packet)
             packet >> color >> msg.opponent >> msg.rating >> msg.deviation;
             if (!static_cast<bool>(packet)) return std::nullopt;
             if (!validColor(color)) return std::nullopt;
+            // Same guard as Welcome/Profile: ratings/deviations feed the
+            // HUD card and the logistic curve; a negative value means a
+            // corrupt or hostile packet.
+            if (msg.rating < 0 || msg.deviation < 0) return std::nullopt;
             if (!readFlag(packet, msg.rated)) return std::nullopt;
             int32_t count = 0;
             packet >> msg.timeControl >> msg.fen >> count;

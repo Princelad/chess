@@ -110,6 +110,12 @@ ReportScreen::ReportScreen(App& app,
         auto nodes = evalNodes(navigator_.initialBoard().toFen(),
                                navigator_.sans());
         if (nodes) {
+            // One worker job at a time: start() on a busy harness is a
+            // silent no-op (its own contract says "stop() to switch
+            // keys"), so a report opened while another job still ran
+            // would sit inert forever. stop() parks the old job Idle —
+            // its cached nodes resume on the next start.
+            harness.stop();
             harness.start(key_, std::move(*nodes), kEvalMovetimeMs);
             statusLabel_.setText("");
         } else {
@@ -118,6 +124,13 @@ ReportScreen::ReportScreen(App& app,
     } else {
         statusLabel_.setText("No chess engine found - report unavailable");
     }
+}
+
+ReportScreen::~ReportScreen()
+{
+    // Leaving the report parks the job (cached nodes persist, so a
+    // re-entry resumes); an untouched harness stop() is a quiet no-op.
+    app_.evalHarness().stop();
 }
 
 void ReportScreen::layoutPanel()

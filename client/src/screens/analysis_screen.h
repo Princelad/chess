@@ -13,6 +13,7 @@
 #include <chess/uci/engine.h>
 
 #include <array>
+#include <atomic>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -70,7 +71,10 @@ private:
 
     std::unique_ptr<uci::UciEngine> engine_;
     bool engineReady_ = false;
-    int analysisPly_ = -1;
+    // Atomic: the engine's onInfo callback reads it from the search
+    // thread while the UI writes it in update()/startEngineAnalysis().
+    std::atomic<int> analysisPly_{-1};
+    int lastAnalyzedPly_ = -1; // re-arm trigger when navigation moves on
     mutable std::mutex evalMutex_;
 
     Label resultLabel_;

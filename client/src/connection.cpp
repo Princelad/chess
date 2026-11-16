@@ -20,7 +20,6 @@ namespace chess::client {
 // realistic game (~4000 plies of disambiguated SAN); both sides must keep
 // this value in sync.
 static constexpr std::size_t MaxPacketSize = 16384;
-static constexpr auto ConnectTimeout = sf::seconds(3);
 
 Connection::Connection(std::chrono::steady_clock::duration pingInterval,
                        std::chrono::steady_clock::duration pongTimeout)
@@ -48,19 +47,51 @@ void Connection::connect(const std::string& host, unsigned short port)
     connectDone_ = false;
     connectSuccess_ = false;
     connectError_.clear();
+    connectCancel_ = false;
 
     auto addrs = std::make_shared<std::vector<sf::IpAddress>>(std::move(addresses));
 
+    // Audit: the thread used to connect with a 3 s BLOCKING timeout per
+    // address, so disconnect() joining it froze the UI for up to 3 s
+    // (more with several resolved addresses). The connect itself is
+    // non-blocking now and the wait runs in ~50 ms selector slices, so a
+    // cancel request is honored within one slice.
     connectThread_ = std::thread([this, addrs, port]() {
-        socket_.setBlocking(true);
+        socket_.setBlocking(false);
+        // Overall deadline replaces the old per-address 3 s blocking
+        // timeout: the handshake phase never outlives it.
+        const auto deadline = std::chrono::steady_clock::now()
+            + std::chrono::milliseconds(3000);
         for (const auto& ip : *addrs) {
-            auto status = socket_.connect(ip, port, ConnectTimeout);
+            if (connectCancel_.load(std::memory_order_relaxed)) return;
+            auto status = socket_.connect(ip, port);
             if (status == sf::Socket::Status::Done) {
-                socket_.setBlocking(false);
                 connectSuccess_ = true;
                 connectDone_ = true;
                 return;
             }
+            if (status == sf::Socket::Status::NotReady) {
+                sf::SocketSelector selector;
+                selector.add(socket_, sf::SocketSelector::Send);
+                while (!connectCancel_.load(std::memory_order_relaxed)) {
+                    if (std::chrono::steady_clock::now() >= deadline)
+                        break;
+                    if (!selector.wait(sf::milliseconds(50))) continue;
+                    // Writable means the handshake returned. connect()
+                    // cannot be re-called here — SFML disconnects the
+                    // socket first — so completion reads like SFML's own
+                    // blocking-timeout path: a connected peer address is
+                    // the success check.
+                    if (socket_.getRemoteAddress().has_value()) {
+                        connectSuccess_ = true;
+                        connectDone_ = true;
+                        return;
+                    }
+                    break; // writable but refused: try the next address
+                }
+                if (connectCancel_.load(std::memory_order_relaxed)) return;
+            }
+            if (std::chrono::steady_clock::now() >= deadline) break;
             socket_.disconnect();
         }
         connectError_ = "Connection failed";
@@ -70,6 +101,7 @@ void Connection::connect(const std::string& host, unsigned short port)
 
 void Connection::disconnect()
 {
+    connectCancel_ = true;
     if (connectThread_.joinable()) connectThread_.join();
     socket_.disconnect();
     while (!outbox_.empty()) outbox_.pop();
@@ -101,6 +133,8 @@ void Connection::spectateStop()
 
 Connection::~Connection()
 {
+    // Honor a pending connect so exit never waits out the handshake.
+    connectCancel_ = true;
     if (connectThread_.joinable()) connectThread_.join();
 }
 
@@ -184,15 +218,24 @@ const std::string& Connection::error() const
 void Connection::drainOutbox()
 {
     while (!outbox_.empty()) {
-        sf::Packet packet;
-        if (!serialize(packet, outbox_.front())) {
-            outbox_.pop();
-            error_ = "Serialization failed";
-            state_ = ConnectionState::Disconnected;
-            return;
+        // SFML's partial-send contract: once send() reports Partial, the
+        // SAME packet object must complete the send — a re-serialized
+        // packet resets the stream position and the receiver reads a
+        // corrupt framing. The front message's packet therefore lives in
+        // pendingSend_ until it goes out whole.
+        if (!pendingSend_) {
+            pendingSend_.emplace();
+            if (!serialize(*pendingSend_, outbox_.front())) {
+                pendingSend_.reset();
+                outbox_.pop();
+                error_ = "Serialization failed";
+                state_ = ConnectionState::Disconnected;
+                return;
+            }
         }
-        auto status = socket_.send(packet);
+        auto status = socket_.send(*pendingSend_);
         if (status == sf::Socket::Status::Done) {
+            pendingSend_.reset();
             outbox_.pop();
         } else if (status == sf::Socket::Status::Disconnected ||
                    status == sf::Socket::Status::Error) {
@@ -200,7 +243,7 @@ void Connection::drainOutbox()
             state_ = ConnectionState::Disconnected;
             return;
         } else {
-            return;
+            return; // Partial (or NotReady): resume with the same packet
         }
     }
 }

@@ -234,6 +234,17 @@ void TournamentLobbyScreen::update(float /*dtSec*/)
             continue;
         }
     }
+
+    // Audit: a dropped link was invisible here — the join-on-entry flow
+    // never re-arms (sendJoin is guarded by joinSent_) and the table
+    // froze on the last snapshot with no explanation. Surface the state
+    // in the status line like the ConnectScreen does.
+    if (app_.connection().state() == ConnectionState::Disconnected) {
+        statusLabel_.setText(
+            app_.connection().error().empty()
+                ? "Connection lost"
+                : "Connection lost - " + app_.connection().error());
+    }
 }
 
 void TournamentLobbyScreen::draw(sf::RenderWindow& window)

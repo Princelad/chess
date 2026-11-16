@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <chrono>
+#include <map>
 
 #include <SFML/Network/TcpListener.hpp>
 #include <SFML/Network/TcpSocket.hpp>
@@ -425,6 +426,121 @@ TEST_F(MatchTest, GraceBudgetForfeitsWhenSpent)
     ASSERT_TRUE(over.has_value());
     EXPECT_EQ(over->result, chess::net::GameResult::BlackWins);
     EXPECT_EQ(over->reason, chess::net::GameOverReason::Disconnection);
+}
+
+TEST_F(MatchTest, BotEngineStartFailureResigns)
+{
+    // An engine-less host: the start failure used to leave the bot seat
+    // permanently unable to move — an unlimited game hung forever (the 1.3
+    // tri-state only covered mid-search deaths).
+    match_->startBot(chess::Color::Black, 1, "/nonexistent/engine");
+    EXPECT_FALSE(match_->isActive());
+
+    const auto over = match_->lastGameOver();
+    ASSERT_TRUE(over.has_value());
+    EXPECT_EQ(over->result, chess::net::GameResult::WhiteWins);
+    EXPECT_EQ(over->reason, chess::net::GameOverReason::Resignation);
+
+    // The human seat learns the game is over.
+    std::optional<chess::net::GameOverMsg> wOver;
+    for (int i = 0; i < 8 && !wOver.has_value(); ++i) {
+        if (auto m = tryRecvOnClient(*clientWhite_))
+            if (auto* go = std::get_if<chess::net::GameOverMsg>(&*m))
+                wOver = *go;
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    ASSERT_TRUE(wOver.has_value());
+    EXPECT_EQ(wOver->result, chess::net::GameResult::WhiteWins);
+}
+
+// The record cap: sanHistory feeds ResumeState/TakebackAccepted/Spectate
+// packets whose wire guard refuses counts past MaxResumeMoves — reaching
+// ply 512 used to desync takeback and strand a rejoining seat with
+// packets its own client rejects. The 513rd move attempt now ends the
+// game as a draw instead of ever producing an oversize packet.
+TEST_F(MatchTest, MoveRecordCapAutoDraws)
+{
+    // A quiet-ish long game: pawn advances and (late) captures reset the
+    // fifty-move clock long before it reaches 100, material stays rich
+    // (only warm-epoch captures happen, so InsufficientMaterial can never
+    // fire), the chooser refuses any move that leaves the opponent
+    // without a legal move (no stalemate/checkmate) and never plays a
+    // third occurrence of a position (no threefold). That lets the game
+    // legally run past the cap, where the record guard must end it as a
+    // draw.
+    auto start = chess::Board::fromFen(
+        "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w - - 0 1");
+    ASSERT_TRUE(start.has_value());
+    chess::Board b = *start;
+
+    Match m(white_, black_, std::string(), std::string(), 0);
+
+    // Position identity for the threefold count: placement, side,
+    // castling and en-passant — the move counters never affect it.
+    auto identity = [](const chess::Board& bd) {
+        const std::string fen = bd.toFen();
+        std::size_t end = 0;
+        for (int field = 0; field < 4 && end != std::string::npos; ++field)
+            end = fen.find(' ', end + 1);
+        return end == std::string::npos ? fen : fen.substr(0, end);
+    };
+
+    std::map<std::string, int> seen;
+    ++seen[identity(b)];
+
+    for (int ply = 0; ply < 640 && m.isActive(); ++ply) {
+        const auto moves = chess::generateLegalMoves(b);
+        ASSERT_FALSE(moves.empty());
+
+        const bool clockWarm = b.halfmoveClock() >= 50;
+        const chess::Move* pick = nullptr;
+        int pickScore = 0;
+        for (const auto& mv : moves) {
+            chess::Board scratch = b;
+            scratch.makeMove(mv);
+            if (chess::generateLegalMoves(scratch).empty())
+                continue; // never stalemate or mate the opponent
+            const auto [it, inserted] =
+                seen.try_emplace(identity(scratch), 1);
+            if (!inserted && it->second >= 2)
+                continue; // never a third occurrence
+            const bool resets =
+                (b.pieceAt(mv.from).type == chess::PieceType::Pawn
+                 && !mv.isCapture())
+                || mv.isCapture(); // captures reset the clock too
+            int score = it->second; // prefer fresh positions
+            if (clockWarm) {
+                if (!resets)
+                    score += 10; // reset plies win the warm epoch
+            } else if (mv.isCapture()) {
+                score += 100; // never eat material while the clock is cold
+            }
+            if (!pick || score < pickScore) {
+                pick = &mv;
+                pickScore = score;
+            }
+        }
+        if (!pick) FAIL() << "chooser cornered at ply " << ply;
+
+        Client& mover =
+            b.sideToMove() == chess::Color::White ? white_ : black_;
+        const std::string san = chess::san::toSan(b, *pick);
+        m.handleMessage(mover, chess::net::MoveMsg{san});
+        if (m.isActive()) {
+            b.makeMove(*pick);
+            ++seen[identity(b)];
+        }
+    }
+
+    // The game must have been ended BY THE CAP, with exactly the capped
+    // number of plies recorded and no oversize packet ever possible.
+    ASSERT_FALSE(m.isActive());
+    EXPECT_EQ(m.sanHistory().size(),
+              static_cast<std::size_t>(chess::net::MaxResumeMoves));
+    const auto over = m.lastGameOver();
+    ASSERT_TRUE(over.has_value());
+    EXPECT_EQ(over->result, chess::net::GameResult::Draw);
+    EXPECT_EQ(over->reason, chess::net::GameOverReason::AgreedDraw);
 }
 
 TEST_F(MatchTest, ResumeRebindsSeatAndNotifiesOpponent)
@@ -876,3 +992,4 @@ TEST_F(Chess960MatchTest, TakebackRollbackRechainsFromFrcStart)
     EXPECT_EQ(match_->currentFen(), startFen_);
     EXPECT_TRUE(match_->isActive());
 }
+

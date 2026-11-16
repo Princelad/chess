@@ -690,19 +690,28 @@ TEST(ParseTimeControl, MalformedIsUnlimited)
     EXPECT_TRUE(parseTimeControl("0+0").unlimited); // zeroed = no clock
 }
 
-// Audit 3.3: absurd digit fields degrade to unlimited, never throw —
-// stoll's out_of_range used to escape the digits-only validation (which
-// happily passes for any number of digits) and would have terminated the
-// process at a new callsite.
+// Audit: absurd digit fields degrade to unlimited, never throw — stoll's
+// out_of_range used to escape the digits-only validation (which happily
+// passes for any number of digits) and would have terminated the process
+// at a new callsite. The audit also tightened the usable ceiling: clock
+// figures ride the wire as int32 milliseconds, so a field whose
+// millisecond value cannot survive that cast is a malformed payload, not
+// a time control. A base of 0 stays legal (increment-only form, the
+// quick-timeout e2e fixture).
 TEST(ParseTimeControl, OverflowingDigitsAreUnlimited)
 {
     EXPECT_TRUE(parseTimeControl("99999999999999999999+0").unlimited);
     EXPECT_TRUE(parseTimeControl("0+99999999999999999999").unlimited);
     EXPECT_TRUE(parseTimeControl("99999999999999999999+1").unlimited);
-    // The legal 15-digit ceiling still parses.
-    auto tc = parseTimeControl("999999999999999+0");
+    // Past the clock-expressible range (int32 ms): unlimited.
+    EXPECT_TRUE(parseTimeControl("999999999999999+0").unlimited);
+    EXPECT_TRUE(parseTimeControl("35792+0").unlimited);
+    EXPECT_TRUE(parseTimeControl("5+35792").unlimited);
+    // The legal ceiling still parses (35791 units * 60000 < 2^31 - 1).
+    auto tc = parseTimeControl("35791+35791");
     ASSERT_FALSE(tc.unlimited);
-    EXPECT_EQ(tc.baseSeconds, 999999999999999LL);
+    EXPECT_EQ(tc.baseSeconds, 35791);
+    EXPECT_EQ(tc.incrementSeconds, 35791);
 }
 
 TEST(ProtocolRoundTrip, ServerGameOverDraw)
@@ -895,6 +904,31 @@ TEST(ProtocolGarbage, ServerLeaderboardNegativeDeviationRefused)
     LeaderboardEntryMsg entry{"Alice", 1500.0, -350.0, 1, 0, 0};
     ServerMessage msg = LeaderboardListMsg{{entry}};
     sf::Packet p = freshPacket(serializeServer(msg));
+    EXPECT_FALSE(deserializeServer(p).has_value());
+}
+
+// Audit: ResumeStateMsg was the one rating-bearing message without the
+// v2.0.2 negative guard — a hostile packet's -5e307 rating rendered on
+// the resumed seat's opponent card.
+TEST(ProtocolGarbage, ServerResumeStateNegativeRatingRefused)
+{
+    ResumeStateMsg msg;
+    msg.color = Color::White;
+    msg.opponent = "Bob";
+    msg.rating = -1500.0;
+    msg.deviation = 350.0;
+    sf::Packet p = freshPacket(serializeServer(ServerMessage{msg}));
+    EXPECT_FALSE(deserializeServer(p).has_value());
+}
+
+TEST(ProtocolGarbage, ServerResumeStateNegativeDeviationRefused)
+{
+    ResumeStateMsg msg;
+    msg.color = Color::White;
+    msg.opponent = "Bob";
+    msg.rating = 1500.0;
+    msg.deviation = -350.0;
+    sf::Packet p = freshPacket(serializeServer(ServerMessage{msg}));
     EXPECT_FALSE(deserializeServer(p).has_value());
 }
 

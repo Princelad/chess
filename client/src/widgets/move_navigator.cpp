@@ -1,6 +1,7 @@
 #include "move_navigator.h"
 #include "app.h"
 #include "move_quality.h"
+#include "screens/ui_helpers.h"
 #include "ui/rounded_rect.h"
 #include "ui/theme.h"
 
@@ -16,14 +17,6 @@ constexpr float ColGap = 8.f;
 constexpr float CellPad = 4.f;
 constexpr float FontSize = 13.f;
 constexpr float RowH = 16.f;
-
-std::string truncateUtf8(const std::string& s, std::size_t maxBytes)
-{
-    if (s.size() <= maxBytes) return s;
-    std::size_t n = maxBytes;
-    while (n > 0 && (static_cast<unsigned char>(s[n]) & 0xC0) == 0x80) --n;
-    return s.substr(0, n > 0 ? n - 1 : 0) + "...";
-}
 
 int pieceValue(PieceType type)
 {
@@ -369,7 +362,7 @@ void MoveNavigator::drawGrid(sf::RenderWindow& window, const sf::Font& font)
             }
 
             if (san.empty()) return;
-            std::string text = truncateUtf8(san, maxChars);
+            std::string text = safeTruncate(san, maxChars);
             moveText.setString(text);
             moveText.setFillColor(ply == currentPly_ ? ui::pal::white
                                                      : ui::pal::textCell);

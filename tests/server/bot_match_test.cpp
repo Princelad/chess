@@ -137,15 +137,26 @@ TEST_F(BotMatchTest, BotEngineFailure)
     human_.state = ClientState::InMatch;
     bot_.state = ClientState::InMatch;
 
+    // Audit: a start failure is an engine failure like any other — the
+    // bot seat resigns (bots never rate, so the human's result stays
+    // unrated). The old behavior left the bot seat permanently unable to
+    // move, hanging unlimited games.
     Match match(human_, bot_);
     match.startBot(chess::Color::Black, 1, "/nonexistent/engine");
 
-    EXPECT_FALSE(match.isBotTurn());
+    EXPECT_FALSE(match.isActive());
 
+    // The human seat learns the game is over.
+    auto msg = recvWait();
+    ASSERT_TRUE(msg.has_value());
+    auto* overMsg = std::get_if<chess::net::GameOverMsg>(&*msg);
+    ASSERT_NE(overMsg, nullptr);
+    EXPECT_EQ(overMsg->result, chess::net::GameResult::WhiteWins);
+    EXPECT_EQ(overMsg->reason, chess::net::GameOverReason::Resignation);
+
+    // A move after the end is refused, not wedged.
     match.handleMessage(human_, chess::net::MoveMsg{"e4"});
-    EXPECT_FALSE(match.isBotTurn());
-
-    EXPECT_TRUE(match.isActive());
+    EXPECT_FALSE(match.isActive());
 }
 
 TEST_F(BotMatchTest, BotClient)

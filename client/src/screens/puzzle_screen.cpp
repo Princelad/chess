@@ -170,7 +170,10 @@ void PuzzleScreen::tryMove(int targetFile, int targetRank)
 
     const chess::Move* found = nullptr;
     std::vector<chess::Move> promos;
-    for (const auto& m : chess::generateLegalMoves(board_)) {
+    // Named local: the pointer below must not dangle into a range-for
+    // temporary (the game/local-game siblings hoist the vector too).
+    const auto moves = chess::generateLegalMoves(board_);
+    for (const auto& m : moves) {
         if (m.from == from && m.to == to) {
             found = &m;
             if (m.isPromotion()) promos.push_back(m);
