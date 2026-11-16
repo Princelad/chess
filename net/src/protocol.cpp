@@ -891,6 +891,10 @@ std::optional<ServerMessage> deserializeServer(sf::Packet& packet)
             packet >> color >> msg.opponent >> msg.rating >> msg.deviation;
             if (!static_cast<bool>(packet)) return std::nullopt;
             if (!validColor(color)) return std::nullopt;
+            // Same guard as Welcome/Profile: ratings/deviations feed the
+            // HUD card and the logistic curve; a negative value means a
+            // corrupt or hostile packet.
+            if (msg.rating < 0 || msg.deviation < 0) return std::nullopt;
             if (!readFlag(packet, msg.rated)) return std::nullopt;
             int32_t count = 0;
             packet >> msg.timeControl >> msg.fen >> count;

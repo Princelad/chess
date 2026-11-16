@@ -410,29 +410,30 @@ TEST_F(E2eTest, SpamValidMovesNoCrash)
 
 TEST_F(E2eTest, OversizedPacketDisconnects)
 {
+    // Audit: the old body sent 8192 bytes — comfortably BELOW the 16384
+    // MaxPacketSize both sides share (the stale comment still said 4096),
+    // so nothing oversized was ever sent and the assertion proved only
+    // that the join was ignored. A real oversize payload must sever the
+    // link deterministically.
     sf::TcpSocket sock = connectClient();
 
-    // Send a packet larger than MaxPacketSize (4096).
     sf::Packet packet;
-    std::vector<unsigned char> big(8192, 0xAA);
+    std::vector<unsigned char> big(16384 + 1, 0xAA);
     packet.append(big.data(), big.size());
     [[maybe_unused]] auto s = sock.send(packet);
 
-    // Server should disconnect. Verify by trying to join.
-    sendMsg(sock, chess::net::JoinMsg{"Big"});
+    // The server answers the oversize by disconnecting: a subsequent
+    // receive stops with an error (connection reset) instead of data.
+    ASSERT_TRUE(pollUntil([&]() {
+        sf::Packet probe;
+        auto status = sock.receive(probe);
+        return status != sf::Socket::Status::NotReady;
+    }));
 
-    bool gotWelcome = false;
-    pollUntil([&]() {
-        if (gotWelcome) return true;
-        auto m = tryRecv(sock);
-        if (m && std::get_if<chess::net::WelcomeMsg>(&*m)) {
-            gotWelcome = true;
-            return true;
-        }
-        return false;
-    }, 300ms);
-
-    EXPECT_FALSE(gotWelcome);
+    // The server itself is untouched: a fresh client's keepalive works.
+    sf::TcpSocket alive = connectClient();
+    sendMsg(alive, chess::net::PingMsg{});
+    ASSERT_TRUE(await<chess::net::PongMsg>(alive).has_value());
 }
 
 // ── Reconnect: new pair can play after previous game ended ──────────────────

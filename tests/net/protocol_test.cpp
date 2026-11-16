@@ -907,6 +907,31 @@ TEST(ProtocolGarbage, ServerLeaderboardNegativeDeviationRefused)
     EXPECT_FALSE(deserializeServer(p).has_value());
 }
 
+// Audit: ResumeStateMsg was the one rating-bearing message without the
+// v2.0.2 negative guard — a hostile packet's -5e307 rating rendered on
+// the resumed seat's opponent card.
+TEST(ProtocolGarbage, ServerResumeStateNegativeRatingRefused)
+{
+    ResumeStateMsg msg;
+    msg.color = Color::White;
+    msg.opponent = "Bob";
+    msg.rating = -1500.0;
+    msg.deviation = 350.0;
+    sf::Packet p = freshPacket(serializeServer(ServerMessage{msg}));
+    EXPECT_FALSE(deserializeServer(p).has_value());
+}
+
+TEST(ProtocolGarbage, ServerResumeStateNegativeDeviationRefused)
+{
+    ResumeStateMsg msg;
+    msg.color = Color::White;
+    msg.opponent = "Bob";
+    msg.rating = 1500.0;
+    msg.deviation = -350.0;
+    sf::Packet p = freshPacket(serializeServer(ServerMessage{msg}));
+    EXPECT_FALSE(deserializeServer(p).has_value());
+}
+
 // ── Takeback (11.3) ─────────────────────────────────────────────────────────
 
 TEST(ProtocolRoundTrip, ClientTakebackRequest)
