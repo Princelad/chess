@@ -91,6 +91,7 @@ ConnectScreen::ConnectScreen(App& app)
         // Hand-edited/unknown tags re-normalize to the standard game (the
         // same exact-match rule the server applies to the join payload).
         app_.config().set("general.variant", variants_[0]);
+        app_.config().save();
     }
     variantLabel_.setText("Variant:");
     variantLabel_.setFontSize(ui::type::Heading);
@@ -229,6 +230,7 @@ bool ConnectScreen::quickQueueTc(const std::string& tc)
             tcIndex_ = i;
             updateTimeControlLabel();
             app_.config().set("general.time_control", tc);
+            app_.config().save();
             break;
         }
     }
@@ -243,6 +245,7 @@ void ConnectScreen::selectTimeControl()
     tcIndex_ = (tcIndex_ + 1) % timeControls_.size();
     updateTimeControlLabel();
     app_.config().set("general.time_control", timeControls_[tcIndex_]);
+    app_.config().save();
 }
 
 void ConnectScreen::updateTimeControlLabel()
@@ -259,6 +262,7 @@ void ConnectScreen::selectVariant()
     variantIndex_ = (variantIndex_ + 1) % variants_.size();
     updateVariantLabel();
     app_.config().set("general.variant", variants_[variantIndex_]);
+    app_.config().save();
 }
 
 void ConnectScreen::updateVariantLabel()

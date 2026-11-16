@@ -671,16 +671,11 @@ TEST(ParseTimeControl, ValidForms)
     ASSERT_FALSE(tc.unlimited);
     EXPECT_EQ(tc.baseSeconds, 90);
     EXPECT_EQ(tc.incrementSeconds, 0);
-}
 
-// Audit: a base of 0 armed a 0 ms clock — the side to move flagged on the
-// first pollClock pass, before any move. A base-less ("increment-only")
-// form cannot be played with this clock, so it degrades to the unlimited
-// game like every other malformed payload.
-TEST(ParseTimeControl, ZeroBaseIsUnlimited)
-{
-    EXPECT_TRUE(parseTimeControl("0+3").unlimited);
-    EXPECT_TRUE(parseTimeControl("0+0").unlimited);
+    tc = parseTimeControl("0+3"); // increment-only: the clock still runs
+    ASSERT_FALSE(tc.unlimited);
+    EXPECT_EQ(tc.baseSeconds, 0);
+    EXPECT_EQ(tc.incrementSeconds, 3);
 }
 
 TEST(ParseTimeControl, MalformedIsUnlimited)
@@ -692,15 +687,17 @@ TEST(ParseTimeControl, MalformedIsUnlimited)
     EXPECT_TRUE(parseTimeControl("5+a").unlimited);
     EXPECT_TRUE(parseTimeControl("a+3").unlimited);
     EXPECT_TRUE(parseTimeControl("5+3 ").unlimited);
+    EXPECT_TRUE(parseTimeControl("0+0").unlimited); // zeroed = no clock
 }
 
-// Audit 3.3: absurd digit fields degrade to unlimited, never throw —
-// stoll's out_of_range used to escape the digits-only validation (which
-// happily passes for any number of digits) and would have terminated the
-// process at a new callsite. The audit also tightened the usable ceiling:
-// clock figures ride the wire as int32 milliseconds, so a field whose
+// Audit: absurd digit fields degrade to unlimited, never throw — stoll's
+// out_of_range used to escape the digits-only validation (which happily
+// passes for any number of digits) and would have terminated the process
+// at a new callsite. The audit also tightened the usable ceiling: clock
+// figures ride the wire as int32 milliseconds, so a field whose
 // millisecond value cannot survive that cast is a malformed payload, not
-// a time control.
+// a time control. A base of 0 stays legal (increment-only form, the
+// quick-timeout e2e fixture).
 TEST(ParseTimeControl, OverflowingDigitsAreUnlimited)
 {
     EXPECT_TRUE(parseTimeControl("99999999999999999999+0").unlimited);

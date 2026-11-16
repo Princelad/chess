@@ -7,6 +7,7 @@
 #include <atomic>
 #include <chrono>
 #include <deque>
+#include <optional>
 #include <queue>
 #include <string>
 #include <thread>
@@ -71,7 +72,12 @@ private:
     std::thread connectThread_;
     std::atomic<bool> connectDone_{false};
     std::atomic<bool> connectSuccess_{false};
+    // Audit: non-blocking connect slices poll this flag so a disconnect
+    // (or the destructor) never waits out the handshake.
+    std::atomic<bool> connectCancel_{false};
     std::string connectError_;
+    // The front outbox message's packet mid-send (Partial-send contract).
+    std::optional<sf::Packet> pendingSend_;
 
     std::chrono::steady_clock::time_point lastPingSent_;
     std::chrono::steady_clock::time_point lastPongReceived_;

@@ -992,3 +992,4 @@ TEST_F(Chess960MatchTest, TakebackRollbackRechainsFromFrcStart)
     EXPECT_EQ(match_->currentFen(), startFen_);
     EXPECT_TRUE(match_->isActive());
 }
+

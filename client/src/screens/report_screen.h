@@ -31,6 +31,7 @@ public:
                  std::vector<std::string> sanMoves,
                  std::string result,
                  std::int64_t archiveId = 0);
+    ~ReportScreen() override;
 
     void handleEvent(const sf::Event& event) override;
     void update(float dtSec) override;

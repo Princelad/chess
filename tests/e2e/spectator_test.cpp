@@ -144,15 +144,14 @@ TEST_F(SpectatorE2eTest, StopReleasesTheWatch)
     spectate(watcher, "Alice");
 
     sendMsg(watcher, chess::net::SpectateStopMsg{});
-    // Deterministic unbind probe: while still watching, a ping answers
-    // Pong (the spectator chain); once the release has landed, the same
-    // ping falls into the Connected fallback ("Join first").
-    ASSERT_TRUE(pollUntil([&]() {
-        sendMsg(watcher, chess::net::PingMsg{});
-        auto m = tryRecv(watcher);
-        return m.has_value()
-            && std::holds_alternative<chess::net::ErrorMsg>(*m);
-    }));
+    // Deterministic barrier (audit): pings are answered for EVERY
+    // connection state now, and a socket's messages are handled strictly
+    // in order — so the Pong proves everything queued before it (the
+    // SpectateStop) has been processed. The old "Pong while bound /
+    // Join first after" discrimination died with the unconditional
+    // keepalive answer.
+    sendMsg(watcher, chess::net::PingMsg{});
+    ASSERT_TRUE(await<chess::net::PongMsg>(watcher).has_value());
 
     ASSERT_TRUE(playMove(white, "e4"));
     auto seatEcho = await<chess::net::ServerMoveMsg>(black);

@@ -124,6 +124,7 @@ TEST(ChatMute, PersistableNameGate)
     EXPECT_FALSE(chatMuteNamePersistable("Bo#t"));   // comment strip
     EXPECT_FALSE(chatMuteNamePersistable("Bo;t"));   // comment strip
     EXPECT_FALSE(chatMuteNamePersistable("Bo=t"));   // key=value split
+    EXPECT_FALSE(chatMuteNamePersistable("Bo,t"));   // CSV separator
     EXPECT_FALSE(chatMuteNamePersistable("[section]"));
     EXPECT_FALSE(chatMuteNamePersistable("Bo\nt"));  // control char
     EXPECT_FALSE(chatMuteNamePersistable(" Bo"));    // edge blank, trimmed

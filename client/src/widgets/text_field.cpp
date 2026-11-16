@@ -16,7 +16,9 @@ std::string truncateForWidth(const std::string& s, const sf::Font& font,
 
     std::string out = s;
     while (out.size() > 1) {
-        out.pop_back();
+        // Whole-sequence pops: a byte-wise cut could split a multibyte
+        // character mid-sequence and render tofu in the field.
+        utf8PopBack(out);
         if (sf::Text(font, out + "...", charSize).getLocalBounds().size.x <= maxWidth)
             break;
     }

@@ -417,6 +417,15 @@ void LocalGameScreen::handleEvent(const sf::Event& event)
             return;
         }
 
+        // Tier 4 gate (mirrors GameScreen): the help overlay covers the
+        // board, so keys beneath it must not drive it — Escape above and
+        // the Help toggle here are the only exits.
+        if (showingHelp_) {
+            if (keyToAction(kp->code, kp->shift) == KeyboardAction::Help)
+                showingHelp_ = false;
+            return;
+        }
+
         if (promo_) {
             if (kp->code == sf::Keyboard::Key::Space) { cancelPromotion(); return; }
             if (auto t = promoTypeForKey(kp->code)) {
@@ -481,6 +490,10 @@ void LocalGameScreen::handleEvent(const sf::Event& event)
         }
         return;
     }
+
+    // Tier 4 gate (mirrors GameScreen): clicks beneath the help overlay do
+    // nothing — the overlay covers the board.
+    if (showingHelp_) return;
 
     sf::Vector2f local(0.f, 0.f);
     if (const auto* mm = event.getIf<sf::Event::MouseMoved>())

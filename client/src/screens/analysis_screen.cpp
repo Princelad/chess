@@ -111,15 +111,18 @@ AnalysisScreen::AnalysisScreen(App& app,
         engineReady_ = true;
         engine_->onInfo([this](const uci::SearchInfo& si) {
             std::lock_guard<std::mutex> lock(evalMutex_);
-            if (analysisPly_ < 0 || analysisPly_ >= static_cast<int>(evals_.size()))
+            // One atomic read: the ply must not change between the bounds
+            // check and the use.
+            const int ply = analysisPly_.load(std::memory_order_relaxed);
+            if (ply < 0 || ply >= static_cast<int>(evals_.size()))
                 return;
-            evals_[analysisPly_].score_cp = si.score_cp;
-            evals_[analysisPly_].isMate = si.score_is_mate;
-            evals_[analysisPly_].mateIn = si.mate_in;
+            evals_[ply].score_cp = si.score_cp;
+            evals_[ply].isMate = si.score_is_mate;
+            evals_[ply].mateIn = si.mate_in;
             if (!si.pv.empty()) {
-                evals_[analysisPly_].bestMove = si.pv[0];
-                evals_[analysisPly_].pv = si.pv; // full line for the toggle
-                evalDone_[analysisPly_] = true;  // eval-graph data point
+                evals_[ply].bestMove = si.pv[0];
+                evals_[ply].pv = si.pv; // full line for the toggle
+                evalDone_[ply] = true;  // eval-graph data point
             }
         });
         startEngineAnalysis();
@@ -155,6 +158,7 @@ void AnalysisScreen::startEngineAnalysis()
     engine_->stop();
     engine_->position(navigator_.board().toFen());
     analysisPly_ = navigator_.currentPly();
+    lastAnalyzedPly_ = navigator_.currentPly();
     engine_->go(0, 0, true);
 }
 
@@ -311,6 +315,12 @@ void AnalysisScreen::update(float /*dtSec*/)
             engine_->stop();
             analysisPly_ = -1;
         }
+    } else if (analysisPly_ == -1
+               && lastAnalyzedPly_ != navigator_.currentPly()) {
+        // Audit: after a search completes, analysisPly_ parks at -1 and
+        // nothing ever re-armed it — navigating to a fresh ply showed the
+        // stale arrow/eval of whichever ply was analyzed last, forever.
+        startEngineAnalysis();
     }
 }
 
@@ -552,9 +562,18 @@ void AnalysisScreen::drawEvalGraph(sf::RenderWindow& window)
         };
     };
 
+    // doneCopy: the engine callback flips evalDone_ under the mutex, so
+    // the draw path reads it under the mutex too (a plain read is a data
+    // race). Snapshot once, then draw — pointAt re-locks per call.
+    std::vector<char> doneCopy;
+    {
+        std::lock_guard<std::mutex> lock(evalMutex_);
+        doneCopy.assign(evalDone_.begin(), evalDone_.end());
+    }
+
     // Polyline segments only between consecutive analyzed plies.
     for (int ply = 0; ply < total; ++ply) {
-        if (!evalDone_[ply] || !evalDone_[ply + 1]) continue;
+        if (!doneCopy[ply] || !doneCopy[ply + 1]) continue;
         sf::Vertex seg[2] = {
             sf::Vertex{pointAt(ply), ui::pal::selectionBlue},
             sf::Vertex{pointAt(ply + 1), ui::pal::selectionBlue},
@@ -565,7 +584,7 @@ void AnalysisScreen::drawEvalGraph(sf::RenderWindow& window)
     // Classified markers ride the chip layer's colors.
     for (int ply = 0;
          ply < static_cast<int>(classLayer_.size()) && ply <= total; ++ply) {
-        if (classLayer_[ply] < 0 || !evalDone_[ply]) continue;
+        if (classLayer_[ply] < 0 || !doneCopy[ply]) continue;
         sf::CircleShape mark(3.f);
         mark.setPosition(pointAt(ply) - sf::Vector2f(3.f, 3.f));
         switch (static_cast<quality::MoveClass>(classLayer_[ply])) {
@@ -589,7 +608,7 @@ void AnalysisScreen::drawEvalGraph(sf::RenderWindow& window)
 
     // Current-ply cursor: a thin white tick for orientation.
     const int ply = navigator_.currentPly();
-    if (ply >= 0 && ply <= total && evalDone_[ply]) {
+    if (ply >= 0 && ply <= total && doneCopy[ply]) {
         sf::Vector2f p = pointAt(ply);
         sf::Vertex tick[2] = {
             sf::Vertex{sf::Vector2f(p.x, y + 1.f), ui::pal::white},

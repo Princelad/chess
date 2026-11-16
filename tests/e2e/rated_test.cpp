@@ -89,7 +89,10 @@ TEST_F(RatedE2eTest, TimedGameFlagsTheIdleMover)
 {
     // "0+5" leaves base time empty and grants +5 s per completed move, so
     // the first side to move is out of time the moment the clock starts —
-    // a full timeout test in real milliseconds, no long waits.
+    // a full timeout test in real milliseconds, no long waits. (Audit:
+    // base 0 stays LEGAL on purpose — it is this quick-timeout fixture;
+    // the parse fix only refuses fields whose ms value cannot survive the
+    // int32 wire casts.)
     auto white = connectClient();
     auto black = connectClient();
 
