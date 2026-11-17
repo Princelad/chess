@@ -105,6 +105,15 @@ void Connection::disconnect()
     if (connectThread_.joinable()) connectThread_.join();
     socket_.disconnect();
     while (!outbox_.empty()) outbox_.pop();
+    // Audit 5.1: the in-flight partial packet must not outlive the socket
+    // either. drainOutbox parks the front message's serialized packet here
+    // across Partial/NotReady sends (the SFML partial-send contract), and a
+    // mid-packet drop used to leave the stale bytes behind — the next
+    // connect()'s first drainOutbox() then skipped serializing the fresh
+    // front message (JoinMsg/ResumeMsg), completed the stale packet instead,
+    // and popped the fresh message un-sent: the server never saw the join or
+    // resume and the seat was falsely aborted by the ~30 s give-up.
+    pendingSend_.reset();
     inbox_.clear();
     state_ = ConnectionState::Disconnected;
     error_.clear();
