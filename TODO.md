@@ -49,6 +49,7 @@ phase, PATCH for bugfixes/hotfixes landed within a phase.
 | Audit — post-2.0 bug sweep | `v2.0.1` | Server lifecycle / client state / protocol-db-core fixes |
 | Audit — deferred sweep | `v2.0.2` | Config round-trip, UTF-8 input, wire rating guards, grace budget |
 | Audit — round 3 | `v2.0.3` | Arena variant stamping, lobby keepalive, clock ceiling, screen lifetime, connection internals |
+| Audit — round 4 | `v2.0.4` | Engine-death waits, analysis restart wedge, puzzle help gate, hub failure visibility |
 
 ---
 
