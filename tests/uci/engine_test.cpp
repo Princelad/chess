@@ -37,6 +37,35 @@ TEST(UciEngine, InitHandshake)
     engine.quit();
 }
 
+// Round-4 audit: the handshake waits used to run out their whole timeout
+// when the engine process died (missing path, exec failure) — every
+// engine-less client screen froze for the full 5 s per attempt, and the
+// eval worker waited movetime + 15 s against a dead process. The reader's
+// death must end the wait.
+TEST(UciEngine, DeadEngineHandshakeReturnsQuickly)
+{
+    uci::UciEngine engine("/nonexistent/engine/binary");
+    const auto start = std::chrono::steady_clock::now();
+    auto info = engine.init(5s);
+    const auto elapsed = std::chrono::steady_clock::now() - start;
+    EXPECT_TRUE(info.name.empty());
+    EXPECT_FALSE(engine.isRunning());
+    // The old behavior burned the full 5 s timeout here.
+    EXPECT_LT(elapsed, std::chrono::seconds(3));
+}
+
+TEST(UciEngine, DeadEngineWaitBestMoveReturnsQuickly)
+{
+    uci::UciEngine engine("/nonexistent/engine/binary");
+    engine.init(5s);
+    Board board = Board::fromStartPos();
+    const auto start = std::chrono::steady_clock::now();
+    auto move = engine.waitBestMove(board, 10s);
+    const auto elapsed = std::chrono::steady_clock::now() - start;
+    EXPECT_FALSE(move.has_value());
+    EXPECT_LT(elapsed, std::chrono::seconds(3));
+}
+
 TEST(UciEngine, SetOption)
 {
     if (!isEngineAvailable()) return;

@@ -68,10 +68,19 @@ EngineInfo UciEngine::init(std::chrono::milliseconds timeout)
     EngineInfo info;
     {
         std::unique_lock<std::mutex> lock(m_mutex);
+        // Death-aware: a reader that exited (process gone) ends the wait
+        // immediately instead of running out the whole timeout on the
+        // caller's thread — the engine-less client screens and bot spawns
+        // used to freeze for the full timeout per attempt.
         bool ok = m_cv.wait_for(lock, timeout, [this] {
-            return m_syncSignal == SyncSignal::UciOk;
+            return m_syncSignal == SyncSignal::UciOk || !m_running.load();
         });
         if (!ok) {
+            quit();
+            return {};
+        }
+        if (!m_running.load()) {
+            m_syncSignal = SyncSignal::None;
             quit();
             return {};
         }
@@ -84,10 +93,10 @@ EngineInfo UciEngine::init(std::chrono::milliseconds timeout)
     {
         std::unique_lock<std::mutex> lock(m_mutex);
         bool ok = m_cv.wait_for(lock, timeout, [this] {
-            return m_syncSignal == SyncSignal::ReadyOk;
+            return m_syncSignal == SyncSignal::ReadyOk || !m_running.load();
         });
         m_syncSignal = SyncSignal::None;
-        if (!ok) {
+        if (!ok || !m_running.load()) {
             quit();
             return {};
         }
@@ -110,8 +119,10 @@ void UciEngine::newGame()
     send("ucinewgame");
     send("isready");
     std::unique_lock<std::mutex> lock(m_mutex);
+    // Death-aware (see init): a dead engine must not stall the caller for
+    // the whole timeout — later commands fail fast via pollBestMove.
     m_cv.wait_for(lock, std::chrono::seconds(5), [this] {
-        return m_syncSignal == SyncSignal::ReadyOk;
+        return m_syncSignal == SyncSignal::ReadyOk || !m_running.load();
     });
     m_syncSignal = SyncSignal::None;
 }
@@ -170,8 +181,11 @@ std::optional<Move> UciEngine::waitBestMove(const Board& board,
                                             std::chrono::milliseconds timeout)
 {
     std::unique_lock<std::mutex> lock(m_mutex);
+    // Death-aware: an engine that dies mid-search wakes the waiter instead
+    // of running out the whole timeout (the eval harness worker used to
+    // wait movetime + 15 s against a dead process).
     bool found = m_cv.wait_for(lock, timeout, [this] {
-        return !m_bestmove.empty();
+        return !m_bestmove.empty() || !m_running.load();
     });
 
     if (!found || m_bestmove.empty()) {
