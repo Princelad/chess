@@ -1069,12 +1069,11 @@ void GameScreen::updateReconnect(float dtSec)
                 // Use the credentials remembered at the last successful
                 // connect; failed dials loop back to Backoff via state
                 // checks below.
-                try {
-                    const auto port = static_cast<unsigned short>(
-                        std::stoi(app_.lastPort()));
-                    app_.connection().connect(app_.lastHost(), port);
+                const auto port = parsePort(app_.lastPort());
+                if (port) {
+                    app_.connection().connect(app_.lastHost(), *port);
                     reconnectPhase_ = ReconnectPhase::Connecting;
-                } catch (...) {
+                } else {
                     // Unparsable remembered port: no credentials, no resume.
                     return giveUpReconnect();
                 }
