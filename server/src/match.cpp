@@ -30,7 +30,7 @@ static chess::Board startBoardFrom(const std::string& startFen)
     auto board = chess::fromFen(startFen);
     if (board.has_value())
         return *board;
-    LOG_ERROR("Unparseable start FEN — falling back to the standard position");
+    LOG_ERROR("Unparseable start FEN - falling back to the standard position");
     return chess::Board::fromStartPos();
 }
 
@@ -208,7 +208,7 @@ void Match::handleMessage(Client& sender, const chess::net::ClientMessage& msg)
             || std::get_if<chess::net::RematchAcceptMsg>(&msg)
             || std::get_if<chess::net::RematchDeclineMsg>(&msg)) {
             sendTo(sender, chess::net::ErrorMsg{
-                "Arena games can't be rematched — the lobby pairs you next"});
+                "Arena games can't be rematched - the lobby pairs you next"});
             return;
         }
     }
@@ -552,7 +552,7 @@ void Match::handleRematchRequest(Client& sender)
         // without notices).
         rematchPending_.reset();
         sendTo(sender, chess::net::ErrorMsg{
-            "No game to rematch — session expired"});
+            "No game to rematch - session expired"});
         return;
     }
     if (rematchPending_.has_value()) {
@@ -1000,8 +1000,8 @@ void Match::pollBotMove()
     // failure mode. Bots are never rated, so this is an unrated outcome
     // for the human seat either way.
     LOG_WARN(poll == chess::uci::UciEngine::PollResult::Dead
-        ? "Bot engine died mid-search — bot resigns"
-        : "Bot engine produced an illegal bestmove — bot resigns");
+        ? "Bot engine died mid-search - bot resigns"
+        : "Bot engine produced an illegal bestmove - bot resigns");
     endGame(botColor_ == chess::Color::White
                 ? chess::net::GameResult::BlackWins
                 : chess::net::GameResult::WhiteWins,

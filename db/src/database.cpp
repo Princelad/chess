@@ -73,7 +73,7 @@ bool Statement::requireStatement(const char* what)
 {
     if (stmt_ != nullptr)
         return true;
-    errorMessage_ = std::string("can't ") + what + " — statement is not prepared";
+    errorMessage_ = std::string("can't ") + what + " - statement is not prepared";
     return false;
 }
 
@@ -82,7 +82,7 @@ bool Statement::prepare(sqlite3* db, const char* sql)
     finalize();
     db_ = db;
     if (db_ == nullptr) {
-        errorMessage_ = "can't prepare — no database handle";
+        errorMessage_ = "can't prepare - no database handle";
         return false;
     }
     if (sqlite3_prepare_v2(db, sql, -1, &stmt_, nullptr) != SQLITE_OK) {

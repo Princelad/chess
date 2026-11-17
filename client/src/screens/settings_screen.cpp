@@ -31,7 +31,7 @@ SettingsScreen::SettingsScreen(App& app)
     title_.setFontSize(ui::type::Big);
     title_.setColor(ui::pal::white);
 
-    hint_.setText("Arrows/Tab: navigate · Space/Enter: activate · Esc: back");
+    hint_.setText("Arrows/Tab: navigate - Space/Enter: activate - Esc: back");
     hint_.setFontSize(ui::type::Small);
     hint_.setColor(ui::pal::textGhost);
 
