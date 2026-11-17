@@ -126,6 +126,19 @@ void RushScreen::backToSelect()
     advanceTimer_ = -1.f;
 }
 
+void RushScreen::backToMenu()
+{
+    // Round-4 audit: finishRun() was the only best-persistence point, so
+    // leaving a live run through Menu discarded a would-be new best. A
+    // beaten best persists here too (only when this run actually beat it —
+    // a run that never started has beatBest false and writes nothing).
+    if (!run_.over && run_.beatBest) {
+        app_.config().setInt(rush::bestKey(run_.mode), run_.best);
+        app_.config().save();
+    }
+    PuzzleScreen::backToMenu();
+}
+
 void RushScreen::onSolved()
 {
     // Base: streak raise, puzzle.best_streak persist, "Solved!" status.

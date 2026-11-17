@@ -76,6 +76,12 @@ private:
     std::atomic<int> analysisPly_{-1};
     int lastAnalyzedPly_ = -1; // re-arm trigger when navigation moves on
     mutable std::mutex evalMutex_;
+    // Round-4 audit: every bestmove this screen can receive is an artifact
+    // of a search that stop() killed (analysis runs go infinite — a search
+    // never completes on its own). The flag marks the artifact window of a
+    // restart so the stale answer is dropped instead of stopping the fresh
+    // search against the new position.
+    bool dropNextBestMove_ = false;
 
     Label resultLabel_;
     Label analysisLabel_;

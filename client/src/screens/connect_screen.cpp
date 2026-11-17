@@ -495,6 +495,7 @@ void ConnectScreen::update(float dtSec)
                 status_.setText("Fix the fields and press Enter to retry.");
                 status_.setColor(ui::pal::textFaded);
                 for (auto& field : fields_) field.setEnabled(true);
+                notifyFailure(); // a collapsed drawer must show this
                 return;
             }
             error_.setText(err->message);
@@ -502,6 +503,7 @@ void ConnectScreen::update(float dtSec)
             status_.setText("");
             for (auto& field : fields_) field.setEnabled(true);
             app_.connection().disconnect();
+            notifyFailure();
             return;
         }
         if (std::holds_alternative<chess::net::OpponentLeftMsg>(msg)) {
@@ -509,6 +511,7 @@ void ConnectScreen::update(float dtSec)
             status_.setText("Opponent left. Try again.");
             for (auto& field : fields_) field.setEnabled(true);
             app_.connection().disconnect();
+            notifyFailure();
             return;
         }
     }
@@ -555,8 +558,17 @@ void ConnectScreen::update(float dtSec)
             phase_ = ConnectPhase::Idle;
             status_.setText("");
             for (auto& field : fields_) field.setEnabled(true);
+            notifyFailure();
         }
     }
+}
+
+// 17.4: fires the hub's expand-the-drawer hook on a dead attempt. The
+// standalone screen leaves the hook unset — a plain no-op.
+void ConnectScreen::notifyFailure()
+{
+    if (onFailure_)
+        onFailure_();
 }
 
 void ConnectScreen::draw(sf::RenderWindow& window)

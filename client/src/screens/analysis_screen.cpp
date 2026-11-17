@@ -156,6 +156,10 @@ void AnalysisScreen::startEngineAnalysis()
     if (!engineReady_ || !engine_) return;
 
     engine_->stop();
+    // The stop's bestmove (async) belongs to the killed search, not to the
+    // position about to be analyzed — the update() poll must drop it
+    // instead of stopping the fresh infinite search with it.
+    dropNextBestMove_ = true;
     engine_->position(navigator_.board().toFen());
     analysisPly_ = navigator_.currentPly();
     lastAnalyzedPly_ = navigator_.currentPly();
@@ -312,9 +316,25 @@ void AnalysisScreen::update(float /*dtSec*/)
     if (analysisPly_ == navigator_.currentPly()) {
         auto move = engine_->tryGetBestMove(navigator_.board());
         if (move) {
-            engine_->stop();
-            analysisPly_ = -1;
+            if (dropNextBestMove_) {
+                // Stop artifact from the killed search — see
+                // startEngineAnalysis; the fresh infinite search keeps
+                // running.
+                dropNextBestMove_ = false;
+            } else {
+                engine_->stop();
+                analysisPly_ = -1;
+            }
         }
+    } else if (analysisPly_ >= 0
+               && analysisPly_ != navigator_.currentPly()) {
+        // Round-4 audit: navigating away from an in-flight search used to
+        // wedge analysis forever — analysisPly_ parks at the old ply, the
+        // -1 re-arm below requires a COMPLETED search, but an infinite
+        // search never completes, so the old position was analyzed (and
+        // burned CPU) for the rest of the session. A ply change while a
+        // search is live restarts the analysis on the shown position.
+        startEngineAnalysis();
     } else if (analysisPly_ == -1
                && lastAnalyzedPly_ != navigator_.currentPly()) {
         // Audit: after a search completes, analysisPly_ parks at -1 and
