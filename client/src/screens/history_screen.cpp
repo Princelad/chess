@@ -1,6 +1,7 @@
 #include "history_screen.h"
 
 #include "ui/theme.h"
+#include "ui_helpers.h"
 
 #include "analysis_screen.h"
 #include "game_screen.h"
@@ -314,7 +315,8 @@ void HistoryScreen::update(float)
             meta << "  " << replay.sans.size() << " halfmoves";
             detailMeta_.setText(meta.str());
             detailSans_.setText(record_->sanMoves.empty()
-                ? "(no moves recorded)" : record_->sanMoves);
+                ? "(no moves recorded)"
+                : wrapSanChain(record_->sanMoves, 76, 12));
             layoutWidgets();
         }
         else if (auto* err = std::get_if<chess::net::ErrorMsg>(&msg)) {

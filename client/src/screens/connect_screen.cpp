@@ -289,11 +289,9 @@ void ConnectScreen::tryConnectOrRetry()
     if (phase_ == ConnectPhase::Idle) {
         if (name().empty()) return;
 
-        unsigned short portNum = 0;
-        try {
-            portNum = static_cast<unsigned short>(std::stoi(fields_[1].text()));
-        } catch (...) {
-            error_.setText("Invalid port number");
+        const auto portNum = parsePort(fields_[1].text());
+        if (!portNum) {
+            error_.setText("Port must be 1-65535");
             return;
         }
 
@@ -303,7 +301,7 @@ void ConnectScreen::tryConnectOrRetry()
         phase_ = ConnectPhase::Connecting;
         status_.setText("Connecting...");
         for (auto& field : fields_) field.setEnabled(false);
-        app_.connection().connect(fields_[0].text(), portNum);
+        app_.connection().connect(fields_[0].text(), *portNum);
         return;
     }
 
@@ -375,11 +373,9 @@ void ConnectScreen::startBrowse(BrowseTarget target)
 {
     if (name().empty() || phase_ != ConnectPhase::Idle) return;
 
-    unsigned short portNum = 0;
-    try {
-        portNum = static_cast<unsigned short>(std::stoi(fields_[1].text()));
-    } catch (...) {
-        error_.setText("Invalid port number");
+    const auto portNum = parsePort(fields_[1].text());
+    if (!portNum) {
+        error_.setText("Port must be 1-65535");
         return;
     }
 
@@ -390,7 +386,7 @@ void ConnectScreen::startBrowse(BrowseTarget target)
     phase_ = ConnectPhase::ConnectingBrowse;
     status_.setText("Connecting...");
     for (auto& field : fields_) field.setEnabled(false);
-    app_.connection().connect(fields_[0].text(), portNum);
+    app_.connection().connect(fields_[0].text(), *portNum);
 }
 
 void ConnectScreen::handleEvent(const sf::Event& event)

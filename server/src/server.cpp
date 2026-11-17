@@ -222,7 +222,7 @@ static void handleSpectate(Client& client, const chess::net::SpectateMsg& msg,
 {
     if (client.state != ClientState::Connected) {
         sendTo(client, chess::net::ErrorMsg{
-            "You have a game of your own — spectate afterwards"});
+            "You have a game of your own - spectate afterwards"});
         return;
     }
 
@@ -315,7 +315,7 @@ static void handleResume(Client& newcomer, const chess::net::ResumeMsg& msg,
         }
         return;
     }
-    sendTo(newcomer, chess::net::ErrorMsg{"No game to resume — session expired"});
+    sendTo(newcomer, chess::net::ErrorMsg{"No game to resume - session expired"});
 }
 
 static void handleLogin(Client& client, const chess::net::LoginMsg& login,
@@ -343,7 +343,7 @@ static void handleLogin(Client& client, const chess::net::LoginMsg& login,
         const auto wait = std::chrono::duration_cast<std::chrono::seconds>(
             client.loginLockedUntil - now).count() + 1;
         sendTo(client, chess::net::ErrorMsg{
-            "Too many failed logins — try again in "
+            "Too many failed logins - try again in "
             + std::to_string(wait) + " seconds"});
         return;
     }
@@ -371,7 +371,7 @@ static void handleLogin(Client& client, const chess::net::LoginMsg& login,
     if (existing.has_value()) {
         if (login.password.empty()) {
             sendTo(client, chess::net::ErrorMsg{
-                "Account '" + existing->name + "' is password protected — "
+                "Account '" + existing->name + "' is password protected - "
                 "enter the password to log in, or pick another name for guest play"});
             return;
         }
@@ -650,7 +650,7 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
         Client* white = finished.white();
         Client* black = finished.black();
         if (!white || !black) {
-            LOG_WARN("Rematch fired with an absent seat — dropped");
+            LOG_WARN("Rematch fired with an absent seat - dropped");
             return;
         }
         Client* bot = white->isBot ? white : (black->isBot ? black : nullptr);
@@ -1084,7 +1084,7 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
                             } else if (players != nullptr
                                        && players->byName(arenaJoin->name).has_value()) {
                                 sendTo(client, chess::net::ErrorMsg{
-                                    "Name '" + arenaJoin->name + "' belongs to an account — "
+                                    "Name '" + arenaJoin->name + "' belongs to an account - "
                                     "log in with its password or pick another name"});
                             } else {
                                 playerName = arenaJoin->name;
@@ -1288,7 +1288,7 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
                                         auto account = players->byName(join->name);
                                         if (account.has_value()) {
                                             sendTo(client, chess::net::ErrorMsg{
-                                                "Name '" + account->name + "' belongs to an account — "
+                                                "Name '" + account->name + "' belongs to an account - "
                                                 "log in with its password or pick another name"});
                                             return;
                                         }
@@ -1334,7 +1334,7 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
                                 // reset the game-over seat: "Join first"
                                 // would be cryptic.
                                 sendTo(client, chess::net::ErrorMsg{
-                                    "No game to rematch — session expired"});
+                                    "No game to rematch - session expired"});
                             } else {
                                 sendTo(client, chess::net::ErrorMsg{"Join first"});
                             }

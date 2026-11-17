@@ -37,7 +37,7 @@ TournamentLobbyScreen::TournamentLobbyScreen(App& app,
     std::string sub = timeControl_.empty()
         ? "unlimited" : ("tc " + timeControl_);
     sub += variant_.empty()
-        ? "   ·   standard" : ("   ·   " + variant_);
+        ? "   -   standard" : ("   -   " + variant_);
     subtitle_.setText(sub);
     subtitle_.setFontSize(ui::type::Body);
     subtitle_.setColor(ui::pal::textDimmed);

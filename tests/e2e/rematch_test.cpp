@@ -176,7 +176,7 @@ TEST_F(RematchWindowExpiredE2eTest, RetentionLapseAnswersFromLobbyState)
     sendMsg(white, chess::net::RematchRequestMsg{});
     auto err = await<chess::net::ErrorMsg>(white);
     ASSERT_TRUE(err.has_value());
-    EXPECT_EQ(err->message, "No game to rematch — session expired");
+    EXPECT_EQ(err->message, "No game to rematch - session expired");
 
     // The queue still works from that state: both can rejoin normally.
     sendMsg(white, chess::net::JoinMsg{"Emil"});

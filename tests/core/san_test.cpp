@@ -265,10 +265,73 @@ TEST(SAN, FromSanEnPassant)
 
 TEST(SAN, ToSanDisambiguationByBoth)
 {
-    // Rooks on a1, a5, c3. All can reach a3. Need both file and rank disambiguation for Ra1.
-    auto board = *Board::fromFen("8/8/8/R7/8/2R5/8/R3k3 w - - 0 1");
+    // Queens a1, a5, c1 all reach a3 (c1 diagonally via b2). For a1->a3
+    // the file is ambiguous (a5) AND the rank is ambiguous (c1): standard
+    // SAN needs both. Rooks can never produce this shape on a corner
+    // square (a rank-clash rook would have to sit on the mover's own
+    // file), which is why the old rook fixture pinned the over-emitted
+    // "Ra1a3" for what is really a rank-unique case ("R1a3").
+    auto board = *Board::fromFen("4k3/8/8/Q7/8/8/8/Q1Q1K3 w - - 0 1");
     Move m = move(squareOf(File::A, Rank::R1), squareOf(File::A, Rank::R3));
-    EXPECT_EQ(san::toSan(board, m), "Ra1a3");
+    EXPECT_EQ(san::toSan(board, m), "Qa1a3");
+}
+
+// --- Audit 5.5: standard minimal disambiguation ---
+
+TEST(SAN, ToSanRankUniquePrefersRankOnly)
+{
+    // Knights b1, b5, a2 all reach c3. For b1->c3 the FILE is ambiguous
+    // (b5 shares file b) but the RANK is unique (others on ranks 5 and 2):
+    // standard SAN is "N1c3" — the old rule also appended the file and
+    // emitted "Nb1c3".
+    auto board = *Board::fromFen("4k3/8/8/1N6/8/8/N7/1N2K3 w - - 0 1");
+    Move m = move(squareOf(File::B, Rank::R1), squareOf(File::C, Rank::R3));
+    EXPECT_EQ(san::toSan(board, m), "N1c3");
+}
+
+TEST(SAN, ToSanRankUniqueSiblingsAlsoMinimal)
+{
+    // Same position: b5->c3 shares its FILE with b1 -> rank-only; a2->c3
+    // shares NO file with the others (b, b vs a) -> file-only.
+    auto board = *Board::fromFen("4k3/8/8/1N6/8/8/N7/1N2K3 w - - 0 1");
+    EXPECT_EQ(san::toSan(board, move(squareOf(File::B, Rank::R5),
+                                     squareOf(File::C, Rank::R3))),
+              "N5c3");
+    EXPECT_EQ(san::toSan(board, move(squareOf(File::A, Rank::R2),
+                                     squareOf(File::C, Rank::R3))),
+              "Nac3");
+}
+
+TEST(SAN, FromSanAcceptsMinimalRankOnly)
+{
+    auto board = *Board::fromFen("4k3/8/8/1N6/8/8/N7/1N2K3 w - - 0 1");
+    auto m = san::fromSan(board, "N1c3");
+    ASSERT_TRUE(m.has_value());
+    EXPECT_EQ(*m, move(squareOf(File::B, Rank::R1), squareOf(File::C, Rank::R3)));
+}
+
+TEST(SAN, FromSanStillAcceptsOverDisambiguated)
+{
+    // Legacy archives may hold the old "Nb1c3" form; fromSan keeps
+    // parsing it (file + rank is a valid, if non-minimal, qualifier).
+    auto board = *Board::fromFen("4k3/8/8/1N6/8/8/N7/1N2K3 w - - 0 1");
+    auto m = san::fromSan(board, "Nb1c3");
+    ASSERT_TRUE(m.has_value());
+    EXPECT_EQ(*m, move(squareOf(File::B, Rank::R1), squareOf(File::C, Rank::R3)));
+}
+
+TEST(SAN, RoundTripThreeKnightDisambiguation)
+{
+    // Every legal move in the 3-knight position round-trips through the
+    // now-minimal toSan output.
+    auto board = *Board::fromFen("4k3/8/8/1N6/8/8/N7/1N2K3 w - - 0 1");
+    auto legal = generateLegalMoves(board);
+    for (const auto& m : legal) {
+        std::string s = san::toSan(board, m);
+        auto parsed = san::fromSan(board, s);
+        ASSERT_TRUE(parsed.has_value()) << "Failed round-trip for: " << s;
+        EXPECT_EQ(*parsed, m) << "Round-trip mismatch for: " << s;
+    }
 }
 
 // --- Black-side SAN ---
@@ -376,9 +439,10 @@ TEST(SAN, GamePlaythroughRoundTrip)
 
 TEST(SAN, FromSanDisambiguationByBoth)
 {
-    // Three rooks can reach a3. "Ra1a3" specifies both file and rank.
-    auto board = *Board::fromFen("8/8/8/R7/8/2R5/8/R3k3 w - - 0 1");
-    auto m = san::fromSan(board, "Ra1a3");
+    // Queens a1, a5, c1 can all reach a3. "Qa1a3" specifies both file and
+    // rank (see ToSanDisambiguationByBoth for why rooks cannot).
+    auto board = *Board::fromFen("4k3/8/8/Q7/8/8/8/Q1Q1K3 w - - 0 1");
+    auto m = san::fromSan(board, "Qa1a3");
     ASSERT_TRUE(m.has_value());
     EXPECT_EQ(*m, move(squareOf(File::A, Rank::R1), squareOf(File::A, Rank::R3)));
 }
