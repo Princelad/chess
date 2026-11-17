@@ -28,6 +28,7 @@ protected:
     void onWrongMove() override;
     void revealSolution() override;
     void nextPuzzle() override;
+    void backToMenu() override;
     bool solverTurn() const override;
 
     void startRun(rush::Mode mode);

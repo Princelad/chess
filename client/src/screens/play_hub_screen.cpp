@@ -62,6 +62,10 @@ PlayHubScreen::PlayHubScreen(App& app)
     , drawer_(std::make_unique<ConnectScreen>(app))
 {
     drawer_->embedAsDrawer();
+    // Round-4 audit: a collapsed drawer's failed attempt used to fail
+    // invisibly (the hub shows no status of its own) — every dead attempt
+    // expands the drawer so the error line is readable.
+    drawer_->setOnFailure([this] { drawerOpen_ = true; });
 
     for (int i = 0; i < QuickCount; ++i) {
         quickBtns_[i].setLabel(QuickSpecs[i].label);

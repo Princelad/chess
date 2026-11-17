@@ -1226,8 +1226,10 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
                             // (archive/leaderboard browsing, arena
                             // waiting, post-failed-login retries) whose
                             // state fell through to the "Join first"
-                            // fallback. Seat traffic is unaffected: seats
-                            // get their Pong via Match::handlePing.
+                            // fallback. This top-level branch is the ONE
+                            // Pong source now: seated matches never see a
+                            // PingMsg (their Match::handlePing route is
+                            // unreachable from this dispatch).
                             sendTo(client, chess::net::PongMsg{});
                         }
                         else switch (client.state) {
@@ -1338,11 +1340,10 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
                             }
                             break;
                         case ClientState::Queued:
-                            if (std::get_if<chess::net::PingMsg>(&*msg)) {
-                                sendTo(client, chess::net::PongMsg{});
-                            } else {
-                                sendTo(client, chess::net::ErrorMsg{"Waiting for match"});
-                            }
+                            // PingMsg never reaches this switch (the
+                            // top-level keepalive branch answers first);
+                            // anything else has no meaning while queued.
+                            sendTo(client, chess::net::ErrorMsg{"Waiting for match"});
                             break;
                         case ClientState::InMatch:
                         case ClientState::GameOver:

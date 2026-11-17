@@ -7,6 +7,7 @@
 
 #include <array>
 #include <cstddef>
+#include <functional>
 #include <optional>
 #include <string>
 #include <utility>
@@ -48,6 +49,12 @@ public:
     // The hub's variant cycler drives the drawer's persisted pick.
     void cycleVariant() { selectVariant(); }
     ConnectPhase phase() const { return phase_; }
+    // 17.4: the hub collapses the drawer while a quick attempt runs; a
+    // failed connect/login/queue would otherwise fail INVISIBLY. The hook
+    // fires on every failure path that leaves the attempt dead (the hub
+    // expands the drawer so the error is visible). No-op when unset —
+    // the standalone screen never needs it.
+    void setOnFailure(std::function<void()> hook) { onFailure_ = std::move(hook); }
 
 private:
     static constexpr std::size_t FieldCount = 4;
@@ -65,6 +72,7 @@ private:
     void selectVariant();
     void updateVariantLabel();
     void layoutWidgets();
+    void notifyFailure();
     const std::string& name() const;
     const std::string& password() const;
     const std::string& timeControl() const { return timeControls_[tcIndex_]; }
@@ -94,6 +102,7 @@ private:
     Label status_;
     Label error_;
     BrowseTarget browseTarget_ = BrowseTarget::None;
+    std::function<void()> onFailure_;
 };
 
 } // namespace chess::client

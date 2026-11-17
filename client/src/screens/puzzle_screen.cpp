@@ -572,6 +572,16 @@ void PuzzleScreen::handleEvent(const sf::Event& event)
             return;
         }
 
+        // Tier 4 (v2.0.3 rule, round-4 audit): the help overlay gates every
+        // other input — keys and clicks beneath it must not drive the board
+        // (a cursor move or a click under the dim was a real move attempt).
+        // Escape above and the Help toggle here are the only exits.
+        if (showingHelp_) {
+            if (keyToAction(kp->code, kp->shift) == KeyboardAction::Help)
+                showingHelp_ = false;
+            return;
+        }
+
         if (promo_) {
             if (kp->code == sf::Keyboard::Key::Space) { cancelPromotion(); return; }
             if (auto t = promoTypeForKey(kp->code)) {
@@ -621,6 +631,10 @@ void PuzzleScreen::handleEvent(const sf::Event& event)
         }
         return;
     }
+
+    // Tier 4: clicks beneath the help overlay do nothing (buttons, promo
+    // cells, and board squares all sit under the dim).
+    if (showingHelp_) return;
 
     sf::Vector2f local(0.f, 0.f);
     if (const auto* mm = event.getIf<sf::Event::MouseMoved>())
