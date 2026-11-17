@@ -57,8 +57,19 @@ std::string toSan(const Board& board, const Move& m)
     // Disambiguation for non-pawn, non-king pieces
     if (piece.type != PieceType::Pawn && piece.type != PieceType::King) {
         auto legal = generateLegalMoves(board);
-        bool needFile = false;
-        bool needRank = false;
+        // Audit 5.5: the PGN-standard rule. Among the other same-type
+        // pieces that can legally reach m.to: the file alone identifies
+        // the mover unless one of them shares the mover's file; then the
+        // rank alone suffices unless one of them also shares the mover's
+        // rank — only that double clash writes file AND rank. The old
+        // form set needFile whenever ANY candidate differed in file, so
+        // the rank-unique case (knights b1/b5/f5 -> c3) over-emitted
+        // "Nb1c3" where standard SAN is "N1c3".
+        const int myFile = m.from & 7;
+        const int myRank = (m.from >> 4) & 7;
+        bool hasOther = false;
+        bool sameFileOther = false;
+        bool sameRankOther = false;
 
         for (const auto& lm : legal) {
             if (lm.to != m.to) continue;
@@ -66,23 +77,19 @@ std::string toSan(const Board& board, const Move& m)
             const Piece p = board.pieceAt(lm.from);
             if (p.type != piece.type) continue;
 
-            int otherFile = lm.from & 7;
-            int myFile = m.from & 7;
-            int myRank = (m.from >> 4) & 7;
-
-            if (otherFile == myFile) {
-                needRank = true;
-            } else {
-                needFile = true;
-            }
+            hasOther = true;
+            if ((lm.from & 7) == myFile) sameFileOther = true;
+            if (((lm.from >> 4) & 7) == myRank) sameRankOther = true;
         }
 
-        if (needFile || needRank) {
-            if (needFile) {
-                san += 'a' + (m.from & 7);
-            }
-            if (needRank) {
-                san += '1' + ((m.from >> 4) & 7);
+        if (hasOther) {
+            if (sameFileOther && sameRankOther) {
+                san += 'a' + myFile;
+                san += '1' + myRank;
+            } else if (sameFileOther) {
+                san += '1' + myRank;
+            } else {
+                san += 'a' + myFile;
             }
         }
     }
