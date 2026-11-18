@@ -132,8 +132,21 @@ void genPawn(Square from, Color color, const Board& board, MoveFilter filter,
         const Square to = from + offset;
         if (offBoard(to)) continue;
         if (board.enPassantSquare() == to) {
-            moves.push_back(enPassantMove(from, to));
-            continue;
+            // Audit 6.1: the EP frame is only real when an enemy pawn sits
+            // on the victim square (same file as `to`, same rank as `from`)
+            // and the EP square itself is empty. fromFen validates only the
+            // EP rank, so a crafted/inconsistent FEN otherwise produces an
+            // EP move that makeMove executes blindly — clearing an
+            // ARBITRARY square, including a king.
+            const Piece victim = board.pieceAt(squareOf(to & 7, (from >> 4) & 7));
+            if (victim.type == PieceType::Pawn && victim.color != color
+                && board.isEmpty(to)) {
+                moves.push_back(enPassantMove(from, to));
+                continue;
+            }
+            // No fall-through skip: an inconsistent FEN may legally hold a
+            // piece ON the EP square, and the normal capture below must
+            // still fire for it.
         }
         const Piece target = board.pieceAt(to);
         if (target.isNone()) continue;
@@ -376,13 +389,22 @@ std::vector<Move> generateLegalMoves(const Board& board, MoveFilter filter)
 
 GameState evaluateGameState(const Board& board)
 {
+    const auto legal = generateLegalMoves(board);
+
+    // Audit 6.2: FIDE 9.6.2 is explicit — "If the last move resulted in
+    // checkmate, that shall take precedence." A quiet mating move can
+    // land on halfmove clock 100 and still wins. Every other precedence
+    // keeps its old shape: stalemate still defers to the auto-draws (a
+    // K-vs-K stalemate stays Draw).
+    if (legal.empty() && inCheck(board, board.sideToMove()))
+        return GameState::Checkmate;
+
     if (threefoldRepetition(board)) return GameState::Draw;
     if (fiftyMoveRule(board)) return GameState::Draw;
     if (insufficientMaterial(board)) return GameState::Draw;
-    auto legal = generateLegalMoves(board);
-    if (!legal.empty()) return GameState::Ongoing;
-    if (inCheck(board, board.sideToMove())) return GameState::Checkmate;
-    return GameState::Stalemate;
+
+    if (legal.empty()) return GameState::Stalemate;
+    return GameState::Ongoing;
 }
 
 bool threefoldRepetition(const Board& board)

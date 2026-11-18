@@ -51,6 +51,7 @@ phase, PATCH for bugfixes/hotfixes landed within a phase.
 | Audit — round 3 | `v2.0.3` | Arena variant stamping, lobby keepalive, clock ceiling, screen lifetime, connection internals |
 | Audit — round 4 | `v2.0.4` | Engine-death waits, analysis restart wedge, puzzle help gate, hub failure visibility |
 | Audit — round 5 | `v2.0.5` | Connection pendingSend_ lifetime, tofu wire strings, archive detail wrap, port validation, standard SAN disambiguation |
+| Audit — round 6 | `v2.0.6` | En-passant generation validation, checkmate precedence over auto-draws |
 
 ---
 
