@@ -38,6 +38,10 @@ private:
     void toggleDrawer();
     void quickBrowse(BrowseTarget target);
     void startPersona(std::size_t index);
+    // Audit 9.1: hub navigation that hands the screen over must first
+    // cancel an in-flight queue — the drawer (its poller) dies with the
+    // hub, so the pairing would never be read.
+    void leaveQueueIfAny();
     void layoutPersonaRows();
 
 private:
