@@ -1023,4 +1023,72 @@ TEST(MoveGen, EnPassantPinnedDiagonally)
     EXPECT_FALSE(isLegalMove(board, enPassantMove(squareOf(File::D, Rank::R5), squareOf(File::C, Rank::R6))));
 }
 
+// --- Audit 6.1: the EP frame is validated against the board ---
+
+bool containsEnPassant(const std::vector<Move>& moves, Square from, Square to)
+{
+    return std::any_of(moves.begin(), moves.end(), [&](const Move& m) {
+        return m.from == from && m.to == to && m.isEnPassant();
+    });
+}
+
+TEST(MoveGen, HostileFenEpFrameWithoutPawnVictimIsRefused)
+{
+    // EP target b3 with a WHITE pawn on a2 — but the victim square (b2)
+    // holds the black KING, not a pawn. The old code generated the frame
+    // anyway, and makeMove's EP branch would clear b2: the black king
+    // vanishes from the board. fromFen validates only the EP rank.
+    auto board = *Board::fromFen("8/8/8/8/8/8/Pk6/4K3 w - b3 0 1");
+    Square a2 = squareOf(File::A, Rank::R2);
+    Square b3 = squareOf(File::B, Rank::R3);
+    EXPECT_FALSE(containsEnPassant(generateMoves(board), a2, b3));
+    EXPECT_FALSE(containsEnPassant(generateLegalMoves(board), a2, b3));
+    // The board is untouched: the king is still on b2.
+    EXPECT_TRUE(board.pieceAt(squareOf(File::B, Rank::R2))
+                == Piece::of(Color::Black, PieceType::King));
+}
+
+TEST(MoveGen, HostileFenEpFrameWithNonPawnVictimIsRefused)
+{
+    // Same shape, but the victim square holds a knight: no EP frame, and
+    // since the EP square itself is empty, no move to it at all.
+    auto board = *Board::fromFen("7k/8/8/8/8/8/Pn5K/8 w - b3 0 1");
+    Square a2 = squareOf(File::A, Rank::R2);
+    Square b3 = squareOf(File::B, Rank::R3);
+    EXPECT_FALSE(containsEnPassant(generateMoves(board), a2, b3));
+    EXPECT_FALSE(containsEnPassant(generateLegalMoves(board), a2, b3));
+}
+
+TEST(MoveGen, HostileFenEpFrameWithoutPawnVictimBlackSide)
+{
+    // Black mirror: EP target a3 with a black pawn on b4, but the victim
+    // square (a4) holds a white knight.
+    auto board = *Board::fromFen("7k/8/8/8/Np6/8/8/4K3 b - a3 0 1");
+    Square b4 = squareOf(File::B, Rank::R4);
+    Square a3 = squareOf(File::A, Rank::R3);
+    EXPECT_FALSE(containsEnPassant(generateMoves(board), b4, a3));
+    EXPECT_FALSE(containsEnPassant(generateLegalMoves(board), b4, a3));
+    EXPECT_TRUE(board.pieceAt(squareOf(File::A, Rank::R4))
+                == Piece::of(Color::White, PieceType::Knight));
+}
+
+TEST(MoveGen, PieceOnEnPassantSquareStillCapturesNormally)
+{
+    // An inconsistent FEN may hold a piece ON the EP target square. The
+    // EP branch used to `continue`, swallowing the square and dropping
+    // the perfectly legal normal capture cxb3 (here it is even the only
+    // legal move: the knight checks Ka1).
+    auto board = *Board::fromFen("8/8/8/8/8/1n6/2P5/K6k w - b3 0 1");
+    Square c2 = squareOf(File::C, Rank::R2);
+    Square b3 = squareOf(File::B, Rank::R3);
+    auto legal = generateLegalMoves(board);
+    EXPECT_TRUE(containsMove(legal, c2, b3, Capture));
+    EXPECT_FALSE(containsEnPassant(legal, c2, b3));
+    // No EP validation also means the honest EP capture still works.
+    auto honest = *Board::fromFen("rnbqkbnr/ppp1pppp/8/3pP3/8/8/PPPP1PPP/RNBQKBNR w KQkq d6 0 3");
+    EXPECT_TRUE(containsEnPassant(generateMoves(honest),
+                                  squareOf(File::E, Rank::R5),
+                                  squareOf(File::D, Rank::R6)));
+}
+
 } // namespace chess
