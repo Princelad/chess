@@ -53,6 +53,7 @@ phase, PATCH for bugfixes/hotfixes landed within a phase.
 | Audit — round 5 | `v2.0.5` | Connection pendingSend_ lifetime, tofu wire strings, archive detail wrap, port validation, standard SAN disambiguation |
 | Audit — round 6 | `v2.0.6` | En-passant generation validation, checkmate precedence over auto-draws |
 | Audit — round 7 | `v2.0.7` | Startup sound settings, local engine resignation, stale bestmove generations |
+| Audit — round 8 | `v2.0.8` | Promotion picker orientation, arena standings row cap |
 
 ---
 
