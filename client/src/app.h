@@ -31,6 +31,38 @@ public:
     virtual void draw(sf::RenderWindow& window) = 0;
 };
 
+// Audit 7.4 (planned round 7, shipped round 9): screens call
+// switchScreen/pushScreen/goBack from their own handlers — before the
+// graveyard, the reassignment destroyed the caller mid-method, and every
+// call site survived only through the "return immediately after the
+// switch" discipline (11.2's applyResume rule, the 12.3 drawer rule, the
+// 12.4 openBrowseTarget returns). Transitions now PARK dying screens
+// here; App::run() reaps once per frame after draw, so a handler that
+// keeps touching `this` after the call stays valid and the discipline
+// becomes style, not memory safety.
+class ScreenGraveyard {
+public:
+    void retire(std::unique_ptr<Screen> screen)
+    {
+        if (screen) pending_.push_back(std::move(screen));
+    }
+
+    // Destroys everything parked since the last reap. Swaps into a local
+    // first: a destructor that calls back into retire() (defensive) then
+    // parks into the member instead of invalidating this destruction.
+    void reap()
+    {
+        if (pending_.empty()) return;
+        std::vector<std::unique_ptr<Screen>> dying;
+        dying.swap(pending_);
+    }
+
+    bool empty() const { return pending_.empty(); }
+
+private:
+    std::vector<std::unique_ptr<Screen>> pending_;
+};
+
 class App {
 public:
     App();
@@ -161,6 +193,9 @@ private:
     EvalHarness evalHarness_;
     std::unique_ptr<Screen> screen_;
     std::vector<std::unique_ptr<Screen>> stack_;
+    // Audit 7.4: screens killed by this frame's transitions, reaped after
+    // draw (ScreenGraveyard above).
+    ScreenGraveyard graveyard_;
     std::optional<sf::Font> font_;
     std::array<sf::Texture, 12> pieceTextures_;
     bool piecesLoaded_ = false;

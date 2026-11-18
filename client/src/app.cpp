@@ -172,12 +172,19 @@ bool App::reloadPieces()
 
 void App::switchScreen(std::unique_ptr<Screen> screen)
 {
+    // Audit 7.4: the old current AND the whole back stack die here — park
+    // them instead of destroying mid-method (the caller may be one of
+    // them).
+    for (auto& parked : stack_)
+        graveyard_.retire(std::move(parked));
     stack_.clear();
+    graveyard_.retire(std::move(screen_));
     screen_ = std::move(screen);
 }
 
 void App::pushScreen(std::unique_ptr<Screen> screen)
 {
+    // Nothing dies in a push — the previous top moves UNDER the new one.
     stack_.push_back(std::move(screen_));
     screen_ = std::move(screen);
 }
@@ -185,6 +192,8 @@ void App::pushScreen(std::unique_ptr<Screen> screen)
 void App::goBack()
 {
     if (stack_.empty()) return;
+    // Audit 7.4: the replaced current dies here — park it.
+    graveyard_.retire(std::move(screen_));
     screen_ = std::move(stack_.back());
     stack_.pop_back();
 }
@@ -221,6 +230,10 @@ void App::run()
         window_.setView(view_);
         if (screen_) screen_->draw(window_);
         window_.display();
+
+        // Audit 7.4: end of frame — nothing is mid-method, so the screens
+        // parked by this frame's transitions can finally be destroyed.
+        graveyard_.reap();
     }
 }
 

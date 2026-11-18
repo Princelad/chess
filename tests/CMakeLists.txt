@@ -61,6 +61,7 @@ if(BUILD_TESTING)
         client/avatars_test.cpp
         client/archive_pgn_test.cpp
         client/game_over_transition_test.cpp
+        client/screen_graveyard_test.cpp
         uci/engine_test.cpp
         e2e/e2e_test.cpp
         e2e/rated_test.cpp
