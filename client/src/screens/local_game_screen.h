@@ -50,6 +50,10 @@ private:
     std::optional<chess::PieceType> promoTypeForKey(sf::Keyboard::Key key) const;
     bool applyEngineMove();
     void checkGameOver();
+    // Audit 7.2: the engine can never answer again (init failure, mid-game
+    // death or a consumed-but-unusable bestmove) — it resigns and the game
+    // ends instead of wedging every input path behind "thinking...".
+    void engineResign(float delaySec, const std::string& note);
     void takeback();
     void finishGameOver();
     void returnToMenu();

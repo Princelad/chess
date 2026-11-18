@@ -97,8 +97,14 @@ LocalGameScreen::LocalGameScreen(App& app, Color myColor,
     engine_ = std::make_unique<uci::UciEngine>(std::move(enginePath));
     auto info = engine_->init();
     if (info.name.empty() && !engine_->isRunning()) {
-        engineFailed_ = true;
-        hud_.setStatus("Engine not found. Set CHESS_ENGINE_PATH.", 999.f);
+        // Audit 7.2: a missing engine can never answer a search — the
+        // board used to stay playable and wedge after the player's first
+        // move (applyMove armed engineThinking_ against the dead engine,
+        // and update()'s engineFailed_ early-return skipped the poll
+        // forever). Mirror the v2.0.3 server rule ("a bot engine that
+        // fails to START resigns"): the engine resigns and the game ends.
+        // The longer delay keeps the hint readable during the transition.
+        engineResign(2.5f, "Engine not found. Set CHESS_ENGINE_PATH.");
         return;
     }
 
@@ -314,17 +320,35 @@ std::optional<chess::PieceType> LocalGameScreen::promoTypeForKey(sf::Keyboard::K
 
 bool LocalGameScreen::applyEngineMove()
 {
-    auto move = engine_->tryGetBestMove(hud_.navigator().finalBoard());
-    if (!move) return false;
+    chess::Move move;
+    // Audit 7.2: tryGetBestMove's nullopt cannot distinguish "still
+    // thinking" from "the engine is gone" (the audit-1.3 gap) — a mid-game
+    // engine death or a consumed-but-unusable bestmove used to leave
+    // engineThinking_ stuck forever with every input path blocked. The
+    // tri-state poll lets a dead/rejecting engine resign instead, like the
+    // server's bots do.
+    const auto poll = engine_->pollBestMove(
+        hud_.navigator().finalBoard(), move);
+    if (poll == uci::UciEngine::PollResult::NoAnswer)
+        return false; // still thinking — keep polling
 
     const auto& cfg = app_.config();
-    const float duration = static_cast<float>(cfg.getFloat("animation.duration", 0.3));
-    if (cfg.getBool("animation.enabled", true) && duration > 0.f)
-        anim_.start(*move, hud_.navigator().finalBoard(), duration);
-    app_.sounds().playMove(hud_.navigator().finalBoard(), *move);
+    const float animDur = static_cast<float>(
+        cfg.getFloat("animation.duration", 0.3));
+    const bool animOn = cfg.getBool("animation.enabled", true);
 
-    std::string san = chess::san::toSan(hud_.navigator().finalBoard(), *move);
-    hud_.navigator().appendMove(*move, san);
+    if (poll != uci::UciEngine::PollResult::Move) {
+        engineResign(gameOverDelaySec(animOn, animDur),
+                     std::string(persona_.name) + " resigns - engine error");
+        return false;
+    }
+
+    if (cfg.getBool("animation.enabled", true) && animDur > 0.f)
+        anim_.start(move, hud_.navigator().finalBoard(), animDur);
+    app_.sounds().playMove(hud_.navigator().finalBoard(), move);
+
+    std::string san = chess::san::toSan(hud_.navigator().finalBoard(), move);
+    hud_.navigator().appendMove(move, san);
     hl_.selectedSquare.reset();
     hl_.legalMoveTargets.clear();
 
@@ -352,6 +376,26 @@ void LocalGameScreen::checkGameOver()
         toResult(state, hud_.navigator().finalBoard().sideToMove()),
         toReason(state, hud_.navigator().finalBoard()),
         gameOverDelaySec(animOn, animDur));
+}
+
+// Audit 7.2: the engine can never move again — it resigns, the human wins
+// (mirror of the v2.0.3 server rule "a bot engine that fails to START
+// resigns"; engine results never rate, locally the game is unrated anyway).
+// The note rides the HUD through the transition delay so the cause is
+// readable before the game-over screen takes over.
+void LocalGameScreen::engineResign(float delaySec, const std::string& note)
+{
+    gameOver_ = true;
+    engineThinking_ = false;
+    engineFailed_ = true;
+    hud_.setGameOver(true);
+    hud_.setInfo(persona_.name, myColor_, myTurn_, gameOver_);
+    hud_.setStatus(note, 999.f);
+    const net::GameResult humanWins = myColor_ == Color::White
+        ? net::GameResult::WhiteWins
+        : net::GameResult::BlackWins;
+    gameOverTransition_.arm(humanWins, net::GameOverReason::Resignation,
+                            delaySec);
 }
 
 void LocalGameScreen::finishGameOver()
