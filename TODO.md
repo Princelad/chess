@@ -54,6 +54,7 @@ phase, PATCH for bugfixes/hotfixes landed within a phase.
 | Audit — round 6 | `v2.0.6` | En-passant generation validation, checkmate precedence over auto-draws |
 | Audit — round 7 | `v2.0.7` | Startup sound settings, local engine resignation, stale bestmove generations |
 | Audit — round 8 | `v2.0.8` | Promotion picker orientation, arena standings row cap |
+| Screen graveyard | `v2.0.9` | Deferred-destruction graveyard so post-switch code is safe |
 
 ---
 
