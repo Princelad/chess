@@ -3,6 +3,7 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <cstdint>
 #include <functional>
 #include <mutex>
 #include <optional>
@@ -89,6 +90,13 @@ private:
     mutable std::mutex m_mutex;
     std::condition_variable m_cv;
     std::string m_bestmove;
+    // Audit 7.3: a bestmove is stamped with the search generation it
+    // answers; every consumer requires an exact match, so an answer of an
+    // OLDER search (one that outlived its consumer's timeout, or an
+    // unsolicited reply to a flush stop) is discarded instead of surfacing
+    // as the answer for the current position. 0 = no search started.
+    std::uint64_t m_searchGen = 0;
+    std::uint64_t m_bestmoveGen = 0;
     SyncSignal m_syncSignal = SyncSignal::None;
     std::string m_engineName;
     std::string m_engineAuthor;
