@@ -780,11 +780,15 @@ TEST(MoveGen, GameStateWhiteCheckmated)
     EXPECT_EQ(evaluateGameState(board), GameState::Checkmate);
 }
 
-TEST(MoveGen, GameStateDrawPrecedenceOverCheckmate)
+TEST(MoveGen, GameStateMateOnFullClockStillWins)
 {
-    // Checkmate position but halfmove clock at 100 — FIDE says draw rules take precedence.
+    // Checkmate with the halfmove clock at 100: FIDE 9.6.2 is explicit
+    // that "if the last move resulted in checkmate, that shall take
+    // precedence" over the 75/50-move auto-draws. Audit 6.2 — the old
+    // draw-checks-first order reported Draw here, and this test used to
+    // pin that with the same wrong rationale.
     auto board = *Board::fromFen("4k3/8/8/8/8/8/r3q3/4K2R w - - 100 50");
-    EXPECT_EQ(evaluateGameState(board), GameState::Draw);
+    EXPECT_EQ(evaluateGameState(board), GameState::Checkmate);
 }
 
 // --- Threefold repetition tests ---
@@ -896,6 +900,32 @@ TEST(MoveGen, FiftyMoveRuleResetsOnCapture)
     // Capture on e5 — clock resets to 0
     board.makeMove(move(squareOf(File::D, Rank::R4), squareOf(File::E, Rank::R5)));
     EXPECT_FALSE(fiftyMoveRule(board));
+}
+
+// --- Audit 6.2: checkmate outranks the automatic draws ---
+
+TEST(MoveGen, GameStateCheckmateOutranksFiftyMoveClock)
+{
+    // Back-rank mate with the halfmove clock at 100 (a quiet mating move
+    // landed on it): FIDE 9.6.2 gives the last move's checkmate
+    // precedence. The old draw-checks-first order reported Draw.
+    auto board = *Board::fromFen("R5k1/5ppp/8/8/8/8/8/4K3 b - - 100 60");
+    EXPECT_TRUE(fiftyMoveRule(board));
+    EXPECT_EQ(evaluateGameState(board), GameState::Checkmate);
+}
+
+TEST(MoveGen, GameStateStalemateKeepsDrawPrecedence)
+{
+    // Deliberate preservation (6.2 fixes only the mate case): a
+    // K+R-vs-K stalemate ON the 100-halfmove clock still reports Draw,
+    // exactly as before the reorder; the same stalemate away from the
+    // clock is Stalemate.
+    auto stalemated = *Board::fromFen("7k/6R1/6K1/8/8/8/8/8 b - - 100 60");
+    EXPECT_TRUE(fiftyMoveRule(stalemated));
+    EXPECT_EQ(evaluateGameState(stalemated), GameState::Draw);
+
+    auto fresh = *Board::fromFen("7k/6R1/6K1/8/8/8/8/8 b - - 0 60");
+    EXPECT_EQ(evaluateGameState(fresh), GameState::Stalemate);
 }
 
 // --- Insufficient material tests ---

@@ -389,13 +389,22 @@ std::vector<Move> generateLegalMoves(const Board& board, MoveFilter filter)
 
 GameState evaluateGameState(const Board& board)
 {
+    const auto legal = generateLegalMoves(board);
+
+    // Audit 6.2: FIDE 9.6.2 is explicit — "If the last move resulted in
+    // checkmate, that shall take precedence." A quiet mating move can
+    // land on halfmove clock 100 and still wins. Every other precedence
+    // keeps its old shape: stalemate still defers to the auto-draws (a
+    // K-vs-K stalemate stays Draw).
+    if (legal.empty() && inCheck(board, board.sideToMove()))
+        return GameState::Checkmate;
+
     if (threefoldRepetition(board)) return GameState::Draw;
     if (fiftyMoveRule(board)) return GameState::Draw;
     if (insufficientMaterial(board)) return GameState::Draw;
-    auto legal = generateLegalMoves(board);
-    if (!legal.empty()) return GameState::Ongoing;
-    if (inCheck(board, board.sideToMove())) return GameState::Checkmate;
-    return GameState::Stalemate;
+
+    if (legal.empty()) return GameState::Stalemate;
+    return GameState::Ongoing;
 }
 
 bool threefoldRepetition(const Board& board)
