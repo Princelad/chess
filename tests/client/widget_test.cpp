@@ -503,16 +503,53 @@ TEST(WidgetPromoStack, FlippedMirrorsFileAndRankTowardTheCenter)
 
 TEST(WidgetPromoStack, StackFitsInsideTheBoardColumn)
 {
-    // Four cells from a top-anchored promotion square stay inside the
-    // board (the checkbox row hangs off the last cell beneath, so the
-    // stack must never overflow the playing field).
+    // Four cells from any promotion square stay inside the board: the
+    // stack grows toward the board center — downward from a top-row
+    // anchor, UPWARD from a bottom-row anchor (audit 8.1: the old
+    // unconditional downward stack hung cells 1..3 off the board for
+    // unflipped-black and flipped-white promotions). All four orientation
+    // combos must fit.
     const float sq = 75.f;
     const sf::Vector2f origin{20.f, 20.f};
+    const float boardTop = origin.y;
     const float boardBottom = origin.y + 8.f * sq;
+    const struct { bool flipped; int toFile, toRank; } combos[] = {
+        {false, 0, 7}, {false, 7, 7},   // unflipped: white promoting
+        {false, 0, 0},                  // unflipped: black promoting
+        {true, 0, 0}, {true, 7, 0},     // flipped: black promoting
+        {true, 0, 7},                   // flipped: white promoting
+    };
+    for (const auto& combo : combos) {
+        for (int i = 0; i < 4; ++i) {
+            const PromoCell c = promoStackCell(
+                sq, origin, combo.flipped, combo.toFile, combo.toRank, i);
+            EXPECT_GE(c.pos.y, boardTop - sq); // one-square headroom for the inset
+            EXPECT_LT(c.pos.y + c.size, boardBottom + sq);
+        }
+    }
+}
+
+// Audit 8.1: a bottom-anchored promotion (unflipped black, flipped white)
+// grows UPWARD — cell k+1 sits ABOVE cell k, and the first cell still
+// centers on the destination square.
+TEST(WidgetPromoStack, BottomAnchoredStackGrowsUpward)
+{
+    const float sq = 60.f;
+    const sf::Vector2f origin{0.f, 0.f};
+
+    const PromoCell first = promoStackCell(sq, origin, false, 3, 0, 0);
+    EXPECT_FLOAT_EQ(first.pos.y, origin.y + 7.f * sq
+        - (first.size - sq) * 0.5f); // centered on the bottom-row destination
+
+    const PromoCell second = promoStackCell(sq, origin, false, 3, 0, 1);
+    EXPECT_FLOAT_EQ(second.pos.y, first.pos.y - first.size);
+    EXPECT_FLOAT_EQ(second.pos.x, first.pos.x);
+
+    // The whole stack sits above the destination's lower edge.
+    const float destBottom = origin.y + 8.f * sq;
     for (int i = 0; i < 4; ++i) {
-        const PromoCell c = promoStackCell(sq, origin, false, 0, 7, i);
-        EXPECT_GE(c.pos.y, origin.y - sq); // one-square headroom for the inset
-        EXPECT_LT(c.pos.y + c.size, boardBottom + sq);
+        const PromoCell c = promoStackCell(sq, origin, false, 3, 0, i);
+        EXPECT_LE(c.pos.y + c.size, destBottom + sq * 0.08f); // inset spill
     }
 }
 

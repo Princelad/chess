@@ -502,9 +502,14 @@ bool GameScreen::ownPieceAt(int file, int rank)
 
 sf::FloatRect GameScreen::autoQueenRect() const
 {
-    auto cell = promoCell(static_cast<int>(promo_->candidates.size()) - 1);
+    // Audit 8.1: the stack may grow upward (bottom-anchored promotion) —
+    // the checkbox hangs below the LOWEST cell, never below the last-index
+    // one (which would cover the stack).
+    const auto& cell0 = promoCell(0);
+    auto last = promoCell(static_cast<int>(promo_->candidates.size()) - 1);
     float sq = boardView_.squareSize();
-    return { { cell.pos.x, cell.pos.y + cell.size + 3.f },
+    const float base = std::max(cell0.pos.y, last.pos.y) + cell0.size;
+    return { { cell0.pos.x, base + 3.f },
              { sq * 1.6f, 22.f } };
 }
 
