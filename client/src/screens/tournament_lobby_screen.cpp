@@ -20,6 +20,12 @@ constexpr float NameX = 380.f;
 constexpr float PointsX = 640.f;
 constexpr float RecordX = 720.f;
 constexpr float LeaveY = 556.f;
+// Audit 8.2 (deferred rounds 5+6): the standings table used to lay EVERY
+// row — a full arena (MaxArenaEntrants = 100) ran ~2658 px off-window.
+// The window holds 11 rows between the panel top (144) and the status
+// line (520); a truncated table renders one extra in-panel row as the
+// "+N more" note instead.
+constexpr std::size_t MaxVisibleRows = 11;
 }
 TournamentLobbyScreen::TournamentLobbyScreen(App& app,
                                              std::string timeControl,
@@ -112,8 +118,11 @@ void TournamentLobbyScreen::enterGame(const chess::net::WelcomeMsg& welcome)
 void TournamentLobbyScreen::rebuildRows()
 {
     rowWidgets_.clear();
-    rowWidgets_.reserve(rows_.size());
-    for (const auto& row : rows_) {
+    const std::size_t visible =
+        std::min<std::size_t>(rows_.size(), MaxVisibleRows);
+    rowWidgets_.reserve(visible);
+    for (std::size_t i = 0; i < visible; ++i) {
+        const auto& row = rows_[i];
         RowWidgets widgets;
         widgets.name.setText(row.name);
         widgets.name.setFontSize(ui::type::Body);
@@ -134,6 +143,18 @@ void TournamentLobbyScreen::rebuildRows()
 
         rowWidgets_.push_back(std::move(widgets));
     }
+
+    // Audit 8.2: truncated tables say so on a line inside the panel's
+    // bottom slot; the slice shown is the standings head (highest score
+    // first, server-ordered).
+    if (rows_.size() > MaxVisibleRows) {
+        moreLabel_.setText("+ " + std::to_string(
+            rows_.size() - MaxVisibleRows) + " more entrants");
+        moreLabel_.setFontSize(ui::type::Body);
+        moreLabel_.setColor(ui::pal::textMuted);
+    } else {
+        moreLabel_.setText("");
+    }
     layoutRows();
 }
 
@@ -148,15 +169,25 @@ void TournamentLobbyScreen::layoutRows()
     }
 
     // 15.6: the table panel wraps header + rows with breathing room (the
-    // list screens' bgPanel recipe). Sized on every snapshot so it fits
-    // the current member count.
+    // list screens' bgPanel recipe). Sized on the VISIBLE count (audit
+    // 8.2: a full arena used to size the panel ~2658 px off-window), with
+    // one extra row slot for the "+N more" note when the table truncates.
     const float rows = static_cast<float>(
         std::max<std::size_t>(rowWidgets_.size(), 1));
+    const bool truncated = rows_.size() > MaxVisibleRows;
+    const float height = 18.f + RowH + rows * RowH + 14.f
+        + (truncated ? RowH : 0.f);
     tablePanel_.setRect(sf::FloatRect(
         sf::Vector2f(NameX - 50.f, HeaderY - 18.f),
-        sf::Vector2f(600.f, 18.f + RowH + rows * RowH + 14.f)));
+        sf::Vector2f(600.f, height)));
     tablePanel_.setFill(ui::pal::bgPanel);
     tablePanel_.setOutline(ui::overlay::panelStroke);
+
+    // Audit 8.2: the "+N more" note occupies the slot under the last
+    // visible row (inside the panel), never overlapping the status line
+    // at y = 520.
+    if (truncated)
+        moreLabel_.setPosition({NameX, TableY + rows * RowH + 3.f});
 
     // Status line: round progress of our own row, or the result echo.
     const chess::net::TournamentRowMsg* selfRow = nullptr;
@@ -282,6 +313,10 @@ void TournamentLobbyScreen::draw(sf::RenderWindow& window)
             {NameX - 28.f, TableY + static_cast<float>(i) * RowH + 3.f},
             18.f, &font, rows_[i].name);
     }
+
+    // Audit 8.2: truncation note under the visible slice.
+    if (!moreLabel_.text().empty())
+        moreLabel_.draw(window, font);
 
     if (!statusLabel_.text().empty())
         statusLabel_.draw(window, font);

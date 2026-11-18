@@ -62,6 +62,8 @@ private:
     // 15.6: the standings table got the list screens' Panel chrome and
     // zebra rows (pal::rowStripe, same recipe as the 15.3 navigator).
     Panel tablePanel_;
+    // Audit 8.2: "+N more entrants" under a truncated standings table.
+    Label moreLabel_;
     Label statusLabel_;
     Label resultLabel_;
     Button leaveBtn_;
