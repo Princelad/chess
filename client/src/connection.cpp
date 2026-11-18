@@ -214,6 +214,11 @@ ServerMessage Connection::nextMessage()
     return msg;
 }
 
+void Connection::unreadMessage(ServerMessage msg)
+{
+    inbox_.push_front(std::move(msg));
+}
+
 ConnectionState Connection::state() const
 {
     return state_;
