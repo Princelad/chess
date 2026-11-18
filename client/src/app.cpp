@@ -19,9 +19,13 @@ App::App()
     , config_(Config::defaultPath())
 {
     window_.setFramerateLimit(120);
+    loadAssets();
+    // Audit 7.1: read the sound settings AFTER loadAssets() — the Config
+    // ctor does not auto-load, so the pre-load reads always saw the
+    // defaults and every start played unmuted at volume 100 until the
+    // Settings screen happened to re-apply the saved values.
     sounds_.setEnabled(!config_.getBool("sound.muted", false));
     sounds_.setVolume(std::clamp(config_.getInt("sound.volume", 100), 0, 100));
-    loadAssets();
     buildView(viewport_.x, viewport_.y);
     // 17.4: the play hub is the app's home; config `general.entry` (any
     // value other than the default "hub") opts back to the old menu for

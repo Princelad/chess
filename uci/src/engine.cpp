@@ -147,6 +147,13 @@ void UciEngine::position(const std::string& fen,
 
 void UciEngine::go(int depth, int movetime_ms, bool infinite)
 {
+    // Audit 7.3: a new search invalidates every answer of an older one —
+    // a bestmove that arrives after this point belongs to a position the
+    // caller has already given up on.
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        ++m_searchGen;
+    }
     std::string cmd = "go";
     if (depth > 0) {
         cmd += " depth " + std::to_string(depth);
@@ -181,11 +188,15 @@ std::optional<Move> UciEngine::waitBestMove(const Board& board,
                                             std::chrono::milliseconds timeout)
 {
     std::unique_lock<std::mutex> lock(m_mutex);
-    // Death-aware: an engine that dies mid-search wakes the waiter instead
-    // of running out the whole timeout (the eval harness worker used to
-    // wait movetime + 15 s against a dead process).
+    // Death-aware (audit: an engine that dies mid-search wakes the waiter
+    // instead of running out the whole timeout) and generation-aware
+    // (audit 7.3): an answer of an OLDER search never satisfies the wait —
+    // the stale slot stays queued until the current search's own reply
+    // overwrites it.
     bool found = m_cv.wait_for(lock, timeout, [this] {
-        return !m_bestmove.empty() || !m_running.load();
+        return (!m_bestmove.empty() && m_bestmoveGen == m_searchGen
+                && m_searchGen > 0)
+            || !m_running.load();
     });
 
     if (!found || m_bestmove.empty()) {
@@ -206,6 +217,12 @@ std::optional<Move> UciEngine::tryGetBestMove(const Board& board)
 {
     std::lock_guard<std::mutex> lock(m_mutex);
     if (m_bestmove.empty()) return std::nullopt;
+    // Audit 7.3: an older search's answer is garbage for the current
+    // position — discard it on sight instead of handing it to the caller.
+    if (m_bestmoveGen != m_searchGen || m_searchGen == 0) {
+        m_bestmove.clear();
+        return std::nullopt;
+    }
     std::string uciStr = m_bestmove;
     m_bestmove.clear();
     if (uciStr == "(none)") return std::nullopt;
@@ -217,18 +234,25 @@ UciEngine::PollResult UciEngine::pollBestMove(const Board& board, Move& out)
     {
         std::lock_guard<std::mutex> lock(m_mutex);
         if (!m_bestmove.empty()) {
-            std::string uciStr = m_bestmove;
-            m_bestmove.clear();
-            if (uciStr != "(none)") {
-                if (auto move = fromUci(board, uciStr)) {
-                    out = *move;
-                    return PollResult::Move;
+            // Audit 7.3: a stale answer (older search's reply, or an
+            // unsolicited one before any go) is dropped so the caller
+            // keeps waiting for the current search's own answer.
+            if (m_bestmoveGen != m_searchGen || m_searchGen == 0) {
+                m_bestmove.clear();
+            } else {
+                std::string uciStr = m_bestmove;
+                m_bestmove.clear();
+                if (uciStr != "(none)") {
+                    if (auto move = fromUci(board, uciStr)) {
+                        out = *move;
+                        return PollResult::Move;
+                    }
+                    // Consumed but unusable: the caller must stop waiting on
+                    // this answer — it will never come back (audit 1.3).
+                    return PollResult::Rejected;
                 }
-                // Consumed but unusable: the caller must stop waiting on
-                // this answer — it will never come back (audit 1.3).
-                return PollResult::Rejected;
+                return PollResult::Rejected; // "(none)"
             }
-            return PollResult::Rejected; // "(none)"
         }
     }
     // No answer queued: is the process even alive? (The answer could
@@ -292,6 +316,11 @@ void UciEngine::readerLoop()
                 {
                     std::lock_guard<std::mutex> lock(m_mutex);
                     m_bestmove = uciMove;
+                    // Audit 7.3: stamp the answer with the search it
+                    // belongs to — a reply that arrives after a newer go
+                    // is stamped with the OLD generation and consumers
+                    // discard it.
+                    m_bestmoveGen = m_searchGen;
                 }
                 m_cv.notify_all();
             } else if (line.compare(0, 5, "info ") == 0) {

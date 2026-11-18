@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <chess/uci/engine.h>
+#include <chess/uci_move.h>
 #include <chess/movegen.h>
 
 #include <chrono>
@@ -16,6 +17,15 @@ static std::string mockEnginePath()
     const char* env = std::getenv("MOCK_ENGINE_PATH");
     if (env) return env;
     return "mock_engine.py";
+}
+
+// Audit mocks live beside the main mock (same directory).
+static std::string mockEngineSibling(const char* name)
+{
+    std::string dir = mockEnginePath();
+    const auto slash = dir.find_last_of('/');
+    return (slash == std::string::npos) ? std::string(name)
+                                        : dir.substr(0, slash + 1) + name;
 }
 
 static bool isEngineAvailable()
@@ -256,6 +266,53 @@ TEST(UciEngine, QuitIdempotent)
     engine.init(3s);
     engine.quit();
     EXPECT_FALSE(engine.isRunning());
+}
+
+// Audit 7.3: a bestmove must never surface as the answer of a search it
+// does not belong to. The mock sends an unsolicited bestmove before any
+// go (stamped generation 0) — tryGetBestMove must discard it, and the
+// first search's own late reply must still arrive.
+TEST(UciEngine, UnsolicitedBestmoveBeforeAnyGoIsDiscarded)
+{
+    uci::UciEngine engine(mockEngineSibling("mock_engine_stale.py"));
+    auto info = engine.init(3s);
+    ASSERT_FALSE(info.name.empty());
+
+    Board b = Board::fromStartPos();
+    // The unsolicited pre-go answer is in the queue here.
+    EXPECT_FALSE(engine.tryGetBestMove(b).has_value());
+
+    engine.position("startpos");
+    engine.go(1);
+    auto move = engine.waitBestMove(b, 3s);
+    ASSERT_TRUE(move.has_value());
+    EXPECT_EQ(*move, *chess::fromUci(b, "e2e4"));
+    engine.quit();
+}
+
+// Audit 7.3: a reply that outlives its consumer's timeout (the eval
+// harness's stall scenario) must not satisfy the retry's wait — the
+// retry's go bumps the generation, so the stale answer is discarded and
+// the new search's own reply is consumed instead.
+TEST(UciEngine, LateAnswerDoesNotPoisonTheRetry)
+{
+    uci::UciEngine engine(mockEngineSibling("mock_engine_stale.py"));
+    auto info = engine.init(3s);
+    ASSERT_FALSE(info.name.empty());
+
+    Board b = Board::fromStartPos();
+    engine.position("startpos");
+    engine.go(1);
+    // The mock answers the first go after 0.5 s — this wait gives up first.
+    EXPECT_FALSE(engine.waitBestMove(b, 100ms).has_value());
+
+    // Retry: the late e2e4 is now queued under the OLD generation.
+    engine.position("startpos");
+    engine.go(1);
+    auto move = engine.waitBestMove(b, 3s);
+    ASSERT_TRUE(move.has_value());
+    EXPECT_EQ(*move, *chess::fromUci(b, "a2a3"));
+    engine.quit();
 }
 
 TEST(UciEngine, DestructorCleansUp)
