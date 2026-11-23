@@ -41,9 +41,11 @@ std::string formatDate(std::int64_t playedAt)
 
 } // namespace
 
-HistoryScreen::HistoryScreen(App& app, bool mineOnlyDefault)
+HistoryScreen::HistoryScreen(App& app, bool mineOnlyDefault,
+                             bool browseConnection)
     : app_(app)
     , mineOnly_(mineOnlyDefault)
+    , browseConnection_(browseConnection)
     , bg_(sf::FloatRect(sf::Vector2f(PanelX, PanelY),
                         sf::Vector2f(PanelW, PanelH)),
           ui::pal::bgPanel, ui::overlay::panelStroke, 1.f)
@@ -78,7 +80,14 @@ HistoryScreen::HistoryScreen(App& app, bool mineOnlyDefault)
     });
 
     backBtn_.setLabel("OK");
-    backBtn_.setOnClick([this] { app_.goBack(); });
+    // Audit 9.3: in the detail view "back" is the list, exactly like Esc —
+    // the button used to exit the whole archive instead.
+    backBtn_.setOnClick([this] {
+        if (phase_ == Phase::Detail)
+            backToList();
+        else
+            leaveScreen();
+    });
 
     watchBtn_.setLabel("Watch");
     watchBtn_.setOnClick([this] { watchGame(); });
@@ -112,6 +121,17 @@ void HistoryScreen::backToList()
     record_.reset();
     phase_ = Phase::List;
     layoutWidgets();
+}
+
+void HistoryScreen::leaveScreen()
+{
+    // Audit 9.4: the browse-only link belongs to this screen (the connect
+    // screen that opened it was destroyed by the switch) — close it, or
+    // the socket outlives its poller. A screen pushed over the game-over
+    // screen keeps the match link alive for the rematch conversation.
+    if (browseConnection_)
+        app_.connection().disconnect();
+    app_.goBack();
 }
 
 void HistoryScreen::copyPgn()
@@ -222,7 +242,7 @@ void HistoryScreen::handleEvent(const sf::Event& event)
             if (phase_ == Phase::Detail)
                 backToList();
             else
-                app_.goBack();
+                leaveScreen();
             return;
         }
         if (phase_ == Phase::List) {

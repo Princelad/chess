@@ -25,7 +25,12 @@ namespace chess::client {
 // the server answers requests in any connection state.
 class HistoryScreen : public Screen {
 public:
-    HistoryScreen(App& app, bool mineOnlyDefault);
+    // Audit 9.4: `browseConnection` marks a screen opened over the connect
+    // screen's browse-only link (the opener is destroyed by the switch, so
+    // leaving must close the socket). A history screen pushed over the
+    // game-over screen shares the match link and passes false.
+    HistoryScreen(App& app, bool mineOnlyDefault,
+                  bool browseConnection = false);
     void handleEvent(const sf::Event& event) override;
     void update(float dtSec) override;
     void draw(sf::RenderWindow& window) override;
@@ -39,6 +44,7 @@ private:
     void copyPgn();
     void watchGame();
     void layoutWidgets();
+    void leaveScreen();
 
     // Rebuilds the playable move chain from the record (AnalysisScreen input).
     struct Replay {
@@ -53,6 +59,7 @@ private:
     Phase phase_ = Phase::Busy;
     bool mineOnly_ = false;
     bool mineToggleable_ = false;
+    bool browseConnection_ = false;
     std::vector<chess::net::ArchiveEntryMsg> entries_;
     std::optional<chess::net::ArchiveGameMsg> record_;
     std::size_t topRow_ = 0;      // first visible entry (window scroll)
