@@ -27,6 +27,7 @@ private:
 
     void request();
     void layoutRows();
+    void leaveScreen();
 
     App& app_;
     Phase phase_ = Phase::Busy;

@@ -4,7 +4,6 @@
 #include "ui/theme.h"
 #include "asset_paths.h"
 #include "keyboard.h"
-#include "menu_screen.h"
 #include "ui_helpers.h"
 
 #include <chess/movegen.h>
@@ -469,7 +468,10 @@ void PuzzleScreen::refreshDailyStats()
 
 void PuzzleScreen::backToMenu()
 {
-    app_.switchScreen(std::make_unique<MenuScreen>(app_));
+    // Audit 9.3: return to the app home — the hub when a hub card opened
+    // this puzzle set, the legacy menu only for `general.entry` opt-outs.
+    // RushScreen's override persists a beaten best before delegating.
+    app_.goHome();
 }
 
 void PuzzleScreen::deselect()

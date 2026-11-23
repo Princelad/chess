@@ -54,6 +54,10 @@ public:
     bool hasMessages() const;
     std::size_t messageCount() const;
     chess::net::ServerMessage nextMessage();
+    // Audit 9.2: selective pumps (screens that own only part of the
+    // conversation) give a not-theirs message back — the exact ordering
+    // of everything behind it is preserved for the next reader.
+    void unreadMessage(chess::net::ServerMessage msg);
 
     ConnectionState state() const;
     const std::string& error() const;

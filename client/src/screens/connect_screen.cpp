@@ -363,7 +363,7 @@ void ConnectScreen::openBrowseTarget()
             std::string{}, std::string{}, std::string{}, false, true));
         return;
     } else
-        app_.switchScreen(std::make_unique<HistoryScreen>(app_, mine));
+        app_.switchScreen(std::make_unique<HistoryScreen>(app_, mine, true));
 }
 
 // Browsing: connect WITHOUT joining a queue; the archive list filters

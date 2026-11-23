@@ -1,5 +1,6 @@
 #include "report_screen.h"
 
+#include "connection_pump.h"
 #include "eco.h"
 #include "screens/ui_helpers.h"
 #include "ui/theme.h"
@@ -274,6 +275,13 @@ void ReportScreen::handleEvent(const sf::Event& event)
 
 void ReportScreen::update(float /*dtSec*/)
 {
+    // Audit 9.2: pump before anything else — a pairing (the arena pass
+    // re-pairs idle GameOver seats ~1 s after a game ends) hands the
+    // screen over here, and the rematch conversation stays queued for
+    // GameOverScreen (the dtor parks the eval job on the switch).
+    if (pumpPairing(app_))
+        return;
+
     buildQuality();
 
     // Status line rides every frame until the quality is in (progress

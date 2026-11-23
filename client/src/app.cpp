@@ -27,13 +27,20 @@ App::App()
     sounds_.setEnabled(!config_.getBool("sound.muted", false));
     sounds_.setVolume(std::clamp(config_.getInt("sound.volume", 100), 0, 100));
     buildView(viewport_.x, viewport_.y);
-    // 17.4: the play hub is the app's home; config `general.entry` (any
-    // value other than the default "hub") opts back to the old menu for
-    // one version. The menu stays fully functional either way.
+    // 17.4: the play hub is the app's home; see createHomeScreen().
+    screen_ = createHomeScreen();
+}
+
+std::unique_ptr<Screen> App::createHomeScreen()
+{
+    // Audit 9.3: one source for the app's home screen — the ctor and
+    // goHome()/goBack()'s empty-stack fallback must agree, or a back
+    // button lands somewhere the app never considers "home".
+    // 17.4: config `general.entry` (any value other than the default
+    // "hub") opts back to the old menu for one version.
     if (config_.get("general.entry", "hub") == "hub")
-        screen_ = std::make_unique<PlayHubScreen>(*this);
-    else
-        screen_ = std::make_unique<MenuScreen>(*this);
+        return std::make_unique<PlayHubScreen>(*this);
+    return std::make_unique<MenuScreen>(*this);
 }
 
 sf::Vector2f App::toLocal(sf::Vector2i pixel) const
@@ -189,9 +196,25 @@ void App::pushScreen(std::unique_ptr<Screen> screen)
     screen_ = std::move(screen);
 }
 
+void App::goHome()
+{
+    switchScreen(createHomeScreen());
+}
+
 void App::goBack()
 {
-    if (stack_.empty()) return;
+    if (stack_.empty()) {
+        // Audit 9.3: every back button routes somewhere. Screens entered
+        // with switchScreen (hub cards, the connect screen's browse
+        // targets, the post-game and dropped-link egress) deliberately
+        // leave no stack entry, so "back" from one of them is the app
+        // home — the very screen the app starts on. The old `return`
+        // left those buttons dead: Settings from the hub, the leaderboard
+        // and archive browsers, and the connect screen after a game all
+        // ignored Back/Esc.
+        goHome();
+        return;
+    }
     // Audit 7.4: the replaced current dies here — park it.
     graveyard_.retire(std::move(screen_));
     screen_ = std::move(stack_.back());

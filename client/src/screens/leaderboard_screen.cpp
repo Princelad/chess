@@ -57,7 +57,7 @@ LeaderboardScreen::LeaderboardScreen(App& app)
     status_.setColor(ui::pal::textSoft);
 
     backBtn_.setLabel("OK");
-    backBtn_.setOnClick([this] { app_.goBack(); });
+    backBtn_.setOnClick([this] { leaveScreen(); });
 
     layoutRows();
     request();
@@ -71,6 +71,15 @@ void LeaderboardScreen::request()
     layoutRows();
     status_.setText("Loading the leaderboard...");
     app_.connection().send(chess::net::LeaderboardRequestMsg{50 + PageRows});
+}
+
+void LeaderboardScreen::leaveScreen()
+{
+    // Audit 9.4: this screen always runs on the connect screen's
+    // browse-only link (the opener is destroyed by the switch), so back
+    // must close it — otherwise the socket outlives its poller.
+    app_.connection().disconnect();
+    app_.goBack();
 }
 
 void LeaderboardScreen::layoutRows()
@@ -119,7 +128,7 @@ void LeaderboardScreen::handleEvent(const sf::Event& event)
     // Rows are informational; only scrolling and leaving apply here.
     if (const auto* kp = event.getIf<sf::Event::KeyPressed>()) {
         if (kp->code == sf::Keyboard::Key::Escape) {
-            app_.goBack();
+            leaveScreen();
             return;
         }
         if (kp->code == sf::Keyboard::Key::Up && topRow_ > 0) {

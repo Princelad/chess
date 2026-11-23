@@ -4,7 +4,6 @@
 #include "ui/theme.h"
 #include "game_over_screen.h"
 #include "keyboard.h"
-#include "menu_screen.h"
 #include "ui_helpers.h"
 
 #include <chess/movegen.h>
@@ -413,7 +412,10 @@ void LocalGameScreen::finishGameOver()
 
 void LocalGameScreen::returnToMenu()
 {
-    app_.switchScreen(std::make_unique<MenuScreen>(app_));
+    // Audit 9.3: home (hub by default) — see App::goHome. The hub's
+    // persona cards start this screen, so a hard-wired MenuScreen dropped
+    // them somewhere they never came from.
+    app_.goHome();
 }
 
 // 8.2 leftover: local takeback vs the engine. Only offered while it is the

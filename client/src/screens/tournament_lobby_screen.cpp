@@ -4,7 +4,6 @@
 #include "ui/icons.h"
 #include "ui/theme.h"
 #include "game_screen.h"
-#include "menu_screen.h"
 
 #include <algorithm>
 
@@ -94,11 +93,12 @@ void TournamentLobbyScreen::sendJoin()
 void TournamentLobbyScreen::leave()
 {
     // Fire-and-forget: the row drop matters to the server's next pass, not
-    // to us — the player chose to go back to the menu.
+    // to us — the player chose to go back home.
     if (app_.connection().state() == ConnectionState::Connected)
         app_.connection().send(chess::net::TournamentLeaveMsg{});
     app_.connection().disconnect();
-    app_.switchScreen(std::make_unique<MenuScreen>(app_));
+    // Audit 9.3: home (hub by default), not the legacy menu.
+    app_.goHome();
 }
 
 void TournamentLobbyScreen::enterGame(const chess::net::WelcomeMsg& welcome)

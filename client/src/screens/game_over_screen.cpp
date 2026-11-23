@@ -4,7 +4,6 @@
 #include "analysis_screen.h"
 #include "game_screen.h"
 #include "history_screen.h"
-#include "menu_screen.h"
 #include "report_screen.h"
 #include "tournament_lobby_screen.h"
 #include "widgets/layout.h"
@@ -275,7 +274,10 @@ void GameOverScreen::activateArenaLobby()
 void GameOverScreen::activateMenu()
 {
     app_.connection().disconnect();
-    app_.switchScreen(std::make_unique<MenuScreen>(app_));
+    // Audit 9.3: home (hub by default) — the legacy menu only for
+    // `general.entry` opt-outs. The old hard-wired MenuScreen dumped hub
+    // players into a screen they never came from.
+    app_.goHome();
 }
 
 void GameOverScreen::acceptRematch()

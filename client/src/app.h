@@ -70,6 +70,9 @@ public:
     void switchScreen(std::unique_ptr<Screen> screen);
     void pushScreen(std::unique_ptr<Screen> screen);
     void goBack();
+    // Audit 9.3: the app's home screen — the play hub, or the legacy menu
+    // when `general.entry` opts out. Clears the back stack.
+    void goHome();
 
     sf::Font& font() { return *font_; }
     Connection& connection() { return connection_; }
@@ -182,6 +185,7 @@ private:
     void loadAssets();
     bool loadPieceTextures();
     void buildView(unsigned int width, unsigned int height);
+    std::unique_ptr<Screen> createHomeScreen();
 
     sf::RenderWindow window_;
     Connection connection_;

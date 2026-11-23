@@ -1,6 +1,7 @@
 #include "analysis_screen.h"
 
 #include "analysis_notes.h"
+#include "connection_pump.h"
 #include "move_quality.h"
 #include "ui/theme.h"
 #include "ui_helpers.h"
@@ -304,6 +305,13 @@ void AnalysisScreen::handleEvent(const sf::Event& event)
 
 void AnalysisScreen::update(float /*dtSec*/)
 {
+    // Audit 9.2: pump before anything else — a pairing (the arena pass
+    // re-pairs idle GameOver seats ~1 s after a game ends) hands the
+    // screen over here, and the rematch conversation stays queued for
+    // GameOverScreen. Everything below is dead code on a handover frame.
+    if (pumpPairing(app_))
+        return;
+
     refreshClassLayer();
 
     if (!engineReady_ || !engine_) return;

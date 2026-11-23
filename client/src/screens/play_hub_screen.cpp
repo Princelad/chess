@@ -137,18 +137,22 @@ PlayHubScreen::PlayHubScreen(App& app)
             {ToolW, ToolH}));
     }
     toolBtns_[0].setOnClick([this] {
+        leaveQueueIfAny();
         app_.switchScreen(std::make_unique<PuzzleScreen>(app_, true));
     });
     toolBtns_[1].setOnClick([this] {
+        leaveQueueIfAny();
         app_.switchScreen(std::make_unique<RushScreen>(app_));
     });
     toolBtns_[2].setOnClick([this] {
+        leaveQueueIfAny();
         app_.switchScreen(std::make_unique<PuzzleScreen>(app_));
     });
     toolBtns_[3].setOnClick([this] { quickBrowse(BrowseTarget::Archive); });
     toolBtns_[4].setOnClick(
         [this] { quickBrowse(BrowseTarget::Leaderboard); });
     toolBtns_[5].setOnClick([this] {
+        leaveQueueIfAny();
         app_.switchScreen(std::make_unique<SettingsScreen>(app_));
     });
     // Watch (12.4): the drawer connects and hands over to the spectator
@@ -190,8 +194,20 @@ void PlayHubScreen::quickBrowse(BrowseTarget target)
     drawerOpen_ = true;
 }
 
+void PlayHubScreen::leaveQueueIfAny()
+{
+    // Audit 9.1: a queued connection must not outlive its poller — the
+    // drawer polls while the hub lives, but a card click hands the screen
+    // to one that never does (Daily/Rush/Puzzles/Settings/persona local
+    // play). Leaving the hub therefore leaves the queue, same contract as
+    // the Esc collapse: cancelAttempt disconnects and resets the phase,
+    // and is a no-op when Idle.
+    drawer_->cancelAttempt();
+}
+
 void PlayHubScreen::startPersona(std::size_t index)
 {
+    leaveQueueIfAny();
     const char* env = std::getenv("CHESS_ENGINE_PATH");
     std::string enginePath = env ? env : "stockfish";
     const Color myColor = playBlack_ ? Color::Black : Color::White;
