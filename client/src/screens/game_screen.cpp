@@ -131,13 +131,13 @@ GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName,
     declineBtn_.setLabel("Decline");
     declineBtn_.setStyle(ui::buttonDanger());
     declineBtn_.setOnClick([this] {
-        if (drawOfferPending_) {
+        if (offer::showsDraw(offerPrompt_)) {
             app_.connection().send(chess::net::DrawDeclineMsg{});
-            drawOfferPending_ = false;
+            settleOfferPrompt(offer::Event::DrawDeclined);
             addSystemChat("Draw declined");
-        } else if (takebackOfferPending_) {
+        } else if (offer::showsTakeback(offerPrompt_)) {
             app_.connection().send(chess::net::TakebackDeclineMsg{});
-            takebackOfferPending_ = false;
+            settleOfferPrompt(offer::Event::TakebackDeclined);
             addSystemChat("Takeback declined");
         }
     });
@@ -145,12 +145,12 @@ GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName,
     acceptBtn_.setLabel("Accept");
     acceptBtn_.setStyle(ui::buttonSuccessBright());
     acceptBtn_.setOnClick([this] {
-        if (drawOfferPending_) {
+        if (offer::showsDraw(offerPrompt_)) {
             app_.connection().send(chess::net::DrawAcceptMsg{});
-            drawOfferPending_ = false;
-        } else if (takebackOfferPending_) {
+            settleOfferPrompt(offer::Event::DrawDeclined);
+        } else if (offer::showsTakeback(offerPrompt_)) {
             app_.connection().send(chess::net::TakebackAcceptMsg{});
-            takebackOfferPending_ = false;
+            settleOfferPrompt(offer::Event::TakebackDeclined);
         }
     });
 
@@ -762,7 +762,7 @@ void GameScreen::handleEvent(const sf::Event& event)
     if (spectator_) {
         if (leaveBtn_.handleEvent(event, local)) return;
     } else if (!gameOver_) {
-        if (drawOfferPending_ || takebackOfferPending_) {
+        if (offer::visible(offerPrompt_)) {
             if (declineBtn_.handleEvent(event, local)) return;
             if (acceptBtn_.handleEvent(event, local)) return;
         } else {
@@ -929,6 +929,9 @@ void GameScreen::update(float dtSec)
                 } else {
                     myTurn_ = true;
                     hud_.setInfo(opponentName_, myColor_, myTurn_, gameOver_);
+                    // A played move dissolves any pending offer server-side
+                    // (10.1) — the prompt must not outlive it.
+                    settleOfferPrompt(offer::Event::PositionChanged);
                     // Our premove (if any) auto-sends now, or dies trying
                     // (11.4).
                     flushPremove();
@@ -937,8 +940,7 @@ void GameScreen::update(float dtSec)
         }
         else if (auto* gameOver = std::get_if<chess::net::GameOverMsg>(&msg)) {
             gameOver_ = true;
-            drawOfferPending_ = false;
-            takebackOfferPending_ = false;
+            settleOfferPrompt(offer::Event::GameEnded);
             premove_.reset();
             hud_.setGameOver(true);
             hud_.setInfo(opponentName_, myColor_, myTurn_, gameOver_);
@@ -951,12 +953,12 @@ void GameScreen::update(float dtSec)
         }
         else if (auto* drawOffer = std::get_if<chess::net::ServerDrawOfferMsg>(&msg)) {
             (void)drawOffer;
-            drawOfferPending_ = true;
+            settleOfferPrompt(offer::Event::DrawOffered);
             hud_.setStatus("Opponent offers a draw", 3.0f);
             addSystemChat("Draw offer received");
         }
         else if (std::holds_alternative<chess::net::ServerDrawDeclineMsg>(msg)) {
-            drawOfferPending_ = false;
+            settleOfferPrompt(offer::Event::DrawDeclined);
             hud_.setStatus("Draw offer declined", 2.0f);
             addSystemChat("Draw offer declined");
         }
@@ -964,17 +966,20 @@ void GameScreen::update(float dtSec)
             // The opponent asks to retract the last full move; the same
             // accept/decline prompt row answers it (draw prompt takes
             // precedence only while also showing — both stay pending).
-            takebackOfferPending_ = true;
+            settleOfferPrompt(offer::Event::TakebackRequested);
             hud_.setStatus("Opponent asks for a takeback", 3.0f);
             addSystemChat("Takeback requested by opponent");
         }
         else if (auto* takebackOk = std::get_if<chess::net::TakebackAcceptedMsg>(&msg)) {
             // Agreed (or bot-accepted) takeback: roll the board back to the
             // trimmed SAN list. The retracted moves are history, not action —
-            // no animation, no move sound, clocks stay as they are.
+            // no animation, no move sound, clocks stay as they are. The
+            // rebuilt frame also dissolves any offer that was on the table.
+            settleOfferPrompt(offer::Event::PositionChanged);
             applyTakeback(takebackOk->sans);
         }
         else if (std::holds_alternative<chess::net::ServerTakebackDeclineMsg>(msg)) {
+            settleOfferPrompt(offer::Event::TakebackDeclined);
             hud_.setStatus("Takeback declined", 2.0f);
             addSystemChat("Takeback declined");
         }
@@ -998,6 +1003,10 @@ void GameScreen::update(float dtSec)
             // overwritten one pass later (the "away" icon flickered and
             // reverted for the whole grace window).
             opponentConnection_ = 2;
+            // The server dissolves pending offers when a seat drops; the
+            // prompt must go with it (10.1) or the survivor is stuck on a
+            // dead accept/decline row for the whole grace window.
+            settleOfferPrompt(offer::Event::SeatReset);
             hud_.setStatus("Opponent lost connection",
                            static_cast<float>(reconn->graceSeconds));
             addSystemChat("Opponent lost connection");
@@ -1179,8 +1188,10 @@ void GameScreen::applyResume(const chess::net::ResumeStateMsg& msg)
     // drawPieces skips the animation's destination square while a slide
     // is live, so the rebuilt board would hide that piece.
     anim_.cancel();
-    drawOfferPending_ = false;
-    takebackOfferPending_ = false;
+    chatLog_.clear();
+    // The rebuilt frame is a fresh conversation: any offer from before the
+    // drop is gone server-side (10.1).
+    settleOfferPrompt(offer::Event::SeatReset);
     chatLog_.clear();
     chatInput_.setFocused(false);
 
@@ -1228,6 +1239,22 @@ void GameScreen::applyTakeback(const std::vector<std::string>& sans)
     addSystemChat("Takeback accepted");
 }
 
+void GameScreen::settleOfferPrompt(offer::Event event)
+{
+    const offer::Result result = offer::apply(offerPrompt_, event);
+    offerPrompt_ = result.state;
+    // Only the silent server-side dissolutions explain themselves; a
+    // decline/accept has its own message.
+    const bool silent = event == offer::Event::PositionChanged
+        || event == offer::Event::SeatReset;
+    if (!silent)
+        return;
+    if (result.dissolvedDraw)
+        addSystemChat("Draw offer withdrawn");
+    if (result.dissolvedTakeback)
+        addSystemChat("Takeback request withdrawn");
+}
+
 void GameScreen::finishGameOver()
 {
     if (spectator_) {
@@ -1262,11 +1289,11 @@ void GameScreen::drawButtons(sf::RenderWindow& window)
 {
     auto& font = app_.font();
 
-    if (drawOfferPending_) {
+    if (offer::showsDraw(offerPrompt_)) {
         drawPromptBanner(window, "Draw offered:");
         declineBtn_.draw(window, font);
         acceptBtn_.draw(window, font);
-    } else if (takebackOfferPending_) {
+    } else if (offer::showsTakeback(offerPrompt_)) {
         drawPromptBanner(window, "Takeback asked:");
         declineBtn_.draw(window, font);
         acceptBtn_.draw(window, font);

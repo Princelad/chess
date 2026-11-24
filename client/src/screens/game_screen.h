@@ -7,6 +7,7 @@
 #include "game_over_transition.h"
 #include "hud.h"
 #include "move_animator.h"
+#include "offer_prompt.h"
 #include "premove.h"
 #include "promo_state.h"
 #include "widgets/button.h"
@@ -72,6 +73,10 @@ private:
     void refreshRatingsHud();
     void drawButtons(sf::RenderWindow& window);
     void drawPromptBanner(sf::RenderWindow& window, const char* text);
+    // Audit 10.1: keeps the offer prompts in step with the server's
+    // offer lifecycle (the server dissolves offers silently on a move or
+    // a disconnect). A dissolved prompt is echoed into the chat log.
+    void settleOfferPrompt(offer::Event event);
     void drawChat(sf::RenderWindow& window);
     // 15.4: a canned chip sends its phrase as an ordinary ChatMsg — the
     // server echo appends it, exactly like typed chat.
@@ -117,7 +122,8 @@ private:
     Hud hud_;
     bool myTurn_ = false;
     bool gameOver_ = false;
-    bool drawOfferPending_ = false;
+    // 10.1: the opponent's pending offers (draw wins the shared row).
+    offer::State offerPrompt_;
     // Premove (11.4): at most one queued move while the opponent thinks.
     std::optional<Premove> premove_;
     // 15.5 board entrance: elapsed seconds of the piece fade-in; nullopt
@@ -155,10 +161,9 @@ private:
     std::array<Button, 3> chatChips_;
     // Spectator-mode replacement row (12.4): a single leave button.
     Button leaveBtn_;
-    // 11.3: `takebackOfferPending_` is the opponent's incoming request
-    // awaiting the accept/decline prompt; our own request is only a status
-    // line (the server already errors on duplicate asks).
-    bool takebackOfferPending_ = false;
+    // 11.3: an incoming takeback request joins the same offer row; our own
+    // request is only a status line (the server already errors on
+    // duplicate asks).
     Button declineBtn_;
     Button acceptBtn_;
     std::string timeControl_;
