@@ -53,4 +53,15 @@ inline bool pumpPairing(App& app)
     return false;
 }
 
+// Audit 10.2: a screen pushed over the LIVE match link (the game-over
+// screen's "Match archive") may find the rematch conversation arriving
+// while it is open. Those messages belong to GameOverScreen, not to the
+// pushed screen: hand them back through unreadMessage so the result screen
+// still owns the offer/decline state when the user returns.
+inline bool isRematchConversation(const chess::net::ServerMessage& msg)
+{
+    return std::holds_alternative<chess::net::ServerRematchRequestMsg>(msg)
+        || std::holds_alternative<chess::net::ServerRematchDeclineMsg>(msg);
+}
+
 } // namespace chess::client

@@ -4,6 +4,7 @@
 #include "ui_helpers.h"
 
 #include "analysis_screen.h"
+#include "connection_pump.h"
 #include "game_screen.h"
 
 #include <SFML/Window/Clipboard.hpp>
@@ -306,6 +307,14 @@ void HistoryScreen::update(float)
 
     while (app_.connection().hasMessages()) {
         auto msg = app_.connection().nextMessage();
+        if (isRematchConversation(msg)) {
+            // Audit 10.2: the rematch conversation belongs to the game-over
+            // screen underneath (this screen was pushed over the live match
+            // link). Give it back untouched - ordering preserved - so the
+            // offer/decline state survives the archive visit.
+            app_.connection().unreadMessage(std::move(msg));
+            break;
+        }
         if (auto* list = std::get_if<chess::net::ArchiveListMsg>(&msg)) {
             entries_ = std::move(list->games);
             topRow_ = 0;
