@@ -56,6 +56,7 @@ phase, PATCH for bugfixes/hotfixes landed within a phase.
 | Audit — round 8 | `v2.0.8` | Promotion picker orientation, arena standings row cap |
 | Screen graveyard | `v2.0.9` | Deferred-destruction graveyard so post-switch code is safe |
 | Audit — round 9 | `v2.0.10` | Back-button routing, hub queue abandonment, selective connection pumps, browse-link cleanup |
+| Audit — round 10 | `v2.0.11` | Offer-prompt lifecycle, rematch handover over pushed screens, draw-offer responders |
 
 ---
 

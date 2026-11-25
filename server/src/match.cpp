@@ -357,6 +357,35 @@ void Match::handleDrawOffer(Client& sender)
     const std::size_t idx = seatIndexOf(sender);
     if (idx >= 2)
         return;
+    if (drawOfferPending_) {
+        // A double click from the asker is harmless; a CROSS-offer means
+        // both seats want the draw, so agree instead of silently moving
+        // the offerer slot (the old overwrite made the second asker's
+        // Accept answer "That is your own draw offer").
+        if (drawOffererIdx_ == idx) {
+            sendTo(sender,
+                   chess::net::ErrorMsg{"Your draw offer is already pending"});
+            return;
+        }
+        endGame(chess::net::GameResult::Draw,
+                chess::net::GameOverReason::AgreedDraw);
+        return;
+    }
+    // The asked seat answers, so their absence fails fast (same frame as
+    // takeback and rematch) instead of storing an offer nothing can see.
+    if (seats_[1 - idx].present == nullptr) {
+        sendTo(sender, chess::net::ErrorMsg{"The opponent is away"});
+        return;
+    }
+    if (seats_[1 - idx].isBot) {
+        // Server bots always agree — mirrors the takeback/rematch
+        // auto-accept. Bots never rate, so a human-engineered draw costs
+        // nothing.
+        LOG_INFO("Draw accepted by bot (" + seats_[idx].name + ")");
+        endGame(chess::net::GameResult::Draw,
+                chess::net::GameOverReason::AgreedDraw);
+        return;
+    }
     drawOfferPending_ = true;
     drawOffererIdx_ = idx;
     sendToPresent(seats_[1 - idx].present, chess::net::ServerDrawOfferMsg{});
@@ -389,6 +418,13 @@ void Match::handleDrawDecline(Client& sender)
     const std::size_t idx = seatIndexOf(sender);
     if (idx >= 2)
         return;
+    // No pending offer means the offerer already withdrew it (a move or a
+    // disconnect dissolved it) — refuse instead of notifying the other
+    // seat about a decline it never asked for.
+    if (!drawOfferPending_) {
+        sendTo(sender, chess::net::ErrorMsg{"No draw offer pending"});
+        return;
+    }
     drawOfferPending_ = false;
     drawOffererIdx_ = 2;
     sendToPresent(seats_[1 - idx].present, chess::net::ServerDrawDeclineMsg{});

@@ -7,6 +7,7 @@
 #include <chess/net/protocol.h>
 
 #include "connection.h"
+#include "connection_pump.h"
 
 #include <chrono>
 #include <atomic>
@@ -381,4 +382,24 @@ TEST_F(ConnectionTest, ErrorFromServer)
     EXPECT_EQ(err->message, "Name taken");
 
     conn.disconnect();
+}
+
+// Audit 10.2: the pushed archive screen over a live match link hands the
+// rematch conversation back to the game-over screen underneath; only the
+// two rematch messages are "not mine".
+TEST(RematchConversationHandover, OnlyRematchMessagesAreForeign)
+{
+    chess::net::ServerMessage request =
+        chess::net::ServerRematchRequestMsg{};
+    chess::net::ServerMessage decline =
+        chess::net::ServerRematchDeclineMsg{true};
+    EXPECT_TRUE(chess::client::isRematchConversation(request));
+    EXPECT_TRUE(chess::client::isRematchConversation(decline));
+
+    chess::net::ServerMessage archive =
+        chess::net::ArchiveListMsg{};
+    EXPECT_FALSE(chess::client::isRematchConversation(archive));
+
+    chess::net::ServerMessage welcome = chess::net::WelcomeMsg{};
+    EXPECT_FALSE(chess::client::isRematchConversation(welcome));
 }

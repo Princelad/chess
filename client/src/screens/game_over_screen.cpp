@@ -260,6 +260,13 @@ void GameOverScreen::activateRematch()
 void GameOverScreen::activateArenaLobby()
 {
     if (!arena_) return;
+    // Analyze/Report disconnect the match link, and the arena lobby never
+    // reconnects on its own (its join waits for a live connection forever):
+    // refuse with a note instead of opening a dead lobby.
+    if (app_.connection().state() != ConnectionState::Connected) {
+        setStatusText("Not connected - return to the arena from the menu");
+        return;
+    }
     // The join name rides along for guests (the server ignores it on
     // authenticated connections); members re-affirm idempotently.
     std::string joinName;
