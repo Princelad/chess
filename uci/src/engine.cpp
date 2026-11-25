@@ -2,10 +2,12 @@
 #include <chess/uci_move.h>
 #include <chess/movegen.h>
 
+#include <cerrno>
 #include <cstring>
 #include <sstream>
 #include <thread>
 
+#include <poll.h>
 #include <signal.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -33,7 +35,12 @@ EngineInfo UciEngine::init(std::chrono::milliseconds timeout)
     }
     int stdinPipe[2];
     int stdoutPipe[2];
-    if (pipe(stdinPipe) != 0 || pipe(stdoutPipe) != 0) {
+    if (pipe(stdinPipe) != 0) {
+        return {};
+    }
+    if (pipe(stdoutPipe) != 0) {
+        close(stdinPipe[0]);
+        close(stdinPipe[1]);
         return {};
     }
 
@@ -51,7 +58,13 @@ EngineInfo UciEngine::init(std::chrono::milliseconds timeout)
         dup2(stdoutPipe[1], STDOUT_FILENO);
         close(stdinPipe[0]);
         close(stdoutPipe[1]);
-        execl(m_enginePath.c_str(), m_enginePath.c_str(), static_cast<char*>(nullptr));
+        // The engine must see only 0/1/2: an inherited TCP socket keeps the
+        // peer connected after the parent disconnects, and an inherited
+        // listener keeps the port bound after a crash. FD_SETSIZE is the
+        // ceiling that matters — SFML's selector is select()-backed.
+        for (int fd = 3; fd < 1024; ++fd) close(fd);
+        // Bare names such as "stockfish" must resolve through PATH.
+        execlp(m_enginePath.c_str(), m_enginePath.c_str(), static_cast<char*>(nullptr));
         _exit(1);
     }
 
@@ -66,40 +79,44 @@ EngineInfo UciEngine::init(std::chrono::milliseconds timeout)
     send("uci");
 
     EngineInfo info;
+    bool failed = false;
     {
         std::unique_lock<std::mutex> lock(m_mutex);
         // Death-aware: a reader that exited (process gone) ends the wait
         // immediately instead of running out the whole timeout on the
         // caller's thread — the engine-less client screens and bot spawns
         // used to freeze for the full timeout per attempt.
-        bool ok = m_cv.wait_for(lock, timeout, [this] {
+        const bool ok = m_cv.wait_for(lock, timeout, [this] {
             return m_syncSignal == SyncSignal::UciOk || !m_running.load();
         });
-        if (!ok) {
-            quit();
-            return {};
+        if (ok && m_running.load()) {
+            info.name = m_engineName;
+            info.author = m_engineAuthor;
+        } else {
+            failed = true;
         }
-        if (!m_running.load()) {
-            m_syncSignal = SyncSignal::None;
-            quit();
-            return {};
-        }
-        info.name = m_engineName;
-        info.author = m_engineAuthor;
         m_syncSignal = SyncSignal::None;
+    }
+    // quit() joins the reader, and the reader needs m_mutex to publish its
+    // handshake lines: calling quit() under the lock deadlocked both threads
+    // whenever the reply arrived just after the timeout.
+    if (failed) {
+        quit();
+        return {};
     }
 
     send("isready");
     {
         std::unique_lock<std::mutex> lock(m_mutex);
-        bool ok = m_cv.wait_for(lock, timeout, [this] {
+        const bool ok = m_cv.wait_for(lock, timeout, [this] {
             return m_syncSignal == SyncSignal::ReadyOk || !m_running.load();
         });
         m_syncSignal = SyncSignal::None;
-        if (!ok || !m_running.load()) {
-            quit();
-            return {};
-        }
+        failed = !ok || !m_running.load();
+    }
+    if (failed) {
+        quit();
+        return {};
     }
 
     return info;
@@ -175,13 +192,11 @@ void UciEngine::stop()
 void UciEngine::quit()
 {
     send("quit");
-
-    if (m_stdoutFd >= 0) {
-        ::close(m_stdoutFd);
-        m_stdoutFd = -1;
-    }
-
-    closeProcess(); // joins the reader (closeProcess owns that now)
+    // Never close the stdout fd here: the reader thread is blocked reading
+    // it, and closing it under that read is both a data race on m_stdoutFd
+    // and a possible read on a recycled descriptor. closeProcess() lets the
+    // child exit first, joins the reader, and only then closes the pipe.
+    closeProcess();
 }
 
 std::optional<Move> UciEngine::waitBestMove(const Board& board,
@@ -200,6 +215,13 @@ std::optional<Move> UciEngine::waitBestMove(const Board& board,
     });
 
     if (!found || m_bestmove.empty()) {
+        return std::nullopt;
+    }
+    // Found can also mean "the engine died", in which case a queued answer
+    // from an older search is still sitting in the slot — never hand it out
+    // for the current position (audit 7.3 applies to every consumer).
+    if (m_bestmoveGen != m_searchGen || m_searchGen == 0) {
+        m_bestmove.clear();
         return std::nullopt;
     }
 
@@ -280,21 +302,38 @@ bool UciEngine::isRunning() const
 void UciEngine::send(const std::string& cmd)
 {
     if (m_stdinFd < 0) return;
-    std::string data = cmd + "\n";
-    ::write(m_stdinFd, data.c_str(), data.size());
+    const std::string data = cmd + "\n";
+    // A short write would truncate the command and leave the caller waiting
+    // out its full timeout for a reply to half a line; EINTR is retried.
+    std::size_t off = 0;
+    while (off < data.size()) {
+        const ssize_t n = ::write(m_stdinFd, data.data() + off,
+                                  data.size() - off);
+        if (n < 0) {
+            if (errno == EINTR) continue;
+            return; // EPIPE etc: the reader notices the death
+        }
+        off += static_cast<std::size_t>(n);
+    }
 }
 
 void UciEngine::readerLoop()
 {
     std::string line;
     char c;
-    while (true) {
-        ssize_t n = ::read(m_stdoutFd, &c, 1);
-        if (n <= 0) {
-            m_running = false;
-            m_cv.notify_all();
-            return;
-        }
+    while (m_running.load()) {
+        // Bounded poll instead of a blocking read: teardown must not depend
+        // on the child closing stdout (a grandchild can keep it open), and
+        // the fd must never be closed under a blocked read.
+        pollfd pfd;
+        pfd.fd = m_stdoutFd;
+        pfd.events = POLLIN;
+        pfd.revents = 0;
+        if (::poll(&pfd, 1, 100) <= 0) continue;
+
+        const ssize_t n = ::read(m_stdoutFd, &c, 1);
+        if (n < 0) continue; // EINTR
+        if (n == 0) break;   // EOF: the engine closed stdout
 
         if (c == '\n') {
             if (line.empty()) continue;
@@ -374,21 +413,29 @@ void UciEngine::readerLoop()
             line += c;
         }
     }
+    m_running = false;
+    m_cv.notify_all();
 }
 
 void UciEngine::closeProcess()
 {
+    // Close stdin first: EOF makes a well-behaved engine exit, which ends
+    // the reader's blocking read. The stdout fd must NOT be closed while
+    // the reader may still be reading it — that raced on m_stdoutFd and
+    // could read a recycled descriptor.
     if (m_stdinFd >= 0) { ::close(m_stdinFd); m_stdinFd = -1; }
-    if (m_stdoutFd >= 0) { ::close(m_stdoutFd); m_stdoutFd = -1; }
-    // Audit 1.3 follow-up: the reader must be joined here, not only in
-    // quit() — a Match destroyed with an already-dead engine skips quit()
-    // (m_running is false) and used to destroy a still-joinable reader
-    // thread, which calls std::terminate and takes the server down.
-    if (m_reader.joinable())
-        m_reader.join();
+    // Reap the child BEFORE joining the reader: a child that ignores quit
+    // never closes stdout, so joining first would hang forever and the
+    // SIGTERM/SIGKILL fallback below would be unreachable.
     if (m_pid > 0) {
-        int status;
+        int status = 0;
         pid_t result = waitpid(m_pid, &status, WNOHANG);
+        const auto deadline = std::chrono::steady_clock::now()
+            + std::chrono::milliseconds(200);
+        while (result == 0 && std::chrono::steady_clock::now() < deadline) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            result = waitpid(m_pid, &status, WNOHANG);
+        }
         if (result == 0) {
             kill(m_pid, SIGTERM);
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -400,6 +447,16 @@ void UciEngine::closeProcess()
         }
         m_pid = -1;
     }
+    // Audit 1.3 follow-up: the reader must be joined here, not only in
+    // quit() — a Match destroyed with an already-dead engine skips quit()
+    // (m_running is false) and used to destroy a still-joinable reader
+    // thread, which calls std::terminate and takes the server down.
+    // Clearing m_running wakes the poll loop, so the join is bounded even
+    // if something still holds the child's stdout open.
+    m_running = false;
+    if (m_reader.joinable())
+        m_reader.join();
+    if (m_stdoutFd >= 0) { ::close(m_stdoutFd); m_stdoutFd = -1; }
 }
 
 } // namespace chess::uci
