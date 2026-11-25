@@ -116,7 +116,9 @@ GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName,
     resignBtn_.setIcon(ui::icons::IconKind::Flag);
     resignBtn_.setStyle(ui::buttonDanger());
     resignBtn_.setOnClick([this] {
-        if (!gameOver_) app_.connection().send(chess::net::ResignMsg{});
+        if (gameOver_) return;
+        if (!app_.connection().send(chess::net::ResignMsg{}))
+            hud_.setStatus("Connection lost - resign not sent", 3.f);
     });
 
     offerDrawBtn_.setLabel("Draw");
@@ -124,7 +126,10 @@ GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName,
     offerDrawBtn_.setStyle(ui::buttonPlum());
     offerDrawBtn_.setOnClick([this] {
         if (gameOver_) return;
-        app_.connection().send(chess::net::DrawOfferMsg{});
+        if (!app_.connection().send(chess::net::DrawOfferMsg{})) {
+            hud_.setStatus("Connection lost - offer not sent", 3.f);
+            return;
+        }
         addSystemChat("Draw offer sent");
     });
 
@@ -132,11 +137,17 @@ GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName,
     declineBtn_.setStyle(ui::buttonDanger());
     declineBtn_.setOnClick([this] {
         if (offer::showsDraw(offerPrompt_)) {
-            app_.connection().send(chess::net::DrawDeclineMsg{});
+            if (!app_.connection().send(chess::net::DrawDeclineMsg{})) {
+                hud_.setStatus("Connection lost - not sent", 3.f);
+                return;
+            }
             settleOfferPrompt(offer::Event::DrawDeclined);
             addSystemChat("Draw declined");
         } else if (offer::showsTakeback(offerPrompt_)) {
-            app_.connection().send(chess::net::TakebackDeclineMsg{});
+            if (!app_.connection().send(chess::net::TakebackDeclineMsg{})) {
+                hud_.setStatus("Connection lost - not sent", 3.f);
+                return;
+            }
             settleOfferPrompt(offer::Event::TakebackDeclined);
             addSystemChat("Takeback declined");
         }
@@ -146,10 +157,16 @@ GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName,
     acceptBtn_.setStyle(ui::buttonSuccessBright());
     acceptBtn_.setOnClick([this] {
         if (offer::showsDraw(offerPrompt_)) {
-            app_.connection().send(chess::net::DrawAcceptMsg{});
+            if (!app_.connection().send(chess::net::DrawAcceptMsg{})) {
+                hud_.setStatus("Connection lost - not sent", 3.f);
+                return;
+            }
             settleOfferPrompt(offer::Event::DrawDeclined);
         } else if (offer::showsTakeback(offerPrompt_)) {
-            app_.connection().send(chess::net::TakebackAcceptMsg{});
+            if (!app_.connection().send(chess::net::TakebackAcceptMsg{})) {
+                hud_.setStatus("Connection lost - not sent", 3.f);
+                return;
+            }
             settleOfferPrompt(offer::Event::TakebackDeclined);
         }
     });
@@ -157,7 +174,10 @@ GameScreen::GameScreen(App& app, Color myColor, const std::string& opponentName,
     takebackBtn_.setLabel("Takeback");
     takebackBtn_.setStyle(ui::buttonPlum());    takebackBtn_.setOnClick([this] {
         if (gameOver_) return;
-        app_.connection().send(chess::net::TakebackRequestMsg{});
+        if (!app_.connection().send(chess::net::TakebackRequestMsg{})) {
+            hud_.setStatus("Connection lost - request not sent", 3.f);
+            return;
+        }
         addSystemChat("Takeback requested");
     });
 
@@ -197,6 +217,10 @@ void GameScreen::applySpectateState(const chess::net::SpectateStateMsg& msg)
     opponentRating_ = std::make_pair(msg.blackRating, msg.blackDeviation);
     rated_ = false;
     timeControl_ = msg.timeControl;
+    // Chess960 watchers must chain from the game's rolled Start Position —
+    // the connect-flow spectator ctor passes an empty FEN, so the snapshot
+    // is the only place the SP can come from.
+    startFen_ = msg.startFen;
 
     hud_.setSpectatorMode(true);
     hud_.setSpectatorNames(msg.whiteName, msg.blackName);
@@ -323,6 +347,7 @@ void GameScreen::selectPiece(int file, int rank)
 
 void GameScreen::trySendMove(int targetFile, int targetRank)
 {
+    if (gameOver_) return;
     // Not our turn yet: the move is queued as a premove and auto-sends the
     // moment the echoed response makes it legal (11.4).
     if (!myTurn_) {
@@ -466,7 +491,7 @@ void GameScreen::commitMove(const chess::Move& m)
 
 void GameScreen::sendPromotionMove(chess::PieceType type)
 {
-    if (!promo_) return;
+    if (!promo_ || gameOver_) return;
     for (const auto& m : promo_->candidates) {
         if (m.promotion == type) {
             promo_.reset();
@@ -582,7 +607,10 @@ void GameScreen::sendChat()
         return;
     }
 
-    app_.connection().send(chess::net::ChatMsg{text});
+    if (!app_.connection().send(chess::net::ChatMsg{text})) {
+        hud_.setStatus("Connection lost - chat not sent", 3.f);
+        return;
+    }
     addChatLine(YouName(), text);
 }
 
@@ -592,7 +620,10 @@ void GameScreen::sendChat()
 void GameScreen::sendQuickChat(const std::string& phrase)
 {
     if (spectator_ || phrase.empty()) return;
-    app_.connection().send(chess::net::ChatMsg{phrase});
+    if (!app_.connection().send(chess::net::ChatMsg{phrase})) {
+        hud_.setStatus("Connection lost - chat not sent", 3.f);
+        return;
+    }
     addChatLine(YouName(), phrase);
 }
 
@@ -648,6 +679,9 @@ void GameScreen::handleEvent(const sf::Event& event)
                 boardView_.toggleFlipped();
                 return;
             case KeyboardAction::Help:
+                // The overlay swallows the mouse release that would end an
+                // in-flight drag, so cancel it on open.
+                if (!showingHelp_) clearBoardInput();
                 showingHelp_ = !showingHelp_;
                 return;
             case KeyboardAction::PrevMove:
@@ -662,7 +696,7 @@ void GameScreen::handleEvent(const sf::Event& event)
                 // Keyboard play is seat-only (9.6): a watcher's arrows do
                 // nothing — there is no cursor commit to give a move to.
                 if (spectator_) return;
-                auto [df, dr] = cursorDelta(kp->code);
+                auto [df, dr] = cursorDelta(kp->code, boardView_.isFlipped());
                 keyCursor_ = moveCursorStep(keyCursor_.first, keyCursor_.second, df, dr);
                 return;
             }
@@ -941,7 +975,12 @@ void GameScreen::update(float dtSec)
         else if (auto* gameOver = std::get_if<chess::net::GameOverMsg>(&msg)) {
             gameOver_ = true;
             settleOfferPrompt(offer::Event::GameEnded);
+            // The result may land while a drag or the promotion picker is
+            // live; clear both or the picker keeps painting (and sending)
+            // moves over the final position during the transition delay.
             premove_.reset();
+            cancelPromotion(); // also deselects
+            clearBoardInput();
             hud_.setGameOver(true);
             hud_.setInfo(opponentName_, myColor_, myTurn_, gameOver_);
             const auto& cfg = app_.config();
@@ -1177,7 +1216,7 @@ void GameScreen::applyResume(const chess::net::ResumeStateMsg& msg)
     hud_.navigator().goEnd(); // show the live position, not ply zero
 
     // Drop leftover interaction state from before the drop.
-    hl_.selectedSquare.reset();
+    deselect();
     dragFrom_.reset();
     rightPress_.reset();
     promo_.reset();
@@ -1288,6 +1327,14 @@ void GameScreen::refreshRatingsHud()
 void GameScreen::drawButtons(sf::RenderWindow& window)
 {
     auto& font = app_.font();
+
+    // 12.4: a watcher holds no seat — Leave is the only action, and the
+    // hit-test already routes this rect to leaveWatch(). Without this
+    // branch the row painted Resign/Draw/Takeback over a live game.
+    if (spectator_) {
+        leaveBtn_.draw(window, font);
+        return;
+    }
 
     if (offer::showsDraw(offerPrompt_)) {
         drawPromptBanner(window, "Draw offered:");

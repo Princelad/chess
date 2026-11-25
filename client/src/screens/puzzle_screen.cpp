@@ -605,7 +605,7 @@ void PuzzleScreen::handleEvent(const sf::Event& event)
                 showingHelp_ = !showingHelp_;
                 return;
             case KeyboardAction::MoveCursor: {
-                auto [df, dr] = cursorDelta(kp->code);
+                auto [df, dr] = cursorDelta(kp->code, boardView_.isFlipped());
                 keyCursor_ = moveCursorStep(keyCursor_.first, keyCursor_.second, df, dr);
                 return;
             }

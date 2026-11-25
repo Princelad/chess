@@ -31,6 +31,17 @@ TEST(KeyboardCursor, DeltaMatchesKeys)
     EXPECT_EQ(cursorDelta(sf::Keyboard::Key::Right), std::make_pair(1, 0));
 }
 
+TEST(KeyboardCursor, FlippedBoardInvertsScreenDirection)
+{
+    // A flipped board renders rank+1 one row down, so the key's visual
+    // direction must be mirrored.
+    EXPECT_EQ(cursorDelta(sf::Keyboard::Key::Up, true), std::make_pair(0, -1));
+    EXPECT_EQ(cursorDelta(sf::Keyboard::Key::Down, true), std::make_pair(0, 1));
+    EXPECT_EQ(cursorDelta(sf::Keyboard::Key::Left, true), std::make_pair(1, 0));
+    EXPECT_EQ(cursorDelta(sf::Keyboard::Key::Right, true), std::make_pair(-1, 0));
+    EXPECT_EQ(cursorDelta(sf::Keyboard::Key::A, true), std::make_pair(0, 0));
+}
+
 TEST(KeyboardAction, MapsBoundKeys)
 {
     EXPECT_EQ(keyToAction(sf::Keyboard::Key::Up, false), KeyboardAction::MoveCursor);

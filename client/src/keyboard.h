@@ -60,16 +60,21 @@ inline std::pair<int, int> moveCursorStep(int file, int rank, int dx, int dy)
     };
 }
 
-// Map an arrow key to a (dx, dy) logical board step.
-inline std::pair<int, int> cursorDelta(sf::Keyboard::Key key)
+// Map an arrow key to a (dx, dy) logical board step. On a flipped board the
+// screen-space direction is opposite the logical one, so the caller passes
+// the board's flip state instead of re-deriving it.
+inline std::pair<int, int> cursorDelta(sf::Keyboard::Key key, bool flipped = false)
 {
+    std::pair<int, int> delta {0, 0};
     switch (key) {
-        case sf::Keyboard::Key::Up:    return { 0, 1 };
-        case sf::Keyboard::Key::Down:  return { 0, -1 };
-        case sf::Keyboard::Key::Left:  return { -1, 0 };
-        case sf::Keyboard::Key::Right: return { 1, 0 };
-        default:                       return { 0, 0 };
+        case sf::Keyboard::Key::Up:    delta = { 0, 1 }; break;
+        case sf::Keyboard::Key::Down:  delta = { 0, -1 }; break;
+        case sf::Keyboard::Key::Left:  delta = { -1, 0 }; break;
+        case sf::Keyboard::Key::Right: delta = { 1, 0 }; break;
+        default:                       break;
     }
+    return flipped ? std::pair<int, int>{-delta.first, -delta.second}
+                   : delta;
 }
 
 } // namespace chess::client
