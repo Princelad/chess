@@ -364,6 +364,27 @@ TEST_F(BotMatchTest, BotAutoAcceptsTakeback)
     EXPECT_TRUE(match.isActive());
 }
 
+TEST_F(BotMatchTest, BotAutoAcceptsDraw)
+{
+    human_.state = ClientState::InMatch;
+    bot_.state = ClientState::InMatch;
+
+    Match match(human_, bot_);
+    match.startBot(chess::Color::Black, 1, enginePath_);
+
+    // Audit 10.3: a bot opponent auto-agrees, mirroring the takeback and
+    // rematch auto-accepts - there is no client loop to surface a prompt.
+    match.handleMessage(human_, chess::net::DrawOfferMsg{});
+
+    EXPECT_FALSE(match.isActive());
+    auto msg = recvWait();
+    ASSERT_TRUE(msg.has_value());
+    auto* over = std::get_if<chess::net::GameOverMsg>(&*msg);
+    ASSERT_NE(over, nullptr);
+    EXPECT_EQ(over->result, chess::net::GameResult::Draw);
+    EXPECT_EQ(over->reason, chess::net::GameOverReason::AgreedDraw);
+}
+
 TEST_F(BotMatchTest, BotMatchTakebackNeedsPlayableFrame)
 {
     human_.state = ClientState::InMatch;

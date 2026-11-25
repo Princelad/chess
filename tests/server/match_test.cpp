@@ -199,6 +199,87 @@ TEST_F(MatchTest, DrawOfferSelfAcceptRefused)
     EXPECT_EQ(over->result, chess::net::GameResult::Draw);
 }
 
+// Audit 10.3: a decline with no offer pending must not notify the other
+// seat (the client's stale prompt used to fire phantom declines).
+TEST_F(MatchTest, DrawDeclineWithoutOfferRefused)
+{
+    match_->handleMessage(black_, chess::net::DrawDeclineMsg{});
+
+    auto msg = tryRecvOnClient(*clientBlack_);
+    ASSERT_TRUE(msg.has_value());
+    auto* err = std::get_if<chess::net::ErrorMsg>(&*msg);
+    ASSERT_NE(err, nullptr);
+    EXPECT_EQ(err->message, "No draw offer pending");
+    // The other seat hears nothing.
+    EXPECT_FALSE(tryRecvOnClient(*clientWhite_).has_value());
+}
+
+// Audit 10.3: a cross-offer used to overwrite the offerer slot, so the
+// second asker's Accept answered "That is your own draw offer". Both
+// seats wanting a draw is an agreement.
+TEST_F(MatchTest, DrawCrossOfferAgreesToDraw)
+{
+    match_->handleMessage(white_, chess::net::DrawOfferMsg{});
+    auto offer = tryRecvOnClient(*clientBlack_);
+    ASSERT_TRUE(offer.has_value());
+    EXPECT_TRUE(std::get_if<chess::net::ServerDrawOfferMsg>(&*offer));
+
+    match_->handleMessage(black_, chess::net::DrawOfferMsg{});
+    EXPECT_FALSE(match_->isActive());
+
+    auto wOver = tryRecvOnClient(*clientWhite_);
+    ASSERT_TRUE(wOver.has_value());
+    auto* w = std::get_if<chess::net::GameOverMsg>(&*wOver);
+    ASSERT_NE(w, nullptr);
+    EXPECT_EQ(w->result, chess::net::GameResult::Draw);
+    EXPECT_EQ(w->reason, chess::net::GameOverReason::AgreedDraw);
+}
+
+// Audit 10.3: a duplicate offer from the same seat is a notice, not a
+// second prompt, and it leaves the original offer intact.
+TEST_F(MatchTest, DrawDuplicateOfferRefused)
+{
+    match_->handleMessage(white_, chess::net::DrawOfferMsg{});
+    match_->handleMessage(white_, chess::net::DrawOfferMsg{});
+
+    auto msg = tryRecvOnClient(*clientWhite_);
+    ASSERT_TRUE(msg.has_value());
+    auto* err = std::get_if<chess::net::ErrorMsg>(&*msg);
+    ASSERT_NE(err, nullptr);
+    EXPECT_EQ(err->message, "Your draw offer is already pending");
+
+    // Only the first offer reached the opponent, and it still works.
+    auto offer = tryRecvOnClient(*clientBlack_);
+    ASSERT_TRUE(offer.has_value());
+    EXPECT_TRUE(std::get_if<chess::net::ServerDrawOfferMsg>(&*offer));
+    EXPECT_FALSE(tryRecvOnClient(*clientBlack_).has_value());
+
+    match_->handleMessage(black_, chess::net::DrawAcceptMsg{});
+    EXPECT_FALSE(match_->isActive());
+}
+
+// Audit 10.3: the asked seat cannot answer an offer it never received —
+// a mid-grace absence fails fast instead of storing a dead offer.
+TEST_F(MatchTest, DrawOfferRefusedWhenOpponentAway)
+{
+    match_->handleDisconnect(black_);
+    ASSERT_TRUE(match_->isActive());
+
+    // The survivor is told about the grace window first.
+    auto notice = tryRecvOnClient(*clientWhite_);
+    ASSERT_TRUE(notice.has_value());
+    EXPECT_TRUE(std::get_if<chess::net::OpponentReconnectingMsg>(&*notice));
+
+    match_->handleMessage(white_, chess::net::DrawOfferMsg{});
+
+    auto msg = tryRecvOnClient(*clientWhite_);
+    ASSERT_TRUE(msg.has_value());
+    auto* err = std::get_if<chess::net::ErrorMsg>(&*msg);
+    ASSERT_NE(err, nullptr);
+    EXPECT_EQ(err->message, "The opponent is away");
+    EXPECT_TRUE(match_->isActive());
+}
+
 // Audit 1.5: a sender who is not a seat never ends the game through the
 // draw/resign verbs (the old resign fallthrough read a non-seat as
 // "White resigned").
