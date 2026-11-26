@@ -345,7 +345,9 @@ TEST(UciEngine, LateAnswerDoesNotPoisonTheRetry)
     // The mock answers the first go after 0.5 s — this wait gives up first.
     EXPECT_FALSE(engine.waitBestMove(b, 100ms).has_value());
 
-    // Retry: the late e2e4 is now queued under the OLD generation.
+    // Let the late e2e4 land under the OLD generation before retrying; the
+    // retry's go must then ignore it and wait for its own answer.
+    std::this_thread::sleep_for(600ms);
     engine.position("startpos");
     engine.go(1);
     auto move = engine.waitBestMove(b, 3s);
