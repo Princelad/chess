@@ -40,7 +40,7 @@ struct ServerConfig {
 // (useful when config.port == 0 for OS-assigned port).
 // Returns the bound port on success, 0 on failure.
 unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdownFlag,
-                         unsigned short* boundPortOut = nullptr);
+                         std::atomic<unsigned short>* boundPortOut = nullptr);
 
 // Stops a running server (thread-safe, can be called from any thread).
 void stopServer(std::atomic<bool>& shutdownFlag);

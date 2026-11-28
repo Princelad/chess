@@ -253,12 +253,23 @@ TEST_F(ConnectionTest, PingPong)
     std::atomic<bool> serverDone{false};
     std::thread serverThread([this, &serverDone]() {
         server_->accept();
+        // Non-blocking: the main thread closes the socket below, and
+        // closing an fd another thread is blocked reading is a race.
+        server_->client->setBlocking(false);
         while (!serverDone) {
-            auto msg = server_->receiveClient();
-            if (!msg) break;
-            if (std::get_if<chess::net::PingMsg>(&*msg)) {
-                server_->send(chess::net::PongMsg{});
+            sf::Packet packet;
+            auto status = server_->client->receive(packet);
+            if (status == sf::Socket::Status::Disconnected ||
+                status == sf::Socket::Status::Error) {
+                break;
             }
+            if (status == sf::Socket::Status::Done) {
+                auto msg = chess::net::deserializeClient(packet);
+                if (msg && std::get_if<chess::net::PingMsg>(&*msg)) {
+                    server_->send(chess::net::PongMsg{});
+                }
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
         }
     });
 
@@ -273,8 +284,10 @@ TEST_F(ConnectionTest, PingPong)
 
     conn.disconnect();
     serverDone = true;
-    server_->close();
+    // Join before closing: the reader must not be inside receive() when the
+    // fd goes away (TSan: close vs recv on the same descriptor).
     serverThread.join();
+    server_->close();
 }
 
 TEST_F(ConnectionTest, PongTimeout)
@@ -311,8 +324,10 @@ TEST_F(ConnectionTest, PongTimeout)
     while (!serverAccepted.load())
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
-    server_->close();
+    // The timed-out Connection closed its end, so the reader exits on its
+    // own; join before closing the fd it was reading.
     serverThread.join();
+    server_->close();
 }
 
 TEST_F(ConnectionTest, JoinAndWelcome)

@@ -203,7 +203,7 @@ protected:
 
     std::atomic<bool> shutdownFlag_ = false;
     std::thread serverThread_;
-    unsigned short boundPort_ = 0;
+    std::atomic<unsigned short> boundPort_ = 0;
 };
 
 } // namespace e2e

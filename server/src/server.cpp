@@ -451,7 +451,7 @@ static std::vector<chess::net::LeaderboardEntryMsg> toLeaderboardEntries(
 }
 
 unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdownFlag,
-                         unsigned short* boundPortOut){
+                         std::atomic<unsigned short>* boundPortOut){
     auto ipOpt = sf::IpAddress::fromString(config.host);
     if (!ipOpt.has_value()) {
         LOG_ERROR("Invalid address: " + config.host);
@@ -465,7 +465,9 @@ unsigned short runServer(const ServerConfig& config, std::atomic<bool>& shutdown
         return 0;
     }
     unsigned short boundPort = listener.getLocalPort();
-    if (boundPortOut) *boundPortOut = boundPort;
+    // The port hand-off is cross-thread (the e2e harness polls it while this
+    // loop runs), so the out-param is atomic.
+    if (boundPortOut) boundPortOut->store(boundPort, std::memory_order_release);
     LOG_INFO("Listening on " + config.host + ":" + std::to_string(boundPort));
 
     // Persistent storage (phase 10.1). A hard failure is preferable to a
