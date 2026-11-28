@@ -65,6 +65,9 @@ public:
 private:
     void drainOutbox();
     void drainInbox();
+    // Tear the link down on a protocol/timeout failure: the socket, outbox
+    // and in-flight packet must not outlive the Connected state.
+    void closeLink(const std::string& error);
 
     sf::TcpSocket socket_;
     std::queue<chess::net::ClientMessage> outbox_;

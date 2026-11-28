@@ -8,6 +8,8 @@
 #include <cstdlib>
 #include <fstream>
 #include <thread>
+#include <poll.h>
+#include <unistd.h>
 
 using namespace chess;
 using namespace std::chrono_literals;
@@ -44,6 +46,43 @@ TEST(UciEngine, InitHandshake)
     EXPECT_TRUE(engine.isRunning());
     EXPECT_EQ(info.name, "MockEngine 1.0");
     EXPECT_EQ(info.author, "Test");
+    engine.quit();
+}
+
+TEST(UciEngine, BareNameResolvesThroughPath)
+{
+    const char* mockPath = std::getenv("MOCK_ENGINE_PATH");
+    if (!mockPath) return;
+
+    std::string path(mockPath);
+    const auto slash = path.find_last_of('/');
+    if (slash == std::string::npos) return;
+    std::string dir = path.substr(0, slash);
+
+    const char* oldPath = std::getenv("PATH");
+    std::string savedPath = oldPath ? oldPath : "";
+    std::string testPath = dir + (oldPath ? ":" + savedPath : "");
+    setenv("PATH", testPath.c_str(), 1);
+
+    uci::UciEngine engine("mock_engine.py");
+    auto info = engine.init(3s);
+
+    if (oldPath) setenv("PATH", savedPath.c_str(), 1);
+    else unsetenv("PATH");
+
+    EXPECT_TRUE(engine.isRunning());
+    EXPECT_EQ(info.name, "MockEngine 1.0");
+    engine.quit();
+}
+
+TEST(UciEngine, StockfishBareNameHandshakeWhenInstalled)
+{
+    if (std::system("command -v stockfish >/dev/null 2>&1") != 0) return;
+
+    uci::UciEngine engine("stockfish");
+    auto info = engine.init(5s);
+    EXPECT_TRUE(engine.isRunning());
+    EXPECT_FALSE(info.name.empty());
     engine.quit();
 }
 
@@ -306,7 +345,9 @@ TEST(UciEngine, LateAnswerDoesNotPoisonTheRetry)
     // The mock answers the first go after 0.5 s — this wait gives up first.
     EXPECT_FALSE(engine.waitBestMove(b, 100ms).has_value());
 
-    // Retry: the late e2e4 is now queued under the OLD generation.
+    // Let the late e2e4 land under the OLD generation before retrying; the
+    // retry's go must then ignore it and wait for its own answer.
+    std::this_thread::sleep_for(600ms);
     engine.position("startpos");
     engine.go(1);
     auto move = engine.waitBestMove(b, 3s);
@@ -324,4 +365,79 @@ TEST(UciEngine, DestructorCleansUp)
         engine.init(3s);
     }
     SUCCEED();
+}
+
+// Round-11 audit: init()'s timeout branch called quit() while still holding
+// m_mutex. quit() joins the reader, and the reader needs that same mutex to
+// publish the late uciok — both threads waited forever. The timeout must
+// release the lock before tearing down.
+TEST(UciEngine, LateHandshakeTimeoutDoesNotDeadlock)
+{
+    uci::UciEngine engine(mockEngineSibling("mock_engine_slow.py"));
+    const auto start = std::chrono::steady_clock::now();
+    auto info = engine.init(100ms);
+    const auto elapsed = std::chrono::steady_clock::now() - start;
+    EXPECT_TRUE(info.name.empty());
+    EXPECT_FALSE(engine.isRunning());
+    EXPECT_LT(elapsed, std::chrono::seconds(3));
+}
+
+// Round-11 audit: closeProcess() joined the reader before the SIGTERM/SIGKILL
+// fallback, so an engine that ignores quit (and never closes stdout) hung
+// the caller forever. Teardown must be bounded by the kill.
+TEST(UciEngine, QuitKillsAnUnresponsiveEngine)
+{
+    uci::UciEngine engine(mockEngineSibling("mock_engine_mute.py"));
+    const auto start = std::chrono::steady_clock::now();
+    auto info = engine.init(100ms);
+    const auto elapsed = std::chrono::steady_clock::now() - start;
+    EXPECT_TRUE(info.name.empty());
+    EXPECT_FALSE(engine.isRunning());
+    EXPECT_LT(elapsed, std::chrono::seconds(3));
+}
+
+// Round-11 audit: the execlp'd child inherited every open fd. An inherited
+// TCP socket outlives the parent's disconnect() (the server keeps a phantom
+// client) and an inherited listener keeps the port bound after a crash.
+TEST(UciEngine, EngineDoesNotInheritOpenFileDescriptors)
+{
+    if (!isEngineAvailable()) return;
+
+    int pipeFds[2];
+    ASSERT_EQ(::pipe(pipeFds), 0);
+    {
+        uci::UciEngine engine(mockEnginePath());
+        ASSERT_FALSE(engine.init(3s).name.empty());
+        ASSERT_EQ(::close(pipeFds[1]), 0);
+
+        pollfd pfd;
+        pfd.fd = pipeFds[0];
+        pfd.events = POLLIN;
+        pfd.revents = 0;
+        // EOF (readable on a pipe nobody writes to) only happens when the
+        // child closed its inherited copy of the write end.
+        EXPECT_GT(::poll(&pfd, 1, 500), 0);
+        ::close(pipeFds[0]);
+    }
+}
+
+// Round-11 audit: waitBestMove() treated "the engine died" as success even
+// when the queued answer belonged to an older search — the eval harness
+// could record the previous node's move for the current position. Audit 7.3
+// applies to every consumer, not just tryGetBestMove/pollBestMove.
+TEST(UciEngine, StaleAnswerIsNotReturnedWhenTheEngineDies)
+{
+    uci::UciEngine engine(mockEngineSibling("mock_engine_late_die.py"));
+    ASSERT_FALSE(engine.init(3s).name.empty());
+
+    Board b = Board::fromStartPos();
+    engine.position("startpos");
+    engine.go(1);
+    // The mock answers after 0.5 s; this wait gives up first.
+    EXPECT_FALSE(engine.waitBestMove(b, 50ms).has_value());
+
+    // The late e2e4 lands under generation 1, then the mock exits.
+    std::this_thread::sleep_for(700ms);
+    engine.go(1); // generation 2; the child is already gone
+    EXPECT_FALSE(engine.waitBestMove(b, 2s).has_value());
 }

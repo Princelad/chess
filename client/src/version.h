@@ -5,6 +5,6 @@
 // table (the round-10 audit closes as v2.0.11).
 namespace chess::client {
 
-inline constexpr const char* kAppVersion = "2.0.11";
+inline constexpr const char* kAppVersion = "2.0.12";
 
 } // namespace chess::client

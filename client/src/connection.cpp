@@ -3,7 +3,6 @@
 #include <chess/net/protocol.h>
 
 #include <cassert>
-#include <memory>
 #include <vector>
 
 using chess::net::ClientMessage;
@@ -31,38 +30,41 @@ void Connection::connect(const std::string& host, unsigned short port)
 {
     disconnect();
 
-    std::vector<sf::IpAddress> addresses;
-    if (auto ip = sf::IpAddress::fromString(host)) {
-        addresses.push_back(*ip);
-    } else {
-        auto resolved = sf::Dns::resolve(host);
-        if (!resolved || resolved->empty()) {
-            error_ = "Cannot resolve: " + host;
-            return;
-        }
-        addresses = std::move(*resolved);
-    }
-
     state_ = ConnectionState::Connecting;
     connectDone_ = false;
     connectSuccess_ = false;
     connectError_.clear();
     connectCancel_ = false;
 
-    auto addrs = std::make_shared<std::vector<sf::IpAddress>>(std::move(addresses));
-
     // Audit: the thread used to connect with a 3 s BLOCKING timeout per
     // address, so disconnect() joining it froze the UI for up to 3 s
     // (more with several resolved addresses). The connect itself is
     // non-blocking now and the wait runs in ~50 ms selector slices, so a
-    // cancel request is honored within one slice.
-    connectThread_ = std::thread([this, addrs, port]() {
+    // cancel request is honored within one slice. Name resolution moved
+    // into the thread too — it used to block the render loop on a slow
+    // resolver, the same freeze the non-blocking connect removed.
+    // shortcut: sf::Dns::resolve has no cancellation, so disconnect()
+    // waits a pending lookup out; upgrade if that becomes a UX problem.
+    connectThread_ = std::thread([this, host, port]() {
+        std::vector<sf::IpAddress> addresses;
+        if (auto ip = sf::IpAddress::fromString(host)) {
+            addresses.push_back(*ip);
+        } else {
+            auto resolved = sf::Dns::resolve(host);
+            if (!resolved || resolved->empty()) {
+                connectError_ = "Cannot resolve: " + host;
+                connectDone_ = true;
+                return;
+            }
+            addresses = std::move(*resolved);
+        }
+
         socket_.setBlocking(false);
         // Overall deadline replaces the old per-address 3 s blocking
         // timeout: the handshake phase never outlives it.
         const auto deadline = std::chrono::steady_clock::now()
             + std::chrono::milliseconds(3000);
-        for (const auto& ip : *addrs) {
+        for (const auto& ip : addresses) {
             if (connectCancel_.load(std::memory_order_relaxed)) return;
             auto status = socket_.connect(ip, port);
             if (status == sf::Socket::Status::Done) {
@@ -117,6 +119,19 @@ void Connection::disconnect()
     inbox_.clear();
     state_ = ConnectionState::Disconnected;
     error_.clear();
+}
+
+void Connection::closeLink(const std::string& error)
+{
+    // A protocol/timeout failure used to only flip state_: the TCP socket
+    // stayed open, the server kept a phantom client, and nothing ever read
+    // or closed the link while the screens stopped polling it.
+    socket_.disconnect();
+    while (!outbox_.empty()) outbox_.pop();
+    pendingSend_.reset();
+    inbox_.clear();
+    error_ = error;
+    state_ = ConnectionState::Disconnected;
 }
 
 void Connection::join(const std::string& name, const std::string& timeControl,
@@ -179,8 +194,7 @@ void Connection::poll()
     }
 
     if (now - lastPongReceived_ > pingInterval_ + pongTimeout_) {
-        error_ = "Connection timed out";
-        state_ = ConnectionState::Disconnected;
+        closeLink("Connection timed out");
         return;
     }
 
@@ -242,8 +256,7 @@ void Connection::drainOutbox()
             if (!serialize(*pendingSend_, outbox_.front())) {
                 pendingSend_.reset();
                 outbox_.pop();
-                error_ = "Serialization failed";
-                state_ = ConnectionState::Disconnected;
+                closeLink("Serialization failed");
                 return;
             }
         }
@@ -253,8 +266,7 @@ void Connection::drainOutbox()
             outbox_.pop();
         } else if (status == sf::Socket::Status::Disconnected ||
                    status == sf::Socket::Status::Error) {
-            error_ = "Connection lost";
-            state_ = ConnectionState::Disconnected;
+            closeLink("Connection lost");
             return;
         } else {
             return; // Partial (or NotReady): resume with the same packet
@@ -270,8 +282,7 @@ void Connection::drainInbox()
         auto status = socket_.receive(packet);
         if (status == sf::Socket::Status::Done) {
             if (packet.getDataSize() > MaxPacketSize) {
-                error_ = "Packet too large";
-                state_ = ConnectionState::Disconnected;
+                closeLink("Packet too large");
                 return;
             }
             auto msg = deserializeServer(packet);
@@ -282,22 +293,19 @@ void Connection::drainInbox()
                 }
                 inbox_.push_back(std::move(*msg));
                 if (inbox_.size() > MaxInboxSize) {
-                    error_ = "Inbox overflow";
-                    state_ = ConnectionState::Disconnected;
+                    closeLink("Inbox overflow");
                     return;
                 }
             } else {
                 badMessages_++;
                 if (badMessages_ >= MaxBadMessages) {
-                    error_ = "Too many malformed packets";
-                    state_ = ConnectionState::Disconnected;
+                    closeLink("Too many malformed packets");
                     return;
                 }
             }
         } else if (status == sf::Socket::Status::Disconnected ||
                    status == sf::Socket::Status::Error) {
-            error_ = "Connection lost";
-            state_ = ConnectionState::Disconnected;
+            closeLink("Connection lost");
             return;
         } else {
             return;

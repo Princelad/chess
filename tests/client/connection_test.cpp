@@ -96,8 +96,57 @@ TEST_F(ConnectionTest, ConnectInvalidAddress)
 {
     Connection conn;
     conn.connect("not.a.valid.host", 12345);
+    // Name resolution runs on the connect thread now (it used to block the
+    // render loop), so the failure arrives through poll().
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds{15};
+    while (conn.state() == ConnectionState::Connecting &&
+           std::chrono::steady_clock::now() < deadline) {
+        conn.poll();
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    conn.poll();
     EXPECT_EQ(conn.state(), ConnectionState::Disconnected);
     EXPECT_FALSE(conn.error().empty());
+}
+
+// Round-11 audit: a protocol failure (packet over the shared 16384-byte
+// budget, heartbeat timeout, bad-message budget) only flipped state_ — the
+// TCP socket stayed open, so the server kept a phantom client that never
+// read or closed while the screens stopped polling.
+TEST_F(ConnectionTest, ProtocolFailureClosesTheSocket)
+{
+    Connection conn;
+    conn.connect("127.0.0.1", server_->port);
+    ASSERT_TRUE(waitForConnected(conn));
+    ASSERT_TRUE(server_->accept());
+
+    sf::Packet huge;
+    huge << std::string(16385, 'x');
+    ASSERT_EQ(server_->client->send(huge), sf::Socket::Status::Done);
+
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    while (conn.state() != ConnectionState::Disconnected &&
+           std::chrono::steady_clock::now() < deadline) {
+        conn.poll();
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    EXPECT_EQ(conn.state(), ConnectionState::Disconnected);
+    EXPECT_EQ(conn.error(), "Packet too large");
+
+    sf::Packet sink;
+    sf::Socket::Status status = sf::Socket::Status::NotReady;
+    server_->client->setBlocking(false);
+    deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    while (std::chrono::steady_clock::now() < deadline) {
+        status = server_->client->receive(sink);
+        if (status == sf::Socket::Status::Disconnected ||
+            status == sf::Socket::Status::Error)
+            break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    EXPECT_TRUE(status == sf::Socket::Status::Disconnected ||
+                status == sf::Socket::Status::Error)
+        << "the client kept the TCP link open after the protocol failure";
 }
 
 TEST_F(ConnectionTest, ConnectRefused)
@@ -204,12 +253,23 @@ TEST_F(ConnectionTest, PingPong)
     std::atomic<bool> serverDone{false};
     std::thread serverThread([this, &serverDone]() {
         server_->accept();
+        // Non-blocking: the main thread closes the socket below, and
+        // closing an fd another thread is blocked reading is a race.
+        server_->client->setBlocking(false);
         while (!serverDone) {
-            auto msg = server_->receiveClient();
-            if (!msg) break;
-            if (std::get_if<chess::net::PingMsg>(&*msg)) {
-                server_->send(chess::net::PongMsg{});
+            sf::Packet packet;
+            auto status = server_->client->receive(packet);
+            if (status == sf::Socket::Status::Disconnected ||
+                status == sf::Socket::Status::Error) {
+                break;
             }
+            if (status == sf::Socket::Status::Done) {
+                auto msg = chess::net::deserializeClient(packet);
+                if (msg && std::get_if<chess::net::PingMsg>(&*msg)) {
+                    server_->send(chess::net::PongMsg{});
+                }
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
         }
     });
 
@@ -224,8 +284,10 @@ TEST_F(ConnectionTest, PingPong)
 
     conn.disconnect();
     serverDone = true;
-    server_->close();
+    // Join before closing: the reader must not be inside receive() when the
+    // fd goes away (TSan: close vs recv on the same descriptor).
     serverThread.join();
+    server_->close();
 }
 
 TEST_F(ConnectionTest, PongTimeout)
@@ -262,8 +324,10 @@ TEST_F(ConnectionTest, PongTimeout)
     while (!serverAccepted.load())
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
-    server_->close();
+    // The timed-out Connection closed its end, so the reader exits on its
+    // own; join before closing the fd it was reading.
     serverThread.join();
+    server_->close();
 }
 
 TEST_F(ConnectionTest, JoinAndWelcome)
